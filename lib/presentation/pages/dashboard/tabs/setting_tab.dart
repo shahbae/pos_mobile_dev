@@ -6,17 +6,37 @@ class SettingTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: theme.colorScheme.background,
+
+      appBar: AppBar(
+        title: const Text("Pengaturan"),
+        backgroundColor: theme.colorScheme.background,
+        elevation: 0,
+      ),
 
       body: ListView(
         children: [
-          const SizedBox(height: 10),
+          const SizedBox(height: 4),
 
           ListTile(
-            leading: const Icon(Icons.factory, color: Colors.white),
-            title: const Text("Pemasok", style: TextStyle(color: Colors.white)),
-            trailing: const Icon(Icons.chevron_right, color: Colors.white70),
+            leading: Icon(
+              Icons.factory_outlined,
+              color: theme.colorScheme.primary,
+            ),
+
+            title: Text(
+              "Pemasok",
+              style: TextStyle(
+                color: Colors.grey.shade900,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+
+            trailing: Icon(Icons.chevron_right, color: Colors.grey.shade500),
+
             onTap: () {
               Navigator.push(
                 context,
@@ -25,7 +45,7 @@ class SettingTab extends StatelessWidget {
             },
           ),
 
-          const Divider(color: Colors.white12),
+          Divider(color: Colors.grey.shade300),
         ],
       ),
     );

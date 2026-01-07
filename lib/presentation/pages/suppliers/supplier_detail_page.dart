@@ -9,12 +9,15 @@ class SupplierDetailPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: theme.colorScheme.background,
 
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0F172A),
         title: const Text("Detail Pemasok"),
+        backgroundColor: theme.colorScheme.background,
+        elevation: 0,
       ),
 
       body: Padding(
@@ -22,28 +25,58 @@ class SupplierDetailPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // =====================
+            // HEADER NAME
+            // =====================
             Text(
               supplier.name,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+            ),
+
+            const SizedBox(height: 6),
+
+            Text(
+              "Informasi pemasok & kontak",
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+            ),
+
+            const SizedBox(height: 18),
+
+            // =====================
+            // DETAIL CARD
+            // =====================
+            Card(
+              elevation: 0,
+              color: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(color: Colors.grey.shade300),
+              ),
+
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    _item("PIC", supplier.pic ?? "-"),
+                    _item("Email", supplier.email ?? "-"),
+                    _item("Telepon", supplier.phone ?? "-"),
+                    _item("Alamat", supplier.address ?? "-"),
+                  ],
+                ),
               ),
             ),
 
-            const SizedBox(height: 10),
-
-            _item("PIC", supplier.pic),
-            _item("Email", supplier.email),
-            _item("Telepon", supplier.phone),
-            _item("Alamat", supplier.address),
-
             const Spacer(),
 
+            // =====================
+            // ACTION BUTTON
+            // =====================
             SizedBox(
-              height: 48,
               width: double.infinity,
-              child: ElevatedButton(
+              height: 48,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text("Edit Data Pemasok"),
                 onPressed: () async {
                   final updated = await Navigator.push(
                     context,
@@ -52,12 +85,8 @@ class SupplierDetailPage extends StatelessWidget {
                     ),
                   );
 
-                  if (updated == true) {
-                    Navigator.pop(context); // balik ke list supaya reload
-                  }
+                  if (updated == true) Navigator.pop(context);
                 },
-
-                child: const Text("Edit Data Pemasok"),
               ),
             ),
           ],
@@ -66,19 +95,27 @@ class SupplierDetailPage extends StatelessWidget {
     );
   }
 
-  Widget _item(String label, String? value) {
+  Widget _item(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 90,
-            child: Text(label, style: const TextStyle(color: Colors.white70)),
+            width: 110,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: Colors.grey.shade700,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
+
           Expanded(
             child: Text(
-              value ?? '-',
-              style: const TextStyle(color: Colors.white),
+              value,
+              style: const TextStyle(fontSize: 14, height: 1.4),
             ),
           ),
         ],

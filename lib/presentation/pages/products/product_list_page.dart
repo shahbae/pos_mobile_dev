@@ -20,6 +20,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
   int page = 1;
   bool loadingMore = false;
   bool hasMore = true;
+  bool isInitialLoading = true; // 🔥 tambahkan ini
 
   Timer? _debounce;
   final ScrollController _scroll = ScrollController();
@@ -67,6 +68,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     setState(() {
       items.addAll(result);
       loadingMore = false;
+      isInitialLoading = false; // 🔥 set false setelah load pertama
       hasMore = result.length == 10;
       if (hasMore) page++;
     });
@@ -74,27 +76,32 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: theme.colorScheme.background,
 
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0F172A),
         title: const Text("Data Produk"),
+        backgroundColor: theme.colorScheme.background,
+        elevation: 0,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(60),
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: TextField(
-              style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
-                hintText: "Cari produk...",
-                hintStyle: const TextStyle(color: Colors.white54),
-                prefixIcon: const Icon(Icons.search, color: Colors.white70),
+                hintText: "Cari produk…",
+                prefixIcon: const Icon(Icons.search),
                 filled: true,
-                fillColor: const Color(0xFF1E293B),
+                fillColor: Colors.grey.shade100,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
                 ),
               ),
               onChanged: (v) {
@@ -110,8 +117,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       ),
 
       floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFF3B82F6),
-        child: const Icon(Icons.add, color: Colors.white),
+        child: const Icon(Icons.add),
         onPressed: () async {
           final created = await Navigator.push(
             context,
@@ -122,27 +128,27 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
         },
       ),
 
-      body: items.isEmpty
+      body:
+          isInitialLoading // 🔥 cek loading awal dulu
+          ? const Center(child: CircularProgressIndicator())
+          : items.isEmpty
           ? const Center(
               child: Text(
-                "Belum ada data",
-                style: TextStyle(color: Colors.white70),
+                "Data produk kosong",
+                style: TextStyle(color: Colors.black54),
               ),
             )
           : ListView.separated(
               controller: _scroll,
               itemCount: items.length + 1,
-              separatorBuilder: (_, __) => const Divider(color: Colors.white12),
+              separatorBuilder: (_, __) =>
+                  Divider(color: Colors.grey.shade200, height: 1),
               itemBuilder: (_, i) {
                 if (i == items.length) {
                   return loadingMore
                       ? const Padding(
                           padding: EdgeInsets.all(16),
-                          child: Center(
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                            ),
-                          ),
+                          child: Center(child: CircularProgressIndicator()),
                         )
                       : const SizedBox.shrink();
                 }
@@ -156,18 +162,23 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
 
   Widget _item(BuildContext context, Product p) {
     return ListTile(
-      leading: const Icon(Icons.inventory_2, color: Colors.white),
-      title: Text(p.name, style: const TextStyle(color: Colors.white)),
+      leading: const Icon(Icons.inventory_2_outlined, color: Colors.blue),
+      title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600)),
       subtitle: Text(
-        "Stok : ${p.stock} • ${formatRupiah(p.sellingPrice)}",
-        style: const TextStyle(color: Colors.white70),
+        "Stok: ${p.stock} • ${formatRupiah(p.sellingPrice)}",
+        style: const TextStyle(color: Colors.black54),
       ),
-      trailing: const Icon(Icons.chevron_right, color: Colors.white70),
-      onTap: () {
-        Navigator.push(
+      trailing: const Icon(Icons.chevron_right, color: Colors.black45),
+
+      onTap: () async {
+        final updated = await Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => ProductDetailPage(product: p)),
         );
+
+        if (updated == true) {
+          _load(reset: true);
+        }
       },
     );
   }

@@ -3,9 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/models/supplier_model.dart';
 import '../../providers/supplier_provider.dart';
+import '../../widgets/text_input_field.dart';
 
 class SupplierFormPage extends ConsumerStatefulWidget {
-  final Supplier? supplier; // <-- kalau null berarti create
+  final Supplier? supplier;
 
   const SupplierFormPage({super.key, this.supplier});
 
@@ -47,8 +48,10 @@ class _SupplierFormPageState extends ConsumerState<SupplierFormPage> {
 
   Future<void> submit() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => loading = true);
+
+    final repo = ref.read(supplierRepositoryProvider);
+    final edit = widget.supplier != null;
 
     final payload = {
       "name": name.text,
@@ -58,11 +61,8 @@ class _SupplierFormPageState extends ConsumerState<SupplierFormPage> {
       "address": address.text,
     };
 
-    final repo = ref.read(supplierRepositoryProvider);
-    final editMode = widget.supplier != null;
-
     try {
-      if (editMode) {
+      if (edit) {
         await repo.updateSupplier(widget.supplier!.id, payload);
       } else {
         await repo.createSupplier(payload);
@@ -70,25 +70,23 @@ class _SupplierFormPageState extends ConsumerState<SupplierFormPage> {
 
       ref.invalidate(supplierListProvider);
 
-      // 🔵 Tampilkan snackbar sukses
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          backgroundColor: Colors.green,
           content: Text(
-            editMode
+            edit
                 ? "Pemasok berhasil diperbarui"
                 : "Pemasok berhasil ditambahkan",
           ),
+          backgroundColor: Colors.green,
         ),
       );
 
       Navigator.pop(context, true);
     } catch (e) {
-      // 🔴 Error notification
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: Colors.red,
+        const SnackBar(
           content: Text("Gagal menyimpan data pemasok"),
+          backgroundColor: Colors.red,
         ),
       );
     } finally {
@@ -98,39 +96,82 @@ class _SupplierFormPageState extends ConsumerState<SupplierFormPage> {
 
   @override
   Widget build(BuildContext context) {
-    final editMode = widget.supplier != null;
+    final edit = widget.supplier != null;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: Theme.of(context).colorScheme.background,
+
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0F172A),
-        title: Text(editMode ? "Edit Pemasok" : "Tambah Pemasok"),
+        elevation: 0,
+        title: Text(edit ? "Edit Pemasok" : "Tambah Pemasok"),
+        backgroundColor: Theme.of(context).colorScheme.background,
       ),
 
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            children: [
-              field("Nama", name),
-              field("PIC", pic),
-              field("Email", email),
-              field("Telepon", phone),
-              field("Alamat", address, multiline: true),
 
-              const SizedBox(height: 20),
+        child: Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
 
-              SizedBox(
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: loading ? null : submit,
-                  child: loading
-                      ? const CircularProgressIndicator()
-                      : Text(editMode ? "Simpan" : "Buat"),
-                ),
+            child: Form(
+              key: _formKey,
+
+              child: ListView(
+                children: [
+                  TextInputField(
+                    label: "Nama",
+                    hint: "Masukkan nama pemasok",
+                    controller: name,
+                    validator: (v) =>
+                        v == null || v.isEmpty ? "Wajib diisi" : null,
+                  ),
+
+                  TextInputField(
+                    label: "PIC",
+                    hint: "Nama penanggung jawab",
+                    controller: pic,
+                  ),
+
+                  TextInputField(
+                    label: "Email",
+                    hint: "nama@email.com",
+                    controller: email,
+                    keyboardType: TextInputType.emailAddress,
+                  ),
+
+                  TextInputField(
+                    label: "Telepon",
+                    hint: "08xxxxxxxxxx",
+                    controller: phone,
+                    keyboardType: TextInputType.phone,
+                  ),
+
+                  TextInputField(
+                    label: "Alamat",
+                    hint: "Masukkan alamat lengkap pemasok",
+                    controller: address,
+                    multiline: true,
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  SizedBox(
+                    height: 48,
+                    child: ElevatedButton(
+                      onPressed: loading ? null : submit,
+                      child: loading
+                          ? const CircularProgressIndicator()
+                          : Text(edit ? "Simpan" : "Buat"),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -143,26 +184,16 @@ class _SupplierFormPageState extends ConsumerState<SupplierFormPage> {
     bool multiline = false,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 14),
       child: TextFormField(
         controller: c,
         maxLines: multiline ? 4 : 1,
-        minLines: multiline ? 3 : 1,
-        style: const TextStyle(color: Colors.white),
-        validator: (v) => v == null || v.isEmpty ? "Required" : null,
+        validator: (v) => v == null || v.isEmpty ? "Wajib diisi" : null,
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: const TextStyle(color: Colors.white70),
           filled: true,
-          fillColor: const Color(0xFF1E293B),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Color(0xFF334155)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Color(0xFF3B82F6)),
-          ),
+          fillColor: Colors.grey.shade100,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
         ),
       ),
     );

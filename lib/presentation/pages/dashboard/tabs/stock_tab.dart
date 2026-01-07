@@ -7,8 +7,10 @@ class StockTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: theme.colorScheme.background,
 
       body: SafeArea(
         child: Padding(
@@ -16,20 +18,20 @@ class StockTab extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 "Manajemen Stok",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
                 ),
               ),
 
               const SizedBox(height: 6),
 
-              const Text(
+              Text(
                 "Kelola produk & inventory bisnis Anda",
-                style: TextStyle(color: Colors.white70, fontSize: 13),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: Colors.grey[600],
+                ),
               ),
 
               const SizedBox(height: 20),
@@ -57,7 +59,7 @@ class StockTab extends ConsumerWidget {
                       icon: Icons.playlist_add_check_circle_outlined,
                       title: "Penyesuaian Stok",
                       subtitle: "Catat perubahan stok barang",
-                      disabled: true, // future feature
+                      disabled: true,
                     ),
 
                     _menuItem(
@@ -93,20 +95,32 @@ class StockTab extends ConsumerWidget {
     VoidCallback? onTap,
     bool disabled = false,
   }) {
+    final theme = Theme.of(context);
+
     return Opacity(
-      opacity: disabled ? 0.4 : 1,
+      opacity: disabled ? 0.45 : 1,
       child: Card(
-        color: const Color(0xFF1E293B),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        elevation: 0, // flat & modern
+        color: theme.colorScheme.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(color: Colors.grey.shade300),
+        ),
         child: ListTile(
           onTap: disabled ? null : onTap,
-          leading: Icon(icon, color: Colors.white),
-          title: Text(title, style: const TextStyle(color: Colors.white)),
+          leading: Icon(icon, color: theme.colorScheme.primary),
+          title: Text(
+            title,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: Colors.black87,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           subtitle: Text(
             subtitle,
-            style: const TextStyle(color: Colors.white70, fontSize: 12),
+            style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
           ),
-          trailing: const Icon(Icons.chevron_right, color: Colors.white60),
+          trailing: Icon(Icons.chevron_right, color: Colors.grey[500]),
         ),
       ),
     );

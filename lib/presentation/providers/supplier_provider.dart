@@ -3,12 +3,16 @@ import '../../data/repositories/supplier_repository.dart';
 import '../../data/services/api_provider.dart';
 import '../../data/models/supplier_model.dart';
 
-final supplierRepositoryProvider = Provider((ref) {
+final supplierRepositoryProvider = Provider<SupplierRepository>((ref) {
   final api = ref.watch(apiProvider);
   return SupplierRepository(api);
 });
 
-final supplierListProvider = FutureProvider<List<Supplier>>((ref) async {
+final supplierListProvider = FutureProvider.family<List<Supplier>, String?>((
+  ref,
+  search,
+) async {
   final repo = ref.watch(supplierRepositoryProvider);
-  return repo.getSuppliers();
+
+  return repo.getSuppliers(page: 1, limit: 10, search: search ?? "");
 });

@@ -28,16 +28,23 @@ class DashboardPage extends ConsumerWidget {
     ];
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: Theme.of(context).colorScheme.background,
 
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: Theme.of(context).colorScheme.background,
         elevation: 0,
-        title: const Text("JAIA POS"),
+        title: const Text(
+          "JAIA POS",
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: Colors.blue,
+          ),
+        ),
 
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout, color: Colors.white),
+            icon: const Icon(Icons.logout),
             onPressed: () async {
               await ref.read(authProvider.notifier).logout();
             },

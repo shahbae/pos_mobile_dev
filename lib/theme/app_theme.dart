@@ -2,69 +2,79 @@ import 'package:flutter/material.dart';
 
 class AppTheme {
   // ===== COLOR SYSTEM =====
-  static const Color navy900 = Color(0xFF0D1923);
-  static const Color navy800 = Color(0xFF152634);
-  static const Color navy700 = Color(0xFF1F2937);
+  static const Color bgLight = Color.fromARGB(255, 249, 250, 252); // background
+  static const Color cardLight = Color(0xFFFFFFFF); // card / surface
+  static const Color borderLight = Color(0xFFE5E7EB); // border subtle
 
-  static const Color brandBlue = Color(0xFF0081F5);
-  static const Color greyText = Colors.white70;
+  static const Color textPrimary = Color(0xFF111827);
+  static const Color textSecondary = Color(0xFF6B7280);
+
+  static const Color brandBlue = Color(0xFF3B82F6);
   static const Color danger = Color(0xFFDC2626);
 
   // ===== TEXT SYSTEM =====
   static const TextStyle heading = TextStyle(
     fontSize: 22,
     fontWeight: FontWeight.w600,
-    color: Colors.white,
+    color: textPrimary,
   );
 
-  static const TextStyle body = TextStyle(fontSize: 14, color: Colors.white70);
+  static const TextStyle body = TextStyle(fontSize: 14, color: textSecondary);
 
-  static ThemeData darkTheme = ThemeData(
-    brightness: Brightness.dark,
-    scaffoldBackgroundColor: navy900,
-    fontFamily: "SF Pro", // opsional
+  static ThemeData lightTheme = ThemeData(
+    brightness: Brightness.light,
+    scaffoldBackgroundColor: bgLight,
+    fontFamily: "SF Pro",
 
-    colorScheme: const ColorScheme.dark(
+    colorScheme: const ColorScheme.light(
       primary: brandBlue,
       secondary: brandBlue,
       error: danger,
-      background: navy900,
-      surface: navy800,
+      background: bgLight,
+      surface: cardLight,
     ),
 
     appBarTheme: const AppBarTheme(
-      backgroundColor: navy900,
-      elevation: 0,
+      backgroundColor: Colors.white,
+      elevation: 0.6,
+      shadowColor: Colors.black12,
       titleTextStyle: TextStyle(
         fontSize: 18,
         fontWeight: FontWeight.w600,
-        color: Colors.white,
+        color: textPrimary,
+      ),
+      iconTheme: IconThemeData(color: textPrimary),
+    ),
+
+    cardTheme: CardThemeData(
+      color: cardLight,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: borderLight),
       ),
     ),
 
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: const Color(0xFF0F172A), // 🔥 warna isi field
-
+      fillColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
 
       hintStyle: const TextStyle(color: Color(0xFF9CA3AF)),
 
-      suffixIconColor: Color(0xFFCBD5E1),
-
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(14)),
-        borderSide: BorderSide(color: Color(0xFF2B3A55), width: 1.2),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: borderLight),
       ),
 
-      focusedBorder: OutlineInputBorder(
+      focusedBorder: const OutlineInputBorder(
         borderRadius: BorderRadius.all(Radius.circular(14)),
-        borderSide: BorderSide(color: Color(0xFF3B82F6), width: 1.6),
+        borderSide: BorderSide(color: brandBlue, width: 1.6),
       ),
 
-      border: OutlineInputBorder(
+      border: const OutlineInputBorder(
         borderRadius: BorderRadius.all(Radius.circular(14)),
-        borderSide: BorderSide(color: Color(0xFF2B3A55), width: 1.2),
+        borderSide: BorderSide(color: borderLight),
       ),
     ),
 
@@ -72,15 +82,18 @@ class AppTheme {
       style: ElevatedButton.styleFrom(
         backgroundColor: brandBlue,
         foregroundColor: Colors.white,
+        minimumSize: const Size.fromHeight(44),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         textStyle: const TextStyle(fontWeight: FontWeight.w600),
       ),
     ),
 
-    cardTheme: CardThemeData(
-      color: navy800,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      elevation: 0,
+    bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+      backgroundColor: Colors.white,
+      selectedItemColor: brandBlue,
+      unselectedItemColor: Color(0xFF9CA3AF),
+      showUnselectedLabels: true,
+      type: BottomNavigationBarType.fixed,
     ),
   );
 }

@@ -40,7 +40,7 @@ class MyApp extends ConsumerWidget {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.darkTheme.copyWith(useMaterial3: false),
+      theme: AppTheme.lightTheme,
       home: page,
     );
   }

@@ -6,19 +6,32 @@ class SupplierRepository {
 
   SupplierRepository(this.api);
 
-  Future<List<Supplier>> getSuppliers() async {
-    final res = await api.dio.get('/suppliers');
+  Future<List<Supplier>> getSuppliers({
+    int page = 1,
+    int limit = 10,
+    String? search,
+  }) async {
+    final res = await api.dio.get(
+      '/suppliers',
+      queryParameters: {
+        'page': page,
+        'limit': limit,
+        if (search != null && search.isNotEmpty) 'search': search,
+      },
+    );
 
-    final List data = res.data['data'];
-
-    return data.map((e) => Supplier.fromJson(e)).toList();
+    return (res.data['data'] as List).map((e) => Supplier.fromJson(e)).toList();
   }
 
-  Future<void> createSupplier(Map<String, dynamic> body) async {
-    await api.dio.post('/suppliers', data: body);
+  Future<void> createSupplier(Map<String, dynamic> data) async {
+    await api.dio.post('/suppliers', data: data);
   }
 
-  Future<void> updateSupplier(String id, Map<String, dynamic> body) async {
-    await api.dio.put('/suppliers/$id', data: body);
+  Future<void> updateSupplier(String id, Map<String, dynamic> data) async {
+    await api.dio.put('/suppliers/$id', data: data);
+  }
+
+  Future<void> deleteSupplier(String id) async {
+    await api.dio.delete('/suppliers/$id');
   }
 }

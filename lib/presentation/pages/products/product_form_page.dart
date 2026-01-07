@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 
 import '../../../data/models/product_model.dart';
 import '../../providers/product_provider.dart';
-import '../../widgets/price_field.dart';
 
 class ProductFormPage extends ConsumerStatefulWidget {
   final Product? product;
@@ -23,12 +22,8 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
   late final stock = TextEditingController(
     text: widget.product?.stock.toString() ?? "",
   );
-  late final buy = TextEditingController(
-    text: widget.product?.purchasePrice.toString() ?? "",
-  );
-  late final sell = TextEditingController(
-    text: widget.product?.sellingPrice.toString() ?? "",
-  );
+  late final buy = TextEditingController();
+  late final sell = TextEditingController();
 
   final formatter = NumberFormat('#,###', 'id_ID');
 
@@ -57,7 +52,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
 
     setState(() => loading = true);
 
-    final data = {
+    final payload = {
       "name": name.text,
       "sku": sku.text.isEmpty ? null : sku.text,
       "stock": int.tryParse(stock.text) ?? 0,
@@ -66,13 +61,13 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
     };
 
     final repo = ref.read(productRepositoryProvider);
-    final editMode = widget.product != null;
+    final edit = widget.product != null;
 
     try {
-      if (editMode) {
-        await repo.updateProduct(widget.product!.id, data);
+      if (edit) {
+        await repo.updateProduct(widget.product!.id, payload);
       } else {
-        await repo.createProduct(data);
+        await repo.createProduct(payload);
       }
 
       ref.invalidate(productListProvider);
@@ -81,9 +76,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
         SnackBar(
           backgroundColor: Colors.green,
           content: Text(
-            editMode
-                ? "Produk berhasil diperbarui"
-                : "Produk berhasil ditambahkan",
+            edit ? "Produk berhasil diperbarui" : "Produk berhasil ditambahkan",
           ),
         ),
       );
@@ -103,13 +96,14 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
 
   @override
   Widget build(BuildContext context) {
-    final editMode = widget.product != null;
+    final edit = widget.product != null;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: Theme.of(context).colorScheme.background,
+
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0F172A),
-        title: Text(editMode ? "Edit Produk" : "Tambah Produk"),
+        title: Text(edit ? "Edit Produk" : "Tambah Produk"),
+        elevation: 0,
       ),
 
       body: Padding(
@@ -118,21 +112,22 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
           key: _formKey,
           child: ListView(
             children: [
-              field("Nama Produk", name),
-              field("SKU (opsional)", sku, required: false),
-              field("Stok", stock),
-              PriceField(label: "Harga Beli", controller: buy),
-              PriceField(label: "Harga Jual", controller: sell),
+              _labeledField("Nama Produk", name),
+              _labeledField("SKU (opsional)", sku, required: false),
+              _labeledField("Stok", stock, inputType: TextInputType.number),
 
-              const SizedBox(height: 20),
+              _moneyField("Harga Beli", buy),
+              _moneyField("Harga Jual", sell),
+
+              const SizedBox(height: 22),
 
               SizedBox(
                 height: 48,
-                child: ElevatedButton(
+                child: FilledButton(
                   onPressed: loading ? null : submit,
                   child: loading
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : Text(editMode ? "Simpan" : "Buat Produk"),
+                      ? const CircularProgressIndicator()
+                      : Text(edit ? "Simpan Perubahan" : "Buat Produk"),
                 ),
               ),
             ],
@@ -142,28 +137,61 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
     );
   }
 
-  Widget field(String label, TextEditingController c, {bool required = true}) {
+  Widget _labeledField(
+    String label,
+    TextEditingController c, {
+    bool required = true,
+    TextInputType inputType = TextInputType.text,
+  }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: TextFormField(
-        controller: c,
-        style: const TextStyle(color: Colors.white),
-        validator: (v) =>
-            required && (v == null || v.isEmpty) ? "Required" : null,
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: const TextStyle(color: Colors.white70),
-          filled: true,
-          fillColor: const Color(0xFF1E293B),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Color(0xFF334155)),
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
           ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Color(0xFF3B82F6)),
+          const SizedBox(height: 6),
+          TextFormField(
+            controller: c,
+            keyboardType: inputType,
+            validator: (v) =>
+                required && (v == null || v.isEmpty) ? "Wajib diisi" : null,
+            decoration: InputDecoration(hintText: label),
           ),
-        ),
+        ],
+      ),
+    );
+  }
+
+  Widget _moneyField(String label, TextEditingController c) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+          ),
+          const SizedBox(height: 6),
+          TextFormField(
+            controller: c,
+            keyboardType: TextInputType.number,
+            validator: (v) => v == null || v.isEmpty ? "Wajib diisi" : null,
+            decoration: const InputDecoration(prefixText: "Rp ", hintText: "0"),
+            onChanged: (value) {
+              final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
+              c.value = TextEditingValue(
+                text: formatter.format(int.tryParse(digits) ?? 0),
+                selection: TextSelection.collapsed(
+                  offset: formatter.format(int.tryParse(digits) ?? 0).length,
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }

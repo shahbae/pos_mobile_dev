@@ -27,7 +27,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     final auth = ref.watch(authProvider);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A), // Navy - dark slate
+      backgroundColor: Theme.of(context).colorScheme.surface,
+
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(0),
@@ -35,45 +36,48 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             constraints: const BoxConstraints(maxWidth: 420),
             child: Column(
               children: [
-                // ICON
+                // ICON BADGE
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF062539),
+                    color: Theme.of(context).colorScheme.surface,
                     borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.black12),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.point_of_sale,
-                    color: Color(0xFF0081F5),
+                    color: Theme.of(context).colorScheme.primary,
                     size: 48,
                   ),
                 ),
 
                 const SizedBox(height: 20),
 
-                const Text(
+                Text(
                   'Selamat Datang Kembali',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
+                  style: Theme.of(context).textTheme.titleLarge!.copyWith(
                     fontWeight: FontWeight.w600,
+                    color: Colors.black87,
                   ),
                 ),
 
                 const SizedBox(height: 4),
 
-                const Text(
-                  'Masuk ke akun pos anda',
-                  style: TextStyle(color: Colors.white70, fontSize: 13),
+                Text(
+                  'Masuk ke akun POS anda',
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
 
                 const SizedBox(height: 24),
-
                 Card(
-                  color: Colors.transparent,
-                  elevation: 0,
+                  elevation: 0, // ⛔ tidak ada shadow
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.surface, // atau Colors.white
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(
+                      18,
+                    ), // masih rounded, tanpa border
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(22),
@@ -81,168 +85,71 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       key: _formKey,
                       child: Column(
                         children: [
-                          const Align(
+                          Align(
                             alignment: Alignment.centerLeft,
                             child: Text(
                               "EMAIL",
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 12,
-                                letterSpacing: .6,
-                              ),
+                              style: Theme.of(context).textTheme.labelSmall!
+                                  .copyWith(letterSpacing: .6),
                             ),
                           ),
 
                           const SizedBox(height: 8),
 
-                          // EMAIL INPUT - NEW STYLE
                           TextFormField(
                             controller: _emailCtrl,
-                            style: const TextStyle(
-                              color: Color(0xFF94A3B8),
-                              fontSize: 16,
-                            ),
-                            decoration: InputDecoration(
+                            decoration: const InputDecoration(
                               hintText: 'nama@email.com',
-                              hintStyle: const TextStyle(
-                                color: Color(0xFF475569),
-                                fontSize: 16,
-                              ),
-                              filled: true,
-                              fillColor: const Color(0xFF1E293B),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 18,
-                              ),
-                              suffixIcon: const Padding(
-                                padding: EdgeInsets.only(right: 16),
-                                child: Icon(
-                                  Icons.email_outlined,
-                                  color: Color(0xFF64748B),
-                                  size: 24,
-                                ),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: const BorderSide(
-                                  color: Color(0xFF334155),
-                                  width: 2,
-                                ),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: const BorderSide(
-                                  color: Color(0xFF3B82F6),
-                                  width: 2,
-                                ),
-                              ),
-                              errorBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: const BorderSide(
-                                  color: Colors.red,
-                                  width: 2,
-                                ),
-                              ),
-                              focusedErrorBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: const BorderSide(
-                                  color: Colors.red,
-                                  width: 2,
-                                ),
-                              ),
+                              prefixIcon: Icon(Icons.email_outlined),
                             ),
+                            validator: (v) => v == null || v.isEmpty
+                                ? "Email wajib diisi"
+                                : null,
                           ),
 
                           const SizedBox(height: 20),
 
-                          const Align(
+                          Align(
                             alignment: Alignment.centerLeft,
                             child: Text(
                               "KATA SANDI",
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 12,
-                                letterSpacing: .6,
-                              ),
+                              style: Theme.of(context).textTheme.labelSmall!
+                                  .copyWith(letterSpacing: .6),
                             ),
                           ),
 
                           const SizedBox(height: 8),
 
-                          // PASSWORD INPUT - NEW STYLE
                           TextFormField(
                             controller: _passCtrl,
                             obscureText: _obscure,
-                            style: const TextStyle(
-                              color: Color(0xFF94A3B8),
-                              fontSize: 16,
-                              letterSpacing: 2,
-                            ),
                             decoration: InputDecoration(
                               hintText: 'Kata Sandi',
-                              hintStyle: const TextStyle(
-                                color: Color(0xFF475569),
-                                fontSize: 16,
-                                letterSpacing: 0,
-                              ),
-                              filled: true,
-                              fillColor: const Color(0xFF1E293B),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 18,
-                              ),
-                              suffixIcon: Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: IconButton(
-                                  icon: Icon(
-                                    _obscure
-                                        ? Icons.visibility_outlined
-                                        : Icons.visibility_off_outlined,
-                                    color: const Color(0xFF64748B),
-                                    size: 24,
-                                  ),
-                                  onPressed: () =>
-                                      setState(() => _obscure = !_obscure),
+                              prefixIcon: const Icon(Icons.lock_outline),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscure
+                                      ? Icons.visibility_outlined
+                                      : Icons.visibility_off_outlined,
                                 ),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: const BorderSide(
-                                  color: Color(0xFF334155),
-                                  width: 2,
-                                ),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: const BorderSide(
-                                  color: Color(0xFF3B82F6),
-                                  width: 2,
-                                ),
-                              ),
-                              errorBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: const BorderSide(
-                                  color: Colors.red,
-                                  width: 2,
-                                ),
-                              ),
-                              focusedErrorBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: const BorderSide(
-                                  color: Colors.red,
-                                  width: 2,
-                                ),
+                                onPressed: () =>
+                                    setState(() => _obscure = !_obscure),
                               ),
                             ),
+                            validator: (v) => v == null || v.isEmpty
+                                ? "Password wajib diisi"
+                                : null,
                           ),
 
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 12),
 
-                          const Align(
+                          Align(
                             alignment: Alignment.centerRight,
                             child: Text(
                               "Lupa Kata Sandi?",
-                              style: TextStyle(color: Color(0xFF3B82F6)),
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
                             ),
                           ),
 
@@ -253,12 +160,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                               width: double.infinity,
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: Colors.red.withOpacity(.15),
+                                color: const Color.fromARGB(25, 255, 0, 0),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Text(
                                 auth.error!,
-                                style: const TextStyle(color: Colors.redAccent),
+                                style: const TextStyle(color: Colors.red),
                               ),
                             ),
 
@@ -268,12 +175,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             width: double.infinity,
                             height: 48,
                             child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF3B82F6),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                              ),
                               onPressed: auth.loading
                                   ? null
                                   : () {
@@ -289,14 +190,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                               child: auth.loading
                                   ? const CircularProgressIndicator(
                                       color: Colors.white,
-                                      strokeWidth: 2.5,
                                     )
-                                  : const Text(
-                                      "Masuk",
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
+                                  : const Text("Masuk"),
                             ),
                           ),
                         ],
@@ -307,34 +202,24 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
                 const SizedBox(height: 16),
 
-                const Text(
+                Text(
                   "Tidak punya akun? Hubungi Admin",
-                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
 
                 const SizedBox(height: 16),
 
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 8,
-                    horizontal: 16,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF111827),
-                    borderRadius: BorderRadius.circular(30),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: const [
-                      Icon(Icons.circle, color: Colors.green, size: 10),
-                      SizedBox(width: 8),
-                      Text(
-                        "Server: APAC-East-1",
-                        style: TextStyle(color: Colors.white70),
-                      ),
-                    ],
-                  ),
-                ),
+                // Chip(
+                //   backgroundColor: Colors.grey.shade100,
+                //   label: Row(
+                //     mainAxisSize: MainAxisSize.min,
+                //     children: const [
+                //       Icon(Icons.circle, color: Colors.green, size: 10),
+                //       SizedBox(width: 8),
+                //       Text("Server: APAC-East-1"),
+                //     ],
+                //   ),
+                // ),
               ],
             ),
           ),
