@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import '../models/product_model.dart';
 import '../services/api_services.dart';
 
@@ -19,18 +20,23 @@ class ProductRepository {
       },
     );
 
-    return (res.data['data'] as List).map((e) => Product.fromJson(e)).toList();
+    debugPrint('[ProductRepo] status=${res.statusCode} body=${res.data}');
+
+    final data = res.data['data'];
+    if (data == null) return [];
+
+    return (data as List).map((e) => Product.fromJson(e)).toList();
   }
 
   Future<void> createProduct(Map<String, dynamic> data) async {
     await api.dio.post('/products', data: data);
   }
 
-  Future<void> updateProduct(String id, Map<String, dynamic> data) async {
+  Future<void> updateProduct(int id, Map<String, dynamic> data) async {
     await api.dio.put('/products/$id', data: data);
   }
 
-  Future<void> deleteProduct(String id) async {
+  Future<void> deleteProduct(int id) async {
     await api.dio.delete('/products/$id');
   }
 }

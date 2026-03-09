@@ -1,25 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../data/models/supplier_model.dart';
-import '../../providers/supplier_provider.dart';
+import '../../../data/models/product_category_model.dart';
+import '../../providers/product_category_provider.dart';
 
-class SupplierFormPage extends ConsumerStatefulWidget {
-  final Supplier? supplier;
+class ProductCategoryFormPage extends ConsumerStatefulWidget {
+  final ProductCategory? category;
 
-  const SupplierFormPage({super.key, this.supplier});
+  const ProductCategoryFormPage({super.key, this.category});
 
   @override
-  ConsumerState<SupplierFormPage> createState() => _SupplierFormPageState();
+  ConsumerState<ProductCategoryFormPage> createState() =>
+      _ProductCategoryFormPageState();
 }
 
-class _SupplierFormPageState extends ConsumerState<SupplierFormPage>
+class _ProductCategoryFormPageState
+    extends ConsumerState<ProductCategoryFormPage>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
 
   late final TextEditingController _nameCtrl;
-  late final TextEditingController _phoneCtrl;
-  late final TextEditingController _addressCtrl;
 
   late final AnimationController _animCtrl;
   late final Animation<double> _fadeIn;
@@ -27,15 +27,13 @@ class _SupplierFormPageState extends ConsumerState<SupplierFormPage>
 
   bool _loading = false;
 
-  bool get _isEdit => widget.supplier != null;
+  bool get _isEdit => widget.category != null;
 
   @override
   void initState() {
     super.initState();
 
-    _nameCtrl = TextEditingController(text: widget.supplier?.name ?? '');
-    _phoneCtrl = TextEditingController(text: widget.supplier?.phone ?? '');
-    _addressCtrl = TextEditingController(text: widget.supplier?.address ?? '');
+    _nameCtrl = TextEditingController(text: widget.category?.name ?? '');
 
     _animCtrl = AnimationController(
       vsync: this,
@@ -53,8 +51,6 @@ class _SupplierFormPageState extends ConsumerState<SupplierFormPage>
   @override
   void dispose() {
     _nameCtrl.dispose();
-    _phoneCtrl.dispose();
-    _addressCtrl.dispose();
     _animCtrl.dispose();
     super.dispose();
   }
@@ -64,22 +60,20 @@ class _SupplierFormPageState extends ConsumerState<SupplierFormPage>
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
 
-    final repo = ref.read(supplierRepositoryProvider);
+    final repo = ref.read(productCategoryRepositoryProvider);
 
     final payload = {
       'name': _nameCtrl.text.trim(),
-      'phone': _phoneCtrl.text.trim(),
-      'address': _addressCtrl.text.trim(),
     };
 
     try {
       if (_isEdit) {
-        await repo.updateSupplier(widget.supplier!.id, payload);
+        await repo.updateCategory(widget.category!.id, payload);
       } else {
-        await repo.createSupplier(payload);
+        await repo.createCategory(payload);
       }
 
-      ref.invalidate(supplierListProvider);
+      ref.invalidate(productCategoryListProvider);
 
       if (!mounted) return;
 
@@ -91,14 +85,15 @@ class _SupplierFormPageState extends ConsumerState<SupplierFormPage>
               const SizedBox(width: 10),
               Text(
                 _isEdit
-                    ? 'Pemasok berhasil diperbarui'
-                    : 'Pemasok berhasil ditambahkan',
+                    ? 'Kategori berhasil diperbarui'
+                    : 'Kategori berhasil ditambahkan',
               ),
             ],
           ),
           backgroundColor: const Color(0xFF10B981),
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           margin: const EdgeInsets.all(16),
         ),
       );
@@ -113,12 +108,13 @@ class _SupplierFormPageState extends ConsumerState<SupplierFormPage>
             children: [
               const Icon(Icons.error_outline, color: Colors.white, size: 20),
               const SizedBox(width: 10),
-              const Text('Gagal menyimpan data pemasok'),
+              const Text('Gagal menyimpan kategori'),
             ],
           ),
           backgroundColor: const Color(0xFFEF4444),
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           margin: const EdgeInsets.all(16),
         ),
       );
@@ -141,7 +137,7 @@ class _SupplierFormPageState extends ConsumerState<SupplierFormPage>
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
         title: Text(
-          _isEdit ? 'Edit Pemasok' : 'Tambah Pemasok',
+          _isEdit ? 'Edit Kategori' : 'Tambah Kategori',
           style: const TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
@@ -184,7 +180,9 @@ class _SupplierFormPageState extends ConsumerState<SupplierFormPage>
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Icon(
-                            _isEdit ? Icons.edit_note_rounded : Icons.person_add_alt_1_rounded,
+                            _isEdit
+                                ? Icons.edit_note_rounded
+                                : Icons.category_rounded,
                             color: cs.primary,
                             size: 28,
                           ),
@@ -195,7 +193,7 @@ class _SupplierFormPageState extends ConsumerState<SupplierFormPage>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                _isEdit ? 'Perbarui Data' : 'Pemasok Baru',
+                                _isEdit ? 'Perbarui Kategori' : 'Kategori Baru',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w700,
@@ -205,8 +203,8 @@ class _SupplierFormPageState extends ConsumerState<SupplierFormPage>
                               const SizedBox(height: 2),
                               Text(
                                 _isEdit
-                                    ? 'Edit informasi pemasok yang sudah ada'
-                                    : 'Lengkapi data pemasok di bawah ini',
+                                    ? 'Edit informasi kategori produk'
+                                    : 'Lengkapi data kategori di bawah ini',
                                 style: TextStyle(
                                   fontSize: 13,
                                   color: Colors.grey.shade600,
@@ -245,7 +243,7 @@ class _SupplierFormPageState extends ConsumerState<SupplierFormPage>
                             ),
                             const SizedBox(width: 10),
                             const Text(
-                              'Informasi Pemasok',
+                              'Informasi Kategori',
                               style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w600,
@@ -257,35 +255,78 @@ class _SupplierFormPageState extends ConsumerState<SupplierFormPage>
 
                         const SizedBox(height: 22),
 
-                        // Nama
-                        _buildField(
-                          label: 'Nama Pemasok',
-                          hint: 'Masukkan nama pemasok',
-                          controller: _nameCtrl,
-                          icon: Icons.store_mall_directory_outlined,
-                          required: true,
-                        ),
-
-                        const SizedBox(height: 18),
-
-                        // Telepon
-                        _buildField(
-                          label: 'No. Telepon',
-                          hint: '08xxxxxxxxxx',
-                          controller: _phoneCtrl,
-                          icon: Icons.phone_outlined,
-                          keyboardType: TextInputType.phone,
-                        ),
-
-                        const SizedBox(height: 18),
-
-                        // Alamat
-                        _buildField(
-                          label: 'Alamat',
-                          hint: 'Masukkan alamat lengkap pemasok',
-                          controller: _addressCtrl,
-                          icon: Icons.location_on_outlined,
-                          multiline: true,
+                        // Nama Kategori
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Row(
+                              children: [
+                                Text(
+                                  'Nama Kategori',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF374151),
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
+                                SizedBox(width: 4),
+                                Text('*',
+                                    style: TextStyle(
+                                        color: Color(0xFFEF4444),
+                                        fontSize: 14)),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            TextFormField(
+                              controller: _nameCtrl,
+                              style: const TextStyle(
+                                  fontSize: 14, color: Color(0xFF111827)),
+                              validator: (v) => v == null || v.trim().isEmpty
+                                  ? 'Nama kategori wajib diisi'
+                                  : null,
+                              decoration: InputDecoration(
+                                hintText: 'Masukkan nama kategori',
+                                hintStyle: const TextStyle(
+                                    color: Color(0xFF9CA3AF), fontSize: 14),
+                                prefixIcon: Padding(
+                                  padding: const EdgeInsets.only(
+                                      left: 14, right: 10),
+                                  child: Icon(Icons.category_outlined,
+                                      size: 20,
+                                      color: const Color(0xFF9CA3AF)),
+                                ),
+                                prefixIconConstraints: const BoxConstraints(
+                                    minWidth: 0, minHeight: 0),
+                                filled: true,
+                                fillColor: const Color(0xFFF9FAFB),
+                                contentPadding:
+                                    const EdgeInsets.symmetric(horizontal: 16),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(
+                                      color: Color(0xFFE5E7EB)),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(
+                                    color: cs.primary,
+                                    width: 1.6,
+                                  ),
+                                ),
+                                errorBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(
+                                      color: Color(0xFFEF4444)),
+                                ),
+                                focusedErrorBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(
+                                      color: Color(0xFFEF4444), width: 1.6),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -323,12 +364,16 @@ class _SupplierFormPageState extends ConsumerState<SupplierFormPage>
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Icon(
-                                    _isEdit ? Icons.save_rounded : Icons.add_rounded,
+                                    _isEdit
+                                        ? Icons.save_rounded
+                                        : Icons.add_rounded,
                                     size: 20,
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
-                                    _isEdit ? 'Simpan Perubahan' : 'Tambah Pemasok',
+                                    _isEdit
+                                        ? 'Simpan Perubahan'
+                                        : 'Tambah Kategori',
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w600,
                                       fontSize: 15,
@@ -367,88 +412,6 @@ class _SupplierFormPageState extends ConsumerState<SupplierFormPage>
           ),
         ),
       ),
-    );
-  }
-
-  // ─── REUSABLE FIELD BUILDER ───────────────────────────
-  Widget _buildField({
-    required String label,
-    required String hint,
-    required TextEditingController controller,
-    required IconData icon,
-    bool multiline = false,
-    bool required = false,
-    TextInputType? keyboardType,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF374151),
-                letterSpacing: 0.2,
-              ),
-            ),
-            if (required) ...[
-              const SizedBox(width: 4),
-              const Text('*', style: TextStyle(color: Color(0xFFEF4444), fontSize: 14)),
-            ],
-          ],
-        ),
-
-        const SizedBox(height: 8),
-
-        TextFormField(
-          controller: controller,
-          maxLines: multiline ? 4 : 1,
-          keyboardType: keyboardType,
-          style: const TextStyle(fontSize: 14, color: Color(0xFF111827)),
-          validator: required
-              ? (v) => v == null || v.trim().isEmpty ? '$label wajib diisi' : null
-              : null,
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
-            prefixIcon: multiline
-                ? null
-                : Padding(
-                    padding: const EdgeInsets.only(left: 14, right: 10),
-                    child: Icon(icon, size: 20, color: const Color(0xFF9CA3AF)),
-                  ),
-            prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
-            filled: true,
-            fillColor: const Color(0xFFF9FAFB),
-            contentPadding: EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: multiline ? 14 : 0,
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: Theme.of(context).colorScheme.primary,
-                width: 1.6,
-              ),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFFEF4444)),
-            ),
-            focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFFEF4444), width: 1.6),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

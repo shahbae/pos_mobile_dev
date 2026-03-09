@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'secure_storage.dart';
@@ -26,6 +27,7 @@ class ApiService {
             options.headers['Authorization'] = 'Bearer $token';
           }
 
+          debugPrint('[API] ${options.method} ${options.path} token=${token != null ? 'YES' : 'NO'}');
           return handler.next(options);
         },
 
@@ -79,14 +81,16 @@ class ApiService {
         options: Options(headers: {'Content-Type': 'application/json'}),
       );
 
-      final token = res.data['token'];
-      final refreshToken = res.data['refresh_token'];
+      if (res.data['success'] != true) return false;
 
-      if (token == null || refreshToken == null) return false;
+      final data = res.data['data'];
+      final token = data?['access_token'];
+
+      if (token == null) return false;
 
       await SecureStorage.saveTokens(
         accessToken: token,
-        refreshToken: refreshToken,
+        refreshToken: data?['refresh_token'],
       );
 
       return true;

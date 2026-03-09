@@ -2,20 +2,20 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../providers/product_provider.dart';
-import '../../../data/models/product_model.dart';
-import 'product_detail_page.dart';
-import 'product_form_page.dart';
+import '../../providers/purchase_provider.dart';
+import '../../../data/models/purchase_model.dart';
 import '../../../utils/currency.dart';
+import 'purchase_form_page.dart';
+import 'purchase_detail_page.dart';
 
-class ProductListPage extends ConsumerStatefulWidget {
-  const ProductListPage({super.key});
+class PurchaseListPage extends ConsumerStatefulWidget {
+  const PurchaseListPage({super.key});
 
   @override
-  ConsumerState<ProductListPage> createState() => _ProductListPageState();
+  ConsumerState<PurchaseListPage> createState() => _PurchaseListPageState();
 }
 
-class _ProductListPageState extends ConsumerState<ProductListPage> {
+class _PurchaseListPageState extends ConsumerState<PurchaseListPage> {
   String search = "";
   int page = 1;
   bool loadingMore = false;
@@ -25,7 +25,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
   Timer? _debounce;
   final ScrollController _scroll = ScrollController();
 
-  List<Product> items = [];
+  List<PurchaseModel> items = [];
 
   @override
   void initState() {
@@ -57,10 +57,10 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
 
     setState(() => loadingMore = true);
 
-    final repo = ref.read(productRepositoryProvider);
+    final repo = ref.read(purchaseRepositoryProvider);
 
     try {
-      final result = await repo.getProducts(
+      final result = await repo.getPurchases(
         page: page,
         limit: 10,
         search: search,
@@ -89,7 +89,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       backgroundColor: theme.colorScheme.surface,
 
       appBar: AppBar(
-        title: const Text("Data Produk"),
+        title: const Text("Data Pembelian"),
         backgroundColor: theme.colorScheme.surface,
         elevation: 0,
         bottom: PreferredSize(
@@ -99,7 +99,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
             child: TextField(
               style: TextStyle(color: Colors.grey.shade900),
               decoration: InputDecoration(
-                hintText: "Cari produk…",
+                hintText: "Cari pembelian (opsional)...",
                 hintStyle: TextStyle(color: Colors.grey.shade500),
 
                 filled: true,
@@ -142,7 +142,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
         onPressed: () async {
           final created = await Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const ProductFormPage()),
+            MaterialPageRoute(builder: (_) => const PurchaseFormPage()),
           );
 
           if (created == true) _load(reset: true);
@@ -155,8 +155,8 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
               ? Center(
                   child: Text(
                     search.isEmpty
-                        ? "Belum ada produk"
-                        : "Produk tidak ditemukan",
+                        ? "Belum ada transaksi pembelian"
+                        : "Pembelian tidak ditemukan",
                     style: TextStyle(color: Colors.grey.shade600),
                   ),
                 )
@@ -183,37 +183,69 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     );
   }
 
-  Widget _item(BuildContext context, Product p) {
+  Widget _item(BuildContext context, PurchaseModel p) {
     final theme = Theme.of(context);
+    final amt = num.tryParse(p.totalAmount ?? '0') ?? 0;
 
     return ListTile(
       leading: Icon(
-        Icons.inventory_2_outlined,
+        Icons.shopping_cart_checkout_outlined,
         color: theme.colorScheme.primary,
       ),
       title: Text(
-        p.name,
+        p.supplierName != null 
+            ? "Pembelian #${p.id} (${p.supplierName})"
+            : "Pembelian #${p.id} (Pemasok ${p.supplierId ?? '-'})",
         style: TextStyle(
           fontWeight: FontWeight.w600,
           color: Colors.grey.shade900,
         ),
       ),
-      subtitle: Text(
-        formatRupiah(p.sellingPriceNum),
-        style: TextStyle(color: Colors.grey.shade600),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            p.note ?? '-',
+            style: TextStyle(color: Colors.grey.shade600),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            _formatDate(p.createdAt),
+            style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+          ),
+        ],
       ),
-      trailing: Icon(Icons.chevron_right, color: Colors.grey.shade500),
-
-      onTap: () async {
-        final updated = await Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => ProductDetailPage(product: p)),
-        );
-
-        if (updated == true) {
-          _load(reset: true);
+      trailing: Text(
+        formatRupiah(amt),
+        style: TextStyle(
+          fontWeight: FontWeight.w700,
+          color: theme.colorScheme.primary,
+        ),
+      ),
+      onTap: () {
+        if (p.id != null) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PurchaseDetailPage(purchaseId: p.id!),
+            ),
+          );
         }
       },
     );
+  }
+
+  String _formatDate(String? dateStr) {
+    if (dateStr == null) return '-';
+    try {
+      final dt = DateTime.parse(dateStr);
+      return '${dt.day.toString().padLeft(2, '0')}/'
+          '${dt.month.toString().padLeft(2, '0')}/'
+          '${dt.year} '
+          '${dt.hour.toString().padLeft(2, '0')}:'
+          '${dt.minute.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return dateStr;
+    }
   }
 }

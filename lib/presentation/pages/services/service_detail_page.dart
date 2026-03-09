@@ -1,25 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../data/models/product_model.dart';
-import '../../providers/product_provider.dart';
-import '../../providers/stock_level_provider.dart';
-import 'product_form_page.dart';
+import '../../../data/models/service_model.dart';
+import '../../providers/service_provider.dart';
 import '../../../utils/currency.dart';
+import 'service_form_page.dart';
 
-class ProductDetailPage extends ConsumerWidget {
-  final Product product;
-  const ProductDetailPage({super.key, required this.product});
+class ServiceDetailPage extends ConsumerWidget {
+  final ServiceModel service;
+  const ServiceDetailPage({super.key, required this.service});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
 
+    // Format tampilan unit type
+    String unitLabel = service.unitType ?? "-";
+    if (unitLabel == "per_item") unitLabel = "Per Item";
+    if (unitLabel == "per_hour") unitLabel = "Per Jam";
+    if (unitLabel == "per_day") unitLabel = "Per Hari";
+
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
 
       appBar: AppBar(
-        title: const Text("Detail Produk"),
+        title: const Text("Detail Layanan"),
         backgroundColor: theme.colorScheme.surface,
         elevation: 0,
       ),
@@ -33,7 +38,7 @@ class ProductDetailPage extends ConsumerWidget {
             // HEADER NAME
             // =====================
             Text(
-              product.name,
+              service.name,
               style:
                   const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
             ),
@@ -41,9 +46,7 @@ class ProductDetailPage extends ConsumerWidget {
             const SizedBox(height: 6),
 
             Text(
-              product.sku != null && product.sku!.isNotEmpty
-                  ? "SKU: ${product.sku}"
-                  : "Informasi produk",
+              "Informasi layanan",
               style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
             ),
 
@@ -63,107 +66,12 @@ class ProductDetailPage extends ConsumerWidget {
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    _row("SKU", product.sku ?? "-"),
-                    _row("Kategori", product.categoryName ?? "-"),
-                    _row("Harga Beli",
-                        formatRupiah(product.purchasePriceNum)),
-                    _row("Harga Jual",
-                        formatRupiah(product.sellingPriceNum)),
-                    _row("Profit",
-                        formatRupiah(product.profitMarginNum)),
-                    _row("Dibuat", _formatDate(product.createdAt)),
+                    _row("Harga Layanan", formatRupiah(service.priceNum)),
+                    _row("Tipe Unit", unitLabel),
+                    _row("Dibuat", _formatDate(service.createdAt)),
                   ],
                 ),
               ),
-            ),
-
-            const SizedBox(height: 18),
-
-            // =====================
-            // STOCK LEVEL CARD
-            // =====================
-            Consumer(
-              builder: (context, ref, child) {
-                final stockAsync = ref.watch(stockLevelProvider(product.id));
-                
-                return stockAsync.when(
-                  data: (stock) {
-                    return Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.primary.withOpacity(0.04),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: theme.colorScheme.primary.withOpacity(0.1)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                "Stok Tersedia (Qty on Hand)",
-                                style: TextStyle(
-                                  color: Colors.grey.shade700,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.05),
-                                      blurRadius: 4,
-                                      offset: const Offset(0, 2),
-                                    )
-                                  ],
-                                ),
-                                child: Icon(Icons.inventory_2_rounded, 
-                                  color: theme.colorScheme.primary, 
-                                  size: 18
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            stock?.qtyOnHand?.toString() ?? '0',
-                            style: TextStyle(
-                              fontSize: 28,
-                              fontWeight: FontWeight.w800,
-                              color: theme.colorScheme.primary,
-                            ),
-                          ),
-                          if (stock?.updatedAt != null) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              "Terakhir update: ${_formatDateTime(stock!.updatedAt!)}",
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey.shade500,
-                              ),
-                            ),
-                          ]
-                        ],
-                      ),
-                    );
-                  },
-                  loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (err, _) => Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.red.shade100),
-                    ),
-                    child: Text("Gagal memuat stok", style: TextStyle(color: Colors.red.shade700)),
-                  ),
-                );
-              },
             ),
 
             const Spacer(),
@@ -176,12 +84,12 @@ class ProductDetailPage extends ConsumerWidget {
               height: 48,
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.edit_outlined),
-                label: const Text("Edit Produk"),
+                label: const Text("Edit Layanan"),
                 onPressed: () async {
                   final updated = await Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => ProductFormPage(product: product),
+                      builder: (_) => ServiceFormPage(service: service),
                     ),
                   );
 
@@ -201,7 +109,7 @@ class ProductDetailPage extends ConsumerWidget {
                 icon: const Icon(Icons.delete_outline,
                     color: Color(0xFFEF4444)),
                 label: const Text(
-                  "Hapus Produk",
+                  "Hapus Layanan",
                   style: TextStyle(color: Color(0xFFEF4444)),
                 ),
                 style: OutlinedButton.styleFrom(
@@ -214,9 +122,9 @@ class ProductDetailPage extends ConsumerWidget {
                   final confirm = await showDialog<bool>(
                     context: context,
                     builder: (ctx) => AlertDialog(
-                      title: const Text('Hapus Produk'),
+                      title: const Text('Hapus Layanan'),
                       content: Text(
-                        'Yakin ingin menghapus produk "${product.name}"?',
+                        'Yakin ingin menghapus layanan "${service.name}"?',
                       ),
                       actions: [
                         TextButton(
@@ -237,10 +145,10 @@ class ProductDetailPage extends ConsumerWidget {
                   if (confirm == true) {
                     try {
                       await ref
-                          .read(productRepositoryProvider)
-                          .deleteProduct(product.id);
+                          .read(serviceRepositoryProvider)
+                          .deleteService(service.id);
 
-                      ref.invalidate(productListProvider);
+                      ref.invalidate(serviceListProvider);
 
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -250,7 +158,7 @@ class ProductDetailPage extends ConsumerWidget {
                                 Icon(Icons.check_circle,
                                     color: Colors.white, size: 20),
                                 SizedBox(width: 10),
-                                Text('Produk berhasil dihapus'),
+                                Text('Layanan berhasil dihapus'),
                               ],
                             ),
                             backgroundColor: const Color(0xFF10B981),
@@ -271,7 +179,7 @@ class ProductDetailPage extends ConsumerWidget {
                                 Icon(Icons.error_outline,
                                     color: Colors.white, size: 20),
                                 SizedBox(width: 10),
-                                Text('Gagal menghapus produk'),
+                                Text('Gagal menghapus layanan'),
                               ],
                             ),
                             backgroundColor: const Color(0xFFEF4444),
@@ -335,15 +243,6 @@ class ProductDetailPage extends ConsumerWidget {
           '${dt.minute.toString().padLeft(2, '0')}';
     } catch (_) {
       return dateStr;
-    }
-  }
-
-  String _formatDateTime(String isoString) {
-    try {
-      final dt = DateTime.parse(isoString);
-      return "${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
-    } catch (_) {
-      return isoString;
     }
   }
 }

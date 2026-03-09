@@ -2,30 +2,27 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../../../data/models/product_model.dart';
-import '../../../data/models/product_category_model.dart';
-import '../../providers/product_provider.dart';
-import '../../providers/product_category_provider.dart';
+import '../../../data/models/service_model.dart';
+import '../../providers/service_provider.dart';
 
-class ProductFormPage extends ConsumerStatefulWidget {
-  final Product? product;
-  const ProductFormPage({super.key, this.product});
+class ServiceFormPage extends ConsumerStatefulWidget {
+  final ServiceModel? service;
+
+  const ServiceFormPage({super.key, this.service});
 
   @override
-  ConsumerState<ProductFormPage> createState() => _ProductFormPageState();
+  ConsumerState<ServiceFormPage> createState() => _ServiceFormPageState();
 }
 
-class _ProductFormPageState extends ConsumerState<ProductFormPage>
+class _ServiceFormPageState extends ConsumerState<ServiceFormPage>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   bool _loading = false;
 
   late final TextEditingController _name;
-  late final TextEditingController _sku;
-  late final TextEditingController _buy;
-  late final TextEditingController _sell;
+  late final TextEditingController _price;
 
-  int? _selectedCategoryId;
+  String? _selectedUnitType;
 
   late final AnimationController _animCtrl;
   late final Animation<double> _fadeIn;
@@ -33,25 +30,20 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
 
   final _formatter = NumberFormat('#,###', 'id_ID');
 
-  bool get _isEdit => widget.product != null;
+  bool get _isEdit => widget.service != null;
 
   @override
   void initState() {
     super.initState();
 
-    _name = TextEditingController(text: widget.product?.name ?? '');
-    _sku = TextEditingController(text: widget.product?.sku ?? '');
-    _buy = TextEditingController();
-    _sell = TextEditingController();
+    _name = TextEditingController(text: widget.service?.name ?? '');
+    _price = TextEditingController();
 
-    _selectedCategoryId = widget.product?.categoryId;
-    debugPrint('[ProductForm] Init edit mode: product.categoryId=${widget.product?.categoryId}');
+    _selectedUnitType = widget.service?.unitType ?? 'per_item';
 
-    if (widget.product != null) {
-      final bp = widget.product!.purchasePriceNum.toInt();
-      final sp = widget.product!.sellingPriceNum.toInt();
-      if (bp > 0) _buy.text = _formatter.format(bp);
-      if (sp > 0) _sell.text = _formatter.format(sp);
+    if (widget.service != null) {
+      final pr = widget.service!.priceNum.toInt();
+      if (pr > 0) _price.text = _formatter.format(pr);
     }
 
     _animCtrl = AnimationController(
@@ -70,9 +62,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
   @override
   void dispose() {
     _name.dispose();
-    _sku.dispose();
-    _buy.dispose();
-    _sell.dispose();
+    _price.dispose();
     _animCtrl.dispose();
     super.dispose();
   }
@@ -82,29 +72,26 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
 
-    final repo = ref.read(productRepositoryProvider);
+    final repo = ref.read(serviceRepositoryProvider);
 
-    final buyDigits = _buy.text.replaceAll(RegExp(r'[^0-9]'), '');
-    final sellDigits = _sell.text.replaceAll(RegExp(r'[^0-9]'), '');
+    final priceDigits = _price.text.replaceAll(RegExp(r'[^0-9]'), '');
 
     final payload = {
       'name': _name.text.trim(),
-      'sku': _sku.text.trim().isEmpty ? null : _sku.text.trim(),
-      'category_id': _selectedCategoryId,
-      'purchase_price': '$buyDigits.00',
-      'selling_price': '$sellDigits.00',
+      'price': '$priceDigits.00',
+      'unit_type': _selectedUnitType,
     };
 
-    debugPrint('[ProductForm] payload=$payload');
+    debugPrint('[ServiceForm] payload=$payload');
 
     try {
       if (_isEdit) {
-        await repo.updateProduct(widget.product!.id, payload);
+        await repo.updateService(widget.service!.id, payload);
       } else {
-        await repo.createProduct(payload);
+        await repo.createService(payload);
       }
 
-      ref.invalidate(productListProvider);
+      ref.invalidate(serviceListProvider);
 
       if (!mounted) return;
 
@@ -116,8 +103,8 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
               const SizedBox(width: 10),
               Text(
                 _isEdit
-                    ? 'Produk berhasil diperbarui'
-                    : 'Produk berhasil ditambahkan',
+                    ? 'Layanan berhasil diperbarui'
+                    : 'Layanan berhasil ditambahkan',
               ),
             ],
           ),
@@ -133,13 +120,15 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
     } catch (e) {
       if (!mounted) return;
 
+      debugPrint('Error submit: $e');
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Row(
             children: [
               Icon(Icons.error_outline, color: Colors.white, size: 20),
               SizedBox(width: 10),
-              Text('Gagal menyimpan produk'),
+              Text('Terjadi kesalahan saat menyimpan'),
             ],
           ),
           backgroundColor: const Color(0xFFEF4444),
@@ -160,8 +149,6 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
-    final categoriesAsync = ref.watch(productCategoryListProvider(null));
-
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
 
@@ -170,7 +157,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
         title: Text(
-          _isEdit ? 'Edit Produk' : 'Tambah Produk',
+          _isEdit ? 'Edit Layanan' : 'Tambah Layanan',
           style: const TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
@@ -215,7 +202,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
                           child: Icon(
                             _isEdit
                                 ? Icons.edit_note_rounded
-                                : Icons.inventory_2_rounded,
+                                : Icons.design_services_rounded,
                             color: cs.primary,
                             size: 28,
                           ),
@@ -226,7 +213,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                _isEdit ? 'Perbarui Produk' : 'Produk Baru',
+                                _isEdit ? 'Perbarui Layanan' : 'Layanan Baru',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w700,
@@ -236,8 +223,8 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
                               const SizedBox(height: 2),
                               Text(
                                 _isEdit
-                                    ? 'Edit informasi produk yang sudah ada'
-                                    : 'Lengkapi data produk di bawah ini',
+                                    ? 'Edit detail informasi layanan'
+                                    : 'Lengkapi data layanan di bawah ini',
                                 style: TextStyle(
                                   fontSize: 13,
                                   color: Colors.grey.shade600,
@@ -263,7 +250,6 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Section title
                         Row(
                           children: [
                             Container(
@@ -276,7 +262,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
                             ),
                             const SizedBox(width: 10),
                             const Text(
-                              'Informasi Produk',
+                              'Informasi Layanan',
                               style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w600,
@@ -288,47 +274,25 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
 
                         const SizedBox(height: 22),
 
-                        // Nama Produk
                         _buildField(
-                          label: 'Nama Produk',
-                          hint: 'Masukkan nama produk',
+                          label: 'Nama Layanan',
+                          hint: 'Contoh: Pemasangan, Perbaikan...',
                           controller: _name,
-                          icon: Icons.inventory_2_outlined,
+                          icon: Icons.miscellaneous_services_rounded,
                           required: true,
                         ),
 
                         const SizedBox(height: 18),
 
-                        // SKU
-                        _buildField(
-                          label: 'SKU',
-                          hint: 'Kode SKU (opsional)',
-                          controller: _sku,
-                          icon: Icons.qr_code_outlined,
-                        ),
-
-                        const SizedBox(height: 18),
-
-                        // Kategori
-                        _buildCategoryDropdown(categoriesAsync, cs),
-
-                        const SizedBox(height: 18),
-
-                        // Harga Beli
                         _buildMoneyField(
-                          label: 'Harga Beli',
-                          controller: _buy,
+                          label: 'Harga Layanan',
+                          controller: _price,
                           required: true,
                         ),
 
                         const SizedBox(height: 18),
 
-                        // Harga Jual
-                        _buildMoneyField(
-                          label: 'Harga Jual',
-                          controller: _sell,
-                          required: true,
-                        ),
+                        _buildUnitTypeDropdown(cs),
                       ],
                     ),
                   ),
@@ -374,7 +338,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
                                   Text(
                                     _isEdit
                                         ? 'Simpan Perubahan'
-                                        : 'Tambah Produk',
+                                        : 'Tambah Layanan',
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w600,
                                       fontSize: 15,
@@ -388,7 +352,6 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
 
                   const SizedBox(height: 12),
 
-                  // ── Cancel button ──
                   SizedBox(
                     width: double.infinity,
                     height: 48,
@@ -416,18 +379,15 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
     );
   }
 
-  // ─── CATEGORY DROPDOWN ────────────────────────────────
-  Widget _buildCategoryDropdown(
-    AsyncValue<List<ProductCategory>> categoriesAsync,
-    ColorScheme cs,
-  ) {
+  // ─── UNIT TYPE DROPDOWN ───────────────────────────────
+  Widget _buildUnitTypeDropdown(ColorScheme cs) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Row(
           children: [
             Text(
-              'Kategori',
+              'Tipe Unit',
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
@@ -441,77 +401,52 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
           ],
         ),
         const SizedBox(height: 8),
-        categoriesAsync.when(
-          data: (categories) {
-            // Cek apakah selected ID ada di daftar kategori
-            final isValid = _selectedCategoryId == null || 
-                categories.any((c) => c.id == _selectedCategoryId);
-            
-            if (!isValid) {
-              debugPrint('[ProductForm] Warning: categoryId $_selectedCategoryId tidak ada di list kategori!');
-            }
-
-            return DropdownButtonFormField<int>(
-              value: isValid ? _selectedCategoryId : null,
-              validator: (v) => v == null ? 'Kategori wajib dipilih' : null,
-              decoration: InputDecoration(
-                hintText: 'Pilih kategori',
-                hintStyle:
-                    const TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
-                prefixIcon: const Padding(
-                  padding: EdgeInsets.only(left: 14, right: 10),
-                  child: Icon(Icons.category_outlined,
-                      size: 20, color: Color(0xFF9CA3AF)),
-                ),
-                prefixIconConstraints:
-                    const BoxConstraints(minWidth: 0, minHeight: 0),
-                filled: true,
-                fillColor: const Color(0xFFF9FAFB),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: cs.primary, width: 1.6),
-                ),
-                errorBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFFEF4444)),
-                ),
-                focusedErrorBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide:
-                      const BorderSide(color: Color(0xFFEF4444), width: 1.6),
-                ),
-              ),
-              items: categories
-                  .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
-                  .toList(),
-              onChanged: (v) => setState(() => _selectedCategoryId = v),
-            );
-          },
-          loading: () => const Center(
-            child: Padding(
-              padding: EdgeInsets.all(12),
-              child: SizedBox(
-                height: 20,
-                width: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
+        DropdownButtonFormField<String>(
+          value: _selectedUnitType,
+          validator: (v) => v == null ? 'Tipe unit wajib dipilih' : null,
+          decoration: InputDecoration(
+            hintText: 'Pilih tipe unit',
+            hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
+            prefixIcon: const Padding(
+              padding: EdgeInsets.only(left: 14, right: 10),
+              child: Icon(Icons.style_outlined,
+                  size: 20, color: Color(0xFF9CA3AF)),
+            ),
+            prefixIconConstraints:
+                const BoxConstraints(minWidth: 0, minHeight: 0),
+            filled: true,
+            fillColor: const Color(0xFFF9FAFB),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: cs.primary, width: 1.6),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFFEF4444)),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide:
+                  const BorderSide(color: Color(0xFFEF4444), width: 1.6),
             ),
           ),
-          error: (e, _) => Text(
-            'Gagal memuat kategori',
-            style: TextStyle(color: Colors.red.shade400, fontSize: 13),
-          ),
+          items: const [
+            DropdownMenuItem(value: 'per_item', child: Text('Per Item')),
+            DropdownMenuItem(value: 'per_hour', child: Text('Per Jam')),
+            DropdownMenuItem(value: 'per_day', child: Text('Per Hari')),
+          ],
+          onChanged: (v) => setState(() => _selectedUnitType = v),
         ),
       ],
     );
   }
 
-  // ─── REUSABLE FIELD BUILDER ───────────────────────────
+  // ─── REUSABLE FIELD ───────────────────────────────────
   Widget _buildField({
     required String label,
     required String hint,
@@ -550,8 +485,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
               : null,
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle:
-                const TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
+            hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
             prefixIcon: Padding(
               padding: const EdgeInsets.only(left: 14, right: 10),
               child: Icon(icon, size: 20, color: const Color(0xFF9CA3AF)),
@@ -587,7 +521,6 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
     );
   }
 
-  // ─── MONEY FIELD ──────────────────────────────────────
   Widget _buildMoneyField({
     required String label,
     required TextEditingController controller,
@@ -620,16 +553,14 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
           keyboardType: TextInputType.number,
           style: const TextStyle(fontSize: 14, color: Color(0xFF111827)),
           validator: required
-              ? (v) =>
-                  v == null || v.isEmpty ? '$label wajib diisi' : null
+              ? (v) => v == null || v.isEmpty ? '$label wajib diisi' : null
               : null,
           decoration: InputDecoration(
             prefixText: 'Rp ',
             prefixStyle:
                 const TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
             hintText: '0',
-            hintStyle:
-                const TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
+            hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
             prefixIcon: const Padding(
               padding: EdgeInsets.only(left: 14, right: 10),
               child: Icon(Icons.payments_outlined,

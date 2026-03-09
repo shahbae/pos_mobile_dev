@@ -1,58 +1,40 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
-import '../../../data/models/product_model.dart';
-import '../../../data/models/product_category_model.dart';
-import '../../providers/product_provider.dart';
-import '../../providers/product_category_provider.dart';
+import '../../../data/models/customer_model.dart';
+import '../../providers/customer_provider.dart';
 
-class ProductFormPage extends ConsumerStatefulWidget {
-  final Product? product;
-  const ProductFormPage({super.key, this.product});
+class CustomerFormPage extends ConsumerStatefulWidget {
+  final Customer? customer;
+
+  const CustomerFormPage({super.key, this.customer});
 
   @override
-  ConsumerState<ProductFormPage> createState() => _ProductFormPageState();
+  ConsumerState<CustomerFormPage> createState() => _CustomerFormPageState();
 }
 
-class _ProductFormPageState extends ConsumerState<ProductFormPage>
+class _CustomerFormPageState extends ConsumerState<CustomerFormPage>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   bool _loading = false;
 
   late final TextEditingController _name;
-  late final TextEditingController _sku;
-  late final TextEditingController _buy;
-  late final TextEditingController _sell;
-
-  int? _selectedCategoryId;
+  late final TextEditingController _phone;
+  late final TextEditingController _address;
 
   late final AnimationController _animCtrl;
   late final Animation<double> _fadeIn;
   late final Animation<Offset> _slideUp;
 
-  final _formatter = NumberFormat('#,###', 'id_ID');
-
-  bool get _isEdit => widget.product != null;
+  bool get _isEdit => widget.customer != null;
 
   @override
   void initState() {
     super.initState();
 
-    _name = TextEditingController(text: widget.product?.name ?? '');
-    _sku = TextEditingController(text: widget.product?.sku ?? '');
-    _buy = TextEditingController();
-    _sell = TextEditingController();
-
-    _selectedCategoryId = widget.product?.categoryId;
-    debugPrint('[ProductForm] Init edit mode: product.categoryId=${widget.product?.categoryId}');
-
-    if (widget.product != null) {
-      final bp = widget.product!.purchasePriceNum.toInt();
-      final sp = widget.product!.sellingPriceNum.toInt();
-      if (bp > 0) _buy.text = _formatter.format(bp);
-      if (sp > 0) _sell.text = _formatter.format(sp);
-    }
+    _name = TextEditingController(text: widget.customer?.name ?? '');
+    _phone = TextEditingController(text: widget.customer?.phone ?? '');
+    _address = TextEditingController(text: widget.customer?.address ?? '');
 
     _animCtrl = AnimationController(
       vsync: this,
@@ -70,9 +52,8 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
   @override
   void dispose() {
     _name.dispose();
-    _sku.dispose();
-    _buy.dispose();
-    _sell.dispose();
+    _phone.dispose();
+    _address.dispose();
     _animCtrl.dispose();
     super.dispose();
   }
@@ -82,29 +63,22 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
 
-    final repo = ref.read(productRepositoryProvider);
-
-    final buyDigits = _buy.text.replaceAll(RegExp(r'[^0-9]'), '');
-    final sellDigits = _sell.text.replaceAll(RegExp(r'[^0-9]'), '');
+    final repo = ref.read(customerRepositoryProvider);
 
     final payload = {
       'name': _name.text.trim(),
-      'sku': _sku.text.trim().isEmpty ? null : _sku.text.trim(),
-      'category_id': _selectedCategoryId,
-      'purchase_price': '$buyDigits.00',
-      'selling_price': '$sellDigits.00',
+      'phone': _phone.text.trim(),
+      'address': _address.text.trim(),
     };
-
-    debugPrint('[ProductForm] payload=$payload');
 
     try {
       if (_isEdit) {
-        await repo.updateProduct(widget.product!.id, payload);
+        await repo.updateCustomer(widget.customer!.id, payload);
       } else {
-        await repo.createProduct(payload);
+        await repo.createCustomer(payload);
       }
 
-      ref.invalidate(productListProvider);
+      ref.invalidate(customerListProvider);
 
       if (!mounted) return;
 
@@ -116,8 +90,8 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
               const SizedBox(width: 10),
               Text(
                 _isEdit
-                    ? 'Produk berhasil diperbarui'
-                    : 'Produk berhasil ditambahkan',
+                    ? 'Pelanggan berhasil diperbarui'
+                    : 'Pelanggan berhasil ditambahkan',
               ),
             ],
           ),
@@ -133,13 +107,15 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
     } catch (e) {
       if (!mounted) return;
 
+      debugPrint('Error submit: $e');
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Row(
             children: [
               Icon(Icons.error_outline, color: Colors.white, size: 20),
               SizedBox(width: 10),
-              Text('Gagal menyimpan produk'),
+              Text('Terjadi kesalahan saat menyimpan'),
             ],
           ),
           backgroundColor: const Color(0xFFEF4444),
@@ -160,8 +136,6 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
-    final categoriesAsync = ref.watch(productCategoryListProvider(null));
-
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
 
@@ -170,7 +144,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
         title: Text(
-          _isEdit ? 'Edit Produk' : 'Tambah Produk',
+          _isEdit ? 'Edit Pelanggan' : 'Tambah Pelanggan',
           style: const TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
@@ -215,7 +189,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
                           child: Icon(
                             _isEdit
                                 ? Icons.edit_note_rounded
-                                : Icons.inventory_2_rounded,
+                                : Icons.person_add_alt_1_rounded,
                             color: cs.primary,
                             size: 28,
                           ),
@@ -226,7 +200,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                _isEdit ? 'Perbarui Produk' : 'Produk Baru',
+                                _isEdit ? 'Perbarui Data' : 'Pelanggan Baru',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w700,
@@ -236,8 +210,8 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
                               const SizedBox(height: 2),
                               Text(
                                 _isEdit
-                                    ? 'Edit informasi produk yang sudah ada'
-                                    : 'Lengkapi data produk di bawah ini',
+                                    ? 'Edit detail informasi pelanggan'
+                                    : 'Lengkapi data pelanggan di bawah ini',
                                 style: TextStyle(
                                   fontSize: 13,
                                   color: Colors.grey.shade600,
@@ -263,7 +237,6 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Section title
                         Row(
                           children: [
                             Container(
@@ -276,7 +249,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
                             ),
                             const SizedBox(width: 10),
                             const Text(
-                              'Informasi Produk',
+                              'Informasi Pelanggan',
                               style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w600,
@@ -288,46 +261,32 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
 
                         const SizedBox(height: 22),
 
-                        // Nama Produk
                         _buildField(
-                          label: 'Nama Produk',
-                          hint: 'Masukkan nama produk',
+                          label: 'Nama Pelanggan',
+                          hint: 'Masukkan nama lengkap',
                           controller: _name,
-                          icon: Icons.inventory_2_outlined,
+                          icon: Icons.person_outline_rounded,
                           required: true,
                         ),
 
                         const SizedBox(height: 18),
 
-                        // SKU
                         _buildField(
-                          label: 'SKU',
-                          hint: 'Kode SKU (opsional)',
-                          controller: _sku,
-                          icon: Icons.qr_code_outlined,
+                          label: 'Nomor Telepon',
+                          hint: 'Contoh: 08123456789 (Opsional)',
+                          controller: _phone,
+                          icon: Icons.phone_outlined,
+                          inputType: TextInputType.phone,
                         ),
 
                         const SizedBox(height: 18),
 
-                        // Kategori
-                        _buildCategoryDropdown(categoriesAsync, cs),
-
-                        const SizedBox(height: 18),
-
-                        // Harga Beli
-                        _buildMoneyField(
-                          label: 'Harga Beli',
-                          controller: _buy,
-                          required: true,
-                        ),
-
-                        const SizedBox(height: 18),
-
-                        // Harga Jual
-                        _buildMoneyField(
-                          label: 'Harga Jual',
-                          controller: _sell,
-                          required: true,
+                        _buildField(
+                          label: 'Alamat',
+                          hint: 'Masukkan alamat lengkap (Opsional)',
+                          controller: _address,
+                          icon: Icons.location_on_outlined,
+                          isMultiline: true,
                         ),
                       ],
                     ),
@@ -367,14 +326,14 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
                                   Icon(
                                     _isEdit
                                         ? Icons.save_rounded
-                                        : Icons.add_rounded,
+                                        : Icons.person_add_rounded,
                                     size: 20,
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
                                     _isEdit
                                         ? 'Simpan Perubahan'
-                                        : 'Tambah Produk',
+                                        : 'Tambah Pelanggan',
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w600,
                                       fontSize: 15,
@@ -388,7 +347,6 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
 
                   const SizedBox(height: 12),
 
-                  // ── Cancel button ──
                   SizedBox(
                     width: double.infinity,
                     height: 48,
@@ -416,108 +374,15 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
     );
   }
 
-  // ─── CATEGORY DROPDOWN ────────────────────────────────
-  Widget _buildCategoryDropdown(
-    AsyncValue<List<ProductCategory>> categoriesAsync,
-    ColorScheme cs,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Row(
-          children: [
-            Text(
-              'Kategori',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF374151),
-                letterSpacing: 0.2,
-              ),
-            ),
-            SizedBox(width: 4),
-            Text('*',
-                style: TextStyle(color: Color(0xFFEF4444), fontSize: 14)),
-          ],
-        ),
-        const SizedBox(height: 8),
-        categoriesAsync.when(
-          data: (categories) {
-            // Cek apakah selected ID ada di daftar kategori
-            final isValid = _selectedCategoryId == null || 
-                categories.any((c) => c.id == _selectedCategoryId);
-            
-            if (!isValid) {
-              debugPrint('[ProductForm] Warning: categoryId $_selectedCategoryId tidak ada di list kategori!');
-            }
-
-            return DropdownButtonFormField<int>(
-              value: isValid ? _selectedCategoryId : null,
-              validator: (v) => v == null ? 'Kategori wajib dipilih' : null,
-              decoration: InputDecoration(
-                hintText: 'Pilih kategori',
-                hintStyle:
-                    const TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
-                prefixIcon: const Padding(
-                  padding: EdgeInsets.only(left: 14, right: 10),
-                  child: Icon(Icons.category_outlined,
-                      size: 20, color: Color(0xFF9CA3AF)),
-                ),
-                prefixIconConstraints:
-                    const BoxConstraints(minWidth: 0, minHeight: 0),
-                filled: true,
-                fillColor: const Color(0xFFF9FAFB),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: cs.primary, width: 1.6),
-                ),
-                errorBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFFEF4444)),
-                ),
-                focusedErrorBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide:
-                      const BorderSide(color: Color(0xFFEF4444), width: 1.6),
-                ),
-              ),
-              items: categories
-                  .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
-                  .toList(),
-              onChanged: (v) => setState(() => _selectedCategoryId = v),
-            );
-          },
-          loading: () => const Center(
-            child: Padding(
-              padding: EdgeInsets.all(12),
-              child: SizedBox(
-                height: 20,
-                width: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-          ),
-          error: (e, _) => Text(
-            'Gagal memuat kategori',
-            style: TextStyle(color: Colors.red.shade400, fontSize: 13),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ─── REUSABLE FIELD BUILDER ───────────────────────────
+  // ─── REUSABLE FIELD ───────────────────────────────────
   Widget _buildField({
     required String label,
     required String hint,
     required TextEditingController controller,
     required IconData icon,
     bool required = false,
+    bool isMultiline = false,
+    TextInputType? inputType,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -543,6 +408,8 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
         const SizedBox(height: 8),
         TextFormField(
           controller: controller,
+          maxLines: isMultiline ? 3 : 1,
+          keyboardType: inputType,
           style: const TextStyle(fontSize: 14, color: Color(0xFF111827)),
           validator: required
               ? (v) =>
@@ -552,15 +419,27 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
             hintText: hint,
             hintStyle:
                 const TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
-            prefixIcon: Padding(
-              padding: const EdgeInsets.only(left: 14, right: 10),
-              child: Icon(icon, size: 20, color: const Color(0xFF9CA3AF)),
-            ),
+            prefixIcon: isMultiline
+                ? Padding(
+                    padding: const EdgeInsets.only(
+                        left: 14, right: 10, top: 18, bottom: 44),
+                    child: Icon(icon, size: 20, color: const Color(0xFF9CA3AF)),
+                  )
+                : Padding(
+                    padding: const EdgeInsets.only(left: 14, right: 10),
+                    child: Icon(icon, size: 20, color: const Color(0xFF9CA3AF)),
+                  ),
             prefixIconConstraints:
                 const BoxConstraints(minWidth: 0, minHeight: 0),
             filled: true,
             fillColor: const Color(0xFFF9FAFB),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+            contentPadding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: isMultiline ? 16 : 0,
+              bottom: isMultiline ? 16 : 0,
+            ),
+            alignLabelWithHint: isMultiline,
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
@@ -582,96 +461,6 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
                   const BorderSide(color: Color(0xFFEF4444), width: 1.6),
             ),
           ),
-        ),
-      ],
-    );
-  }
-
-  // ─── MONEY FIELD ──────────────────────────────────────
-  Widget _buildMoneyField({
-    required String label,
-    required TextEditingController controller,
-    bool required = false,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF374151),
-                letterSpacing: 0.2,
-              ),
-            ),
-            if (required) ...[
-              const SizedBox(width: 4),
-              const Text('*',
-                  style: TextStyle(color: Color(0xFFEF4444), fontSize: 14)),
-            ],
-          ],
-        ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          style: const TextStyle(fontSize: 14, color: Color(0xFF111827)),
-          validator: required
-              ? (v) =>
-                  v == null || v.isEmpty ? '$label wajib diisi' : null
-              : null,
-          decoration: InputDecoration(
-            prefixText: 'Rp ',
-            prefixStyle:
-                const TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
-            hintText: '0',
-            hintStyle:
-                const TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
-            prefixIcon: const Padding(
-              padding: EdgeInsets.only(left: 14, right: 10),
-              child: Icon(Icons.payments_outlined,
-                  size: 20, color: Color(0xFF9CA3AF)),
-            ),
-            prefixIconConstraints:
-                const BoxConstraints(minWidth: 0, minHeight: 0),
-            filled: true,
-            fillColor: const Color(0xFFF9FAFB),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: Theme.of(context).colorScheme.primary,
-                width: 1.6,
-              ),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFFEF4444)),
-            ),
-            focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  const BorderSide(color: Color(0xFFEF4444), width: 1.6),
-            ),
-          ),
-          onChanged: (value) {
-            final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
-            final num = int.tryParse(digits) ?? 0;
-            if (num == 0) return;
-            controller.value = TextEditingValue(
-              text: _formatter.format(num),
-              selection: TextSelection.collapsed(
-                offset: _formatter.format(num).length,
-              ),
-            );
-          },
         ),
       ],
     );

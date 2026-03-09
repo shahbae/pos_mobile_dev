@@ -1,27 +1,21 @@
-class Supplier {
+class ProductCategory {
   final int id;
   final int? tenantId;
   final String name;
-  final String? phone;
-  final String? address;
   final String? createdAt;
 
-  Supplier({
+  ProductCategory({
     required this.id,
     this.tenantId,
     required this.name,
-    this.phone,
-    this.address,
     this.createdAt,
   });
 
-  factory Supplier.fromJson(Map<String, dynamic> json) {
-    return Supplier(
+  factory ProductCategory.fromJson(Map<String, dynamic> json) {
+    return ProductCategory(
       id: json['id'],
       tenantId: json['tenant_id'],
       name: json['name'],
-      phone: json['phone'],
-      address: json['address'],
       createdAt: json['created_at'],
     );
   }

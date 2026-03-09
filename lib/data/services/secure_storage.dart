@@ -8,16 +8,17 @@ class SecureStorage {
 
   static Future<bool> hasTokens() async {
     final a = await getAccessToken();
-    final r = await getRefreshToken();
-    return a != null && r != null;
+    return a != null;
   }
 
   static Future<void> saveTokens({
     required String accessToken,
-    required String refreshToken,
+    String? refreshToken,
   }) async {
     await _storage.write(key: _accessTokenKey, value: accessToken);
-    await _storage.write(key: _refreshTokenKey, value: refreshToken);
+    if (refreshToken != null) {
+      await _storage.write(key: _refreshTokenKey, value: refreshToken);
+    }
   }
 
   static Future<String?> getAccessToken() async =>

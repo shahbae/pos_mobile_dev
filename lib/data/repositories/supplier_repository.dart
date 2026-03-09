@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import '../services/api_services.dart';
 import '../models/supplier_model.dart';
 
@@ -20,18 +21,23 @@ class SupplierRepository {
       },
     );
 
-    return (res.data['data'] as List).map((e) => Supplier.fromJson(e)).toList();
+    debugPrint('[SupplierRepo] status=${res.statusCode} body=${res.data}');
+
+    final data = res.data['data'];
+    if (data == null) return [];
+
+    return (data as List).map((e) => Supplier.fromJson(e)).toList();
   }
 
   Future<void> createSupplier(Map<String, dynamic> data) async {
     await api.dio.post('/suppliers', data: data);
   }
 
-  Future<void> updateSupplier(String id, Map<String, dynamic> data) async {
+  Future<void> updateSupplier(int id, Map<String, dynamic> data) async {
     await api.dio.put('/suppliers/$id', data: data);
   }
 
-  Future<void> deleteSupplier(String id) async {
+  Future<void> deleteSupplier(int id) async {
     await api.dio.delete('/suppliers/$id');
   }
 }

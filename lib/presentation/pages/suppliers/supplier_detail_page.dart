@@ -12,11 +12,11 @@ class SupplierDetailPage extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: theme.colorScheme.background,
+      backgroundColor: theme.colorScheme.surface,
 
       appBar: AppBar(
         title: const Text("Detail Pemasok"),
-        backgroundColor: theme.colorScheme.background,
+        backgroundColor: theme.colorScheme.surface,
         elevation: 0,
       ),
 
@@ -57,8 +57,6 @@ class SupplierDetailPage extends StatelessWidget {
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    _item("PIC", supplier.pic ?? "-"),
-                    _item("Email", supplier.email ?? "-"),
                     _item("Telepon", supplier.phone ?? "-"),
                     _item("Alamat", supplier.address ?? "-"),
                   ],
@@ -85,7 +83,9 @@ class SupplierDetailPage extends StatelessWidget {
                     ),
                   );
 
-                  if (updated == true) Navigator.pop(context);
+                  if (updated == true && context.mounted) {
+                    Navigator.pop(context);
+                  }
                 },
               ),
             ),

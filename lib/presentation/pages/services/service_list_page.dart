@@ -2,20 +2,20 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../providers/product_provider.dart';
-import '../../../data/models/product_model.dart';
-import 'product_detail_page.dart';
-import 'product_form_page.dart';
+import '../../providers/service_provider.dart';
+import '../../../data/models/service_model.dart';
 import '../../../utils/currency.dart';
+import 'service_detail_page.dart';
+import 'service_form_page.dart';
 
-class ProductListPage extends ConsumerStatefulWidget {
-  const ProductListPage({super.key});
+class ServiceListPage extends ConsumerStatefulWidget {
+  const ServiceListPage({super.key});
 
   @override
-  ConsumerState<ProductListPage> createState() => _ProductListPageState();
+  ConsumerState<ServiceListPage> createState() => _ServiceListPageState();
 }
 
-class _ProductListPageState extends ConsumerState<ProductListPage> {
+class _ServiceListPageState extends ConsumerState<ServiceListPage> {
   String search = "";
   int page = 1;
   bool loadingMore = false;
@@ -25,7 +25,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
   Timer? _debounce;
   final ScrollController _scroll = ScrollController();
 
-  List<Product> items = [];
+  List<ServiceModel> items = [];
 
   @override
   void initState() {
@@ -57,10 +57,10 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
 
     setState(() => loadingMore = true);
 
-    final repo = ref.read(productRepositoryProvider);
+    final repo = ref.read(serviceRepositoryProvider);
 
     try {
-      final result = await repo.getProducts(
+      final result = await repo.getServices(
         page: page,
         limit: 10,
         search: search,
@@ -89,7 +89,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       backgroundColor: theme.colorScheme.surface,
 
       appBar: AppBar(
-        title: const Text("Data Produk"),
+        title: const Text("Data Layanan"),
         backgroundColor: theme.colorScheme.surface,
         elevation: 0,
         bottom: PreferredSize(
@@ -99,7 +99,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
             child: TextField(
               style: TextStyle(color: Colors.grey.shade900),
               decoration: InputDecoration(
-                hintText: "Cari produk…",
+                hintText: "Cari layanan…",
                 hintStyle: TextStyle(color: Colors.grey.shade500),
 
                 filled: true,
@@ -142,7 +142,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
         onPressed: () async {
           final created = await Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const ProductFormPage()),
+            MaterialPageRoute(builder: (_) => const ServiceFormPage()),
           );
 
           if (created == true) _load(reset: true);
@@ -155,8 +155,8 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
               ? Center(
                   child: Text(
                     search.isEmpty
-                        ? "Belum ada produk"
-                        : "Produk tidak ditemukan",
+                        ? "Belum ada layanan"
+                        : "Layanan tidak ditemukan",
                     style: TextStyle(color: Colors.grey.shade600),
                   ),
                 )
@@ -183,12 +183,18 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     );
   }
 
-  Widget _item(BuildContext context, Product p) {
+  Widget _item(BuildContext context, ServiceModel p) {
     final theme = Theme.of(context);
+
+    // Format tampilan unit type
+    String unitLabel = p.unitType ?? "-";
+    if (unitLabel == "per_item") unitLabel = "Per Item";
+    if (unitLabel == "per_hour") unitLabel = "Per Jam";
+    if (unitLabel == "per_day") unitLabel = "Per Hari";
 
     return ListTile(
       leading: Icon(
-        Icons.inventory_2_outlined,
+        Icons.miscellaneous_services_outlined,
         color: theme.colorScheme.primary,
       ),
       title: Text(
@@ -199,7 +205,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
         ),
       ),
       subtitle: Text(
-        formatRupiah(p.sellingPriceNum),
+        "${formatRupiah(p.priceNum)} • $unitLabel",
         style: TextStyle(color: Colors.grey.shade600),
       ),
       trailing: Icon(Icons.chevron_right, color: Colors.grey.shade500),
@@ -207,7 +213,7 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
       onTap: () async {
         final updated = await Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => ProductDetailPage(product: p)),
+          MaterialPageRoute(builder: (_) => ServiceDetailPage(service: p)),
         );
 
         if (updated == true) {

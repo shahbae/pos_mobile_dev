@@ -30,7 +30,6 @@ class AppTheme {
       primary: brandBlue,
       secondary: brandBlue,
       error: danger,
-      background: bgLight,
       surface: cardLight,
     ),
 

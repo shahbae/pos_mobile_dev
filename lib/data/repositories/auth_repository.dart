@@ -14,19 +14,20 @@ class AuthRepository {
         data: {'email': email, 'password': password},
       );
 
-      // Backend kamu balas: { status: "error", message: ".." }
-      if (res.statusCode != 200 || res.data['status'] == 'error') {
-        throw res.data['message'] ?? 'Login gagal';
+      // API response: { success: true/false, data: { access_token, ... } }
+      if (res.statusCode != 200 || res.data['success'] != true) {
+        final msg = res.data['message'] ?? res.data['error'] ?? 'Login gagal';
+        throw msg;
       }
 
-      final token = res.data['token'];
-      final refresh = res.data['refresh_token'];
+      final data = res.data['data'];
+      final token = data['access_token'];
 
-      if (token == null || refresh == null) {
+      if (token == null) {
         throw 'Token tidak ditemukan pada response API';
       }
 
-      await SecureStorage.saveTokens(accessToken: token, refreshToken: refresh);
+      await SecureStorage.saveTokens(accessToken: token);
     } on DioException catch (e) {
       final msg = e.response?.data?['message'];
       throw msg ?? 'Login gagal';
@@ -45,14 +46,16 @@ class AuthRepository {
         data: {'refresh_token': refresh},
       );
 
-      final newAccess = res.data['token'];
-      final newRefresh = res.data['refresh_token'];
+      if (res.data['success'] != true) return false;
 
-      if (newAccess == null || newRefresh == null) return false;
+      final data = res.data['data'];
+      final newAccess = data?['access_token'];
+
+      if (newAccess == null) return false;
 
       await SecureStorage.saveTokens(
         accessToken: newAccess,
-        refreshToken: newRefresh,
+        refreshToken: data?['refresh_token'],
       );
 
       return true;

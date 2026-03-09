@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/presentation/pages/products/product_list_page.dart';
+import 'package:pos_mobile/presentation/pages/product_categories/product_category_list_page.dart';
+import 'package:pos_mobile/presentation/pages/services/service_list_page.dart';
+import 'package:pos_mobile/presentation/pages/purchases/purchase_list_page.dart';
+import 'package:pos_mobile/presentation/pages/stock_movements/stock_movement_list_page.dart';
+import 'package:pos_mobile/presentation/pages/expenses/expense_list_page.dart';
 
 class StockTab extends ConsumerWidget {
   const StockTab({super.key});
@@ -10,7 +15,7 @@ class StockTab extends ConsumerWidget {
     final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: theme.colorScheme.background,
+      backgroundColor: theme.colorScheme.surface,
 
       body: SafeArea(
         child: Padding(
@@ -56,6 +61,36 @@ class StockTab extends ConsumerWidget {
 
                     _menuItem(
                       context,
+                      icon: Icons.design_services_outlined,
+                      title: "Layanan",
+                      subtitle: "Kelola tarif layanan dan jasa",
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const ServiceListPage(),
+                          ),
+                        );
+                      },
+                    ),
+
+                    _menuItem(
+                      context,
+                      icon: Icons.shopping_cart_checkout_outlined,
+                      title: "Pembelian",
+                      subtitle: "Catat transaksi pembelian ke supplier",
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const PurchaseListPage(),
+                          ),
+                        );
+                      },
+                    ),
+
+                    _menuItem(
+                      context,
                       icon: Icons.playlist_add_check_circle_outlined,
                       title: "Penyesuaian Stok",
                       subtitle: "Catat perubahan stok barang",
@@ -67,7 +102,14 @@ class StockTab extends ConsumerWidget {
                       icon: Icons.history_outlined,
                       title: "Riwayat Mutasi Stok",
                       subtitle: "Lihat keluar / masuk stok",
-                      disabled: true,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const StockMovementListPage(),
+                          ),
+                        );
+                      },
                     ),
 
                     _menuItem(
@@ -75,7 +117,29 @@ class StockTab extends ConsumerWidget {
                       icon: Icons.category_outlined,
                       title: "Kategori Produk",
                       subtitle: "Kelola pengelompokan produk",
-                      disabled: true,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const ProductCategoryListPage(),
+                          ),
+                        );
+                      },
+                    ),
+
+                    _menuItem(
+                      context,
+                      icon: Icons.money_off_csred_outlined,
+                      title: "Pengeluaran",
+                      subtitle: "Catat biaya operasional & lainnya",
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const ExpenseListPage(),
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),

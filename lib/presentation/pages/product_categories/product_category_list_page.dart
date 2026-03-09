@@ -2,18 +2,20 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../providers/supplier_provider.dart';
-import '../suppliers/supplier_detail_page.dart';
-import '../suppliers/supplier_form_page.dart';
+import '../../providers/product_category_provider.dart';
+import '../product_categories/product_category_detail_page.dart';
+import '../product_categories/product_category_form_page.dart';
 
-class SupplierListPage extends ConsumerStatefulWidget {
-  const SupplierListPage({super.key});
+class ProductCategoryListPage extends ConsumerStatefulWidget {
+  const ProductCategoryListPage({super.key});
 
   @override
-  ConsumerState<SupplierListPage> createState() => _SupplierListPageState();
+  ConsumerState<ProductCategoryListPage> createState() =>
+      _ProductCategoryListPageState();
 }
 
-class _SupplierListPageState extends ConsumerState<SupplierListPage> {
+class _ProductCategoryListPageState
+    extends ConsumerState<ProductCategoryListPage> {
   String search = "";
   Timer? _debounce;
 
@@ -27,8 +29,8 @@ class _SupplierListPageState extends ConsumerState<SupplierListPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    final suppliers = ref.watch(
-      supplierListProvider(search.isEmpty ? null : search),
+    final categories = ref.watch(
+      productCategoryListProvider(search.isEmpty ? null : search),
     );
 
     return Scaffold(
@@ -37,7 +39,7 @@ class _SupplierListPageState extends ConsumerState<SupplierListPage> {
       appBar: AppBar(
         backgroundColor: theme.colorScheme.surface,
         elevation: 0,
-        title: const Text("Data Pemasok"),
+        title: const Text("Kategori Produk"),
 
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(60),
@@ -46,7 +48,7 @@ class _SupplierListPageState extends ConsumerState<SupplierListPage> {
             child: TextField(
               style: TextStyle(color: Colors.grey.shade900),
               decoration: InputDecoration(
-                hintText: "Cari pemasok…",
+                hintText: "Cari kategori…",
                 hintStyle: TextStyle(color: Colors.grey.shade500),
 
                 filled: true,
@@ -89,26 +91,27 @@ class _SupplierListPageState extends ConsumerState<SupplierListPage> {
         onPressed: () async {
           final created = await Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const SupplierFormPage()),
+            MaterialPageRoute(
+              builder: (_) => const ProductCategoryFormPage(),
+            ),
           );
 
           if (created == true) {
             ref.invalidate(
-              supplierListProvider(search.isEmpty ? null : search),
+              productCategoryListProvider(search.isEmpty ? null : search),
             );
           }
         },
         child: const Icon(Icons.add),
       ),
 
-      body: suppliers.when(
+      body: categories.when(
         data: (list) => list.isEmpty
             ? Center(
-                // 🔥 tambahkan Center wrapper
                 child: Text(
                   search.isEmpty
-                      ? "Data pemasok kosong" // 🔥 pesan jika memang kosong
-                      : "Pemasok tidak ditemukan", // 🔥 pesan jika hasil pencarian kosong
+                      ? "Belum ada kategori produk"
+                      : "Kategori tidak ditemukan",
                   style: TextStyle(color: Colors.grey.shade600),
                 ),
               )
@@ -118,25 +121,20 @@ class _SupplierListPageState extends ConsumerState<SupplierListPage> {
                     Divider(color: Colors.grey.shade300),
 
                 itemBuilder: (_, i) {
-                  final s = list[i];
+                  final c = list[i];
 
                   return ListTile(
                     leading: Icon(
-                      Icons.factory,
+                      Icons.category_outlined,
                       color: theme.colorScheme.primary,
                     ),
 
                     title: Text(
-                      s.name,
+                      c.name,
                       style: TextStyle(
                         color: Colors.grey.shade900,
                         fontWeight: FontWeight.w600,
                       ),
-                    ),
-
-                    subtitle: Text(
-                      s.phone ?? "-",
-                      style: TextStyle(color: Colors.grey.shade600),
                     ),
 
                     trailing: Icon(
@@ -148,12 +146,15 @@ class _SupplierListPageState extends ConsumerState<SupplierListPage> {
                       await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => SupplierDetailPage(supplier: s),
+                          builder: (_) =>
+                              ProductCategoryDetailPage(category: c),
                         ),
                       );
 
                       ref.invalidate(
-                        supplierListProvider(search.isEmpty ? null : search),
+                        productCategoryListProvider(
+                          search.isEmpty ? null : search,
+                        ),
                       );
                     },
                   );
