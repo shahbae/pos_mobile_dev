@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../data/repositories/product_repository.dart';
-import 'product_provider.dart';
-import '../../../data/models/product_model.dart';
+import 'package:pos_mobile/data/repositories/product_repository.dart';
+import 'package:pos_mobile/presentation/providers/product_provider.dart';
+import 'package:pos_mobile/data/models/product_model.dart';
 
 class ProductPaginationState {
   final List<Product> items;
@@ -38,7 +38,7 @@ class ProductPaginationState {
 }
 
 final productPaginationProvider =
-    StateNotifierProvider<ProductPaginationNotifier, ProductPaginationState>((
+    StateNotifierProvider.autoDispose<ProductPaginationNotifier, ProductPaginationState>((
       ref,
     ) {
       final repo = ref.watch(productRepositoryProvider);

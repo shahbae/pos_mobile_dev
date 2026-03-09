@@ -2,7 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-import 'secure_storage.dart';
+import 'package:pos_mobile/data/services/secure_storage.dart';
 
 class ApiService {
   late final Dio dio;

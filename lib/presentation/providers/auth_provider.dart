@@ -1,9 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
 
-import '../../data/repositories/auth_repository.dart';
-import '../../data/services/api_provider.dart';
-import '../../data/services/secure_storage.dart';
+import 'package:pos_mobile/data/repositories/auth_repository.dart';
+import 'package:pos_mobile/data/services/api_provider.dart';
+import 'package:pos_mobile/data/services/secure_storage.dart';
 
 enum AuthStatus { unknown, authenticated, unauthenticated }
 

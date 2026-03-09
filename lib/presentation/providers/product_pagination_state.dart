@@ -1,4 +1,4 @@
-import '../../../data/models/product_model.dart';
+import 'package:pos_mobile/data/models/product_model.dart';
 
 class ProductListState {
   final List<Product> items;

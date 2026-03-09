@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
-import '../models/product_model.dart';
-import '../services/api_services.dart';
+import 'package:pos_mobile/data/models/product_model.dart';
+import 'package:pos_mobile/data/services/api_services.dart';
 
 class ProductRepository {
   final ApiService api;

@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-import 'theme/app_theme.dart';
-import 'presentation/providers/auth_provider.dart';
-import 'presentation/pages/dashboard/dashboard_page.dart';
-import 'presentation/pages/login_page.dart';
+import 'package:pos_mobile/theme/app_theme.dart';
+import 'package:pos_mobile/presentation/providers/auth_provider.dart';
+import 'package:pos_mobile/presentation/pages/dashboard/dashboard_page.dart';
+import 'package:pos_mobile/presentation/pages/login_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

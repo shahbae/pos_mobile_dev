@@ -5,10 +5,11 @@ import 'package:pos_mobile/presentation/pages/dashboard/tabs/stock_tab.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/dashboard_index_provider.dart';
 
-import 'tabs/home_tab.dart';
-import 'tabs/sales_tab.dart';
-import 'tabs/report_tab.dart';
-import 'tabs/setting_tab.dart';
+import 'package:pos_mobile/presentation/pages/dashboard/tabs/home_tab.dart';
+import 'package:pos_mobile/presentation/pages/dashboard/tabs/sales_tab.dart';
+import 'package:pos_mobile/presentation/pages/dashboard/tabs/report_tab.dart';
+import 'package:pos_mobile/presentation/pages/dashboard/tabs/setting_tab.dart';
+import 'package:pos_mobile/presentation/pages/product_transactions/product_transaction_page.dart';
 
 class DashboardPage extends ConsumerWidget {
   const DashboardPage({super.key});
@@ -79,7 +80,10 @@ class DashboardPage extends ConsumerWidget {
                 backgroundColor: const Color(0xFF3B82F6),
                 shape: const CircleBorder(),
                 onPressed: () {
-                  ref.read(dashboardIndexProvider.notifier).state = 1;
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ProductTransactionPage()),
+                  );
                 },
                 child: const Icon(Icons.add, size: 28, color: Colors.white),
               ),
