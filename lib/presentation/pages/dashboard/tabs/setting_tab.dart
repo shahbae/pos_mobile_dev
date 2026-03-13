@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../pages/suppliers/supplier_list_page.dart';
 import '../../../pages/customers/customer_list_page.dart';
+import '../../../pages/employees/employee_list_page.dart';
 
 class SettingTab extends StatelessWidget {
   const SettingTab({super.key});
@@ -65,6 +66,29 @@ class SettingTab extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const CustomerListPage()),
+              );
+            },
+          ),
+
+          Divider(color: Colors.grey.shade300),
+
+          ListTile(
+            leading: Icon(
+              Icons.badge_outlined,
+              color: theme.colorScheme.primary,
+            ),
+            title: Text(
+              "Karyawan",
+              style: TextStyle(
+                color: Colors.grey.shade900,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            trailing: Icon(Icons.chevron_right, color: Colors.grey.shade500),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const EmployeeListPage()),
               );
             },
           ),

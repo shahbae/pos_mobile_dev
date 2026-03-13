@@ -10,6 +10,8 @@ import 'package:pos_mobile/presentation/pages/dashboard/tabs/sales_tab.dart';
 import 'package:pos_mobile/presentation/pages/dashboard/tabs/report_tab.dart';
 import 'package:pos_mobile/presentation/pages/dashboard/tabs/setting_tab.dart';
 import 'package:pos_mobile/presentation/pages/product_transactions/product_transaction_page.dart';
+import 'package:pos_mobile/presentation/pages/service_transactions/service_transaction_page.dart';
+import 'package:pos_mobile/presentation/providers/tenant_provider.dart';
 
 class DashboardPage extends ConsumerWidget {
   const DashboardPage({super.key});
@@ -17,6 +19,7 @@ class DashboardPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final index = ref.watch(dashboardIndexProvider);
+    final tenantAsync = ref.watch(tenantProvider);
     final shortest = MediaQuery.of(context).size.shortestSide;
     final isTablet = shortest >= 600;
 
@@ -80,10 +83,19 @@ class DashboardPage extends ConsumerWidget {
                 backgroundColor: const Color(0xFF3B82F6),
                 shape: const CircleBorder(),
                 onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const ProductTransactionPage()),
-                  );
+                  final businessType = tenantAsync.valueOrNull?.businessType;
+                  
+                  if (businessType == 'laundry') {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const ServiceTransactionPage()),
+                    );
+                  } else {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const ProductTransactionPage()),
+                    );
+                  }
                 },
                 child: const Icon(Icons.add, size: 28, color: Colors.white),
               ),

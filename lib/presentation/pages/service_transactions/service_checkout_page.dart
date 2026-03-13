@@ -2,37 +2,36 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
-import 'package:pos_mobile/presentation/providers/product_transaction_provider.dart';
-import 'package:pos_mobile/presentation/pages/product_transactions/transaction_success_page.dart';
+import 'package:pos_mobile/presentation/providers/service_transaction_provider.dart';
+import 'package:pos_mobile/presentation/pages/service_transactions/service_transaction_success_page.dart';
 import 'package:pos_mobile/utils/currency.dart';
 import 'package:pos_mobile/core/utils/currency_input_formatter.dart';
-
+import 'package:pos_mobile/data/models/service_model.dart';
 import 'package:pos_mobile/presentation/pages/customers/customer_list_page.dart';
 import 'package:pos_mobile/data/models/customer_model.dart';
 
-class CheckoutPage extends ConsumerStatefulWidget {
-  const CheckoutPage({super.key});
+class ServiceCheckoutPage extends ConsumerStatefulWidget {
+  const ServiceCheckoutPage({super.key});
 
   @override
-  ConsumerState<CheckoutPage> createState() => _CheckoutPageState();
+  ConsumerState<ServiceCheckoutPage> createState() => _ServiceCheckoutPageState();
 }
 
-class _CheckoutPageState extends ConsumerState<CheckoutPage> {
+class _ServiceCheckoutPageState extends ConsumerState<ServiceCheckoutPage> {
   final TextEditingController _paidAmountController = TextEditingController();
   String _paymentMethod = 'cash';
 
   @override
   void initState() {
     super.initState();
-    final total = ref.read(productTransactionProvider).total;
-    // Format awal dengan titik pemisah
+    final total = ref.read(serviceTransactionProvider).totalPrice;
     final formatter = NumberFormat.decimalPattern('id_ID');
     _paidAmountController.text = formatter.format(total);
   }
 
   @override
   Widget build(BuildContext context) {
-    final cartState = ref.watch(productTransactionProvider);
+    final cartState = ref.watch(serviceTransactionProvider);
 
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
@@ -59,7 +58,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               trailing: cartState.selectedCustomer != null 
                 ? IconButton(
                     icon: const Icon(Icons.close, color: Colors.grey),
-                    onPressed: () => ref.read(productTransactionProvider.notifier).setCustomer(null),
+                    onPressed: () => ref.read(serviceTransactionProvider.notifier).setCustomer(null),
                   )
                 : const Icon(Icons.chevron_right),
               onTap: () async {
@@ -71,13 +70,14 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                 );
                 
                 if (result != null && result['customer'] != null) {
-                   ref.read(productTransactionProvider.notifier).setCustomer(result['customer'] as Customer);
+                   ref.read(serviceTransactionProvider.notifier).setCustomer(result['customer'] as Customer);
                 }
               },
             ),
             const Divider(height: 32, color: AppTheme.borderLight),
+
             const Text(
-              "Ringkasan Pesanan",
+              "Ringkasan Layanan",
               style: TextStyle(
                 color: AppTheme.textPrimary,
                 fontSize: 18,
@@ -94,10 +94,18 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               child: ListView.separated(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                itemCount: cartState.items.length,
+                itemCount: cartState.cart.length,
                 separatorBuilder: (context, index) => const Divider(color: AppTheme.borderLight, height: 1),
                 itemBuilder: (context, index) {
-                  final item = cartState.items[index];
+                  final service = cartState.cart.keys.elementAt(index);
+                  final quantity = cartState.cart[service]!;
+                  final subtotal = service.priceNum * quantity;
+                  
+                  String qStr = quantity.toString();
+                  if (qStr.endsWith('.0')) {
+                    qStr = qStr.substring(0, qStr.length - 2);
+                  }
+
                   return Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                     child: Row(
@@ -107,16 +115,16 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                item.product.name,
+                                service.name,
                                 style: const TextStyle(
                                   color: AppTheme.textPrimary,
                                   fontWeight: FontWeight.w700,
                                   fontSize: 15,
                                 ),
                               ),
-                              const SizedBox(height: 2),
+                              const SizedBox(height: 4),
                               Text(
-                                formatRupiah(item.product.sellingPriceNum),
+                                "${formatRupiah(service.priceNum)} x $qStr",
                                 style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
                               ),
                             ],
@@ -133,32 +141,36 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                               _QtyButton(
                                 icon: Icons.remove,
                                 onTap: () => ref
-                                    .read(productTransactionProvider.notifier)
-                                    .updateQuantity(item.product.id, item.quantity - 1),
+                                    .read(serviceTransactionProvider.notifier)
+                                    .updateQuantity(service, quantity - 1),
                               ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 12),
-                                child: Text(
-                                  "${item.quantity}",
-                                  style: const TextStyle(
-                                    color: AppTheme.brandBlue,
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 15,
+                              InkWell(
+                                onTap: () => _showQuantityDialog(context, ref, service),
+                                borderRadius: BorderRadius.circular(8),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                  child: Text(
+                                    qStr,
+                                    style: const TextStyle(
+                                      color: AppTheme.brandBlue,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 15,
+                                    ),
                                   ),
                                 ),
                               ),
                               _QtyButton(
                                 icon: Icons.add,
                                 onTap: () => ref
-                                    .read(productTransactionProvider.notifier)
-                                    .updateQuantity(item.product.id, item.quantity + 1),
+                                    .read(serviceTransactionProvider.notifier)
+                                    .updateQuantity(service, quantity + 1),
                               ),
                             ],
                           ),
                         ),
                         const SizedBox(width: 16),
                         Text(
-                          formatRupiah(item.subtotal),
+                          formatRupiah(subtotal),
                           style: const TextStyle(
                             color: AppTheme.textPrimary,
                             fontWeight: FontWeight.w800,
@@ -225,9 +237,6 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                   fontSize: 28,
                   fontWeight: FontWeight.w800,
                 ),
-                onChanged: (value) {
-                  // No-op for now, just for formatting
-                },
                 decoration: const InputDecoration(
                   prefixText: "Rp ",
                   prefixStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 20, fontWeight: FontWeight.w600),
@@ -249,7 +258,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                         final rawPaidAmount = _paidAmountController.text.replaceAll('.', '');
                         final paidValue = double.tryParse(rawPaidAmount) ?? 0;
                         
-                        if (paidValue < cartState.total) {
+                        if (paidValue < cartState.totalPrice) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text("Jumlah bayar kurang dari total belanja"),
@@ -260,24 +269,23 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                           return;
                         }
 
-                        await ref.read(productTransactionProvider.notifier).submitTransaction(
-                              paymentMethod: _paymentMethod,
-                              paidAmount: rawPaidAmount,
-                            );
+                        ref.read(serviceTransactionProvider.notifier).updatePayment(_paymentMethod, paidValue);
 
-                        if (mounted) {
-                          final newState = ref.read(productTransactionProvider);
-                          if (newState.lastResponse != null) {
+                        try {
+                          final res = await ref.read(serviceTransactionProvider.notifier).checkout();
+                          if (mounted) {
                             Navigator.pushReplacement(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => TransactionSuccessPage(response: newState.lastResponse!),
+                                builder: (_) => ServiceTransactionSuccessPage(invoiceNumber: res.invoiceNumber),
                               ),
                             );
-                          } else if (newState.error != null) {
+                          }
+                        } catch (e) {
+                          if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text("Gagal: ${newState.error}"),
+                                content: Text("Gagal: $e"),
                                 backgroundColor: Colors.red,
                                 behavior: SnackBarBehavior.floating,
                               ),
@@ -295,7 +303,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                 child: cartState.isLoading
                     ? const CircularProgressIndicator(color: Colors.white)
                     : Text(
-                        "Konfirmasi & Bayar ${formatRupiah(cartState.total)}",
+                        "Konfirmasi & Bayar ${formatRupiah(cartState.totalPrice)}",
                         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
                       ),
               ),
@@ -304,6 +312,66 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
           ],
         ),
       ),
+    );
+  }
+
+  void _showQuantityDialog(BuildContext context, WidgetRef ref, ServiceModel service) {
+    final qtyController = TextEditingController();
+    final cartState = ref.read(serviceTransactionProvider);
+    if (cartState.cart.containsKey(service)) {
+       qtyController.text = cartState.cart[service].toString();
+       if (qtyController.text.endsWith('.0')) {
+         qtyController.text = qtyController.text.substring(0, qtyController.text.length - 2);
+       }
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: Text("Ubah Jumlah (${service.unitType})"),
+          content: TextField(
+            controller: qtyController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(
+              hintText: 'Misal: 1.5',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                ref.read(serviceTransactionProvider.notifier).removeFromCart(service);
+                Navigator.pop(ctx);
+                if (ref.read(serviceTransactionProvider).cart.isEmpty && mounted) {
+                   Navigator.pop(context);
+                }
+              },
+              child: const Text("Hapus", style: TextStyle(color: Colors.red)),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("Batal"),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.brandBlue),
+              onPressed: () {
+                final val = double.tryParse(qtyController.text.replaceAll(',', '.')) ?? 0;
+                if (val > 0) {
+                  ref.read(serviceTransactionProvider.notifier).updateQuantity(service, val);
+                } else {
+                  ref.read(serviceTransactionProvider.notifier).removeFromCart(service);
+                }
+                Navigator.pop(ctx);
+                if (ref.read(serviceTransactionProvider).cart.isEmpty && mounted) {
+                   Navigator.pop(context);
+                }
+              },
+              child: const Text("Simpan", style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pos_mobile/data/models/customer_model.dart';
 import 'package:pos_mobile/data/models/product_model.dart';
 import 'package:pos_mobile/data/models/product_transaction_model.dart';
 import 'package:pos_mobile/data/repositories/product_transaction_repository.dart';
@@ -24,12 +25,14 @@ class ProductTransactionState {
   final bool isLoading;
   final String? error;
   final ProductTransactionResponse? lastResponse;
+  final Customer? selectedCustomer;
 
   ProductTransactionState({
     this.items = const [],
     this.isLoading = false,
     this.error,
     this.lastResponse,
+    this.selectedCustomer,
   });
 
   double get total => items.fold(0, (sum, item) => sum + item.subtotal);
@@ -39,12 +42,14 @@ class ProductTransactionState {
     bool? isLoading,
     String? error,
     ProductTransactionResponse? lastResponse,
+    Customer? selectedCustomer,
   }) {
     return ProductTransactionState(
       items: items ?? this.items,
       isLoading: isLoading ?? this.isLoading,
       error: error,
       lastResponse: lastResponse ?? this.lastResponse,
+      selectedCustomer: selectedCustomer ?? this.selectedCustomer,
     );
   }
 }
@@ -59,6 +64,10 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
   final ProductTransactionRepository repo;
 
   ProductTransactionNotifier(this.repo) : super(ProductTransactionState());
+
+  void setCustomer(Customer? customer) {
+    state = state.copyWith(selectedCustomer: customer);
+  }
 
   void addToCart(Product product) {
     final existingIndex = state.items.indexWhere((item) => item.product.id == product.id);
@@ -99,7 +108,7 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
   }
 
   void clearCart() {
-    state = state.copyWith(items: [], lastResponse: null, error: null);
+    state = state.copyWith(items: [], lastResponse: null, error: null, selectedCustomer: null);
   }
 
   Future<void> submitTransaction({
@@ -120,7 +129,7 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
           .toList(),
       paymentMethod: paymentMethod,
       paidAmount: paidAmount,
-      customerId: customerId,
+      customerId: customerId ?? state.selectedCustomer?.id,
     );
 
     try {
@@ -129,6 +138,7 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
         isLoading: false,
         lastResponse: response,
         items: [], // Clear cart on success
+        selectedCustomer: null, // Clear customer on success
       );
     } catch (e) {
       state = state.copyWith(

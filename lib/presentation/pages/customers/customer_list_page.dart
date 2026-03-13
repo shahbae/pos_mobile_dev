@@ -8,7 +8,12 @@ import 'customer_detail_page.dart';
 import 'customer_form_page.dart';
 
 class CustomerListPage extends ConsumerStatefulWidget {
-  const CustomerListPage({super.key});
+  final bool isSelectionMode;
+  
+  const CustomerListPage({
+    super.key,
+    this.isSelectionMode = false,
+  });
 
   @override
   ConsumerState<CustomerListPage> createState() => _CustomerListPageState();
@@ -204,6 +209,11 @@ class _CustomerListPageState extends ConsumerState<CustomerListPage> {
       trailing: Icon(Icons.chevron_right, color: Colors.grey.shade500),
 
       onTap: () async {
+        if (widget.isSelectionMode) {
+          Navigator.pop(context, {'customer': p});
+          return;
+        }
+
         final updated = await Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => CustomerDetailPage(customer: p)),
