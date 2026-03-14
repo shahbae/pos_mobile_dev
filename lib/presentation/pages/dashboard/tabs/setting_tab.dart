@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import '../../../pages/suppliers/supplier_list_page.dart';
 import '../../../pages/customers/customer_list_page.dart';
 import '../../../pages/employees/employee_list_page.dart';
 
-class SettingTab extends StatelessWidget {
+class SettingTab extends ConsumerWidget {
   const SettingTab({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final auth = ref.watch(authProvider);
+    final isStaff = auth.role == 'staff';
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
@@ -72,28 +76,29 @@ class SettingTab extends StatelessWidget {
 
           Divider(color: Colors.grey.shade300),
 
-          ListTile(
-            leading: Icon(
-              Icons.badge_outlined,
-              color: theme.colorScheme.primary,
-            ),
-            title: Text(
-              "Karyawan",
-              style: TextStyle(
-                color: Colors.grey.shade900,
-                fontWeight: FontWeight.w500,
+          if (!isStaff) ...[
+            ListTile(
+              leading: Icon(
+                Icons.badge_outlined,
+                color: theme.colorScheme.primary,
               ),
+              title: Text(
+                "Karyawan",
+                style: TextStyle(
+                  color: Colors.grey.shade900,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              trailing: Icon(Icons.chevron_right, color: Colors.grey.shade500),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const EmployeeListPage()),
+                );
+              },
             ),
-            trailing: Icon(Icons.chevron_right, color: Colors.grey.shade500),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const EmployeeListPage()),
-              );
-            },
-          ),
-
-          Divider(color: Colors.grey.shade300),
+            Divider(color: Colors.grey.shade300),
+          ],
         ],
       ),
     );

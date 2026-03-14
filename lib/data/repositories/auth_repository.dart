@@ -65,6 +65,21 @@ class AuthRepository {
   }
 
   Future<void> logout() async {
-    await SecureStorage.clear();
+    final refreshToken = await SecureStorage.getRefreshToken();
+
+    try {
+      final res = await api.dio.post(
+        '/auth/logout',
+        data: refreshToken != null ? {'refresh_token': refreshToken} : {},
+      );
+
+      if (res.statusCode == 405) {
+        await api.dio.get('/auth/logout');
+      }
+    } catch (e) {
+      final _ = e;
+    } finally {
+      await SecureStorage.clear();
+    }
   }
 }

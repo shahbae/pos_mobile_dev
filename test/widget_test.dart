@@ -5,26 +5,60 @@
 // gestures. You can also use WidgetTester to find child widgets in the widget
 // tree, read text, and verify that the values of widget properties are correct.
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:intl/intl.dart';
 
 import 'package:pos_mobile/main.dart';
+import 'package:pos_mobile/presentation/pages/login_page.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  TestWidgetsFlutterBinding.ensureInitialized();
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  final storage = <String, String>{};
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+  const channel = MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
+  setUpAll(() async {
+    await dotenv.load(
+      fileName: '.env',
+      isOptional: true,
+      mergeWith: {'API_BASE_URL': 'http://localhost'},
+    );
+    await initializeDateFormatting('id_ID', null);
+    Intl.defaultLocale = 'id_ID';
+    channel.setMockMethodCallHandler((call) async {
+      final args =
+          (call.arguments as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      switch (call.method) {
+        case 'write':
+          storage[args['key'] as String] = args['value'] as String;
+          return null;
+        case 'read':
+          return storage[args['key'] as String];
+        case 'deleteAll':
+          storage.clear();
+          return null;
+        default:
+          return null;
+      }
+    });
+  });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  tearDown(() {
+    storage.clear();
+    channel.setMockMethodCallHandler(null);
+  });
+
+  testWidgets('Menampilkan Login saat belum autentikasi', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: MyApp()));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(LoginPage), findsOneWidget);
   });
 }
