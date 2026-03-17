@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/data/models/daily_report_model.dart';
 import 'package:pos_mobile/data/models/profit_report_model.dart';
 import 'package:pos_mobile/data/models/stock_alerts_report_model.dart';
+import 'package:pos_mobile/data/models/top_products_report_model.dart';
 import 'package:pos_mobile/data/repositories/report_repository.dart';
 import 'package:pos_mobile/data/services/api_provider.dart';
 
@@ -37,4 +38,19 @@ final profitReportProvider = FutureProvider<ProfitReportData>((ref) async {
 final stockAlertsReportProvider = FutureProvider<StockAlertsData>((ref) async {
   final repo = ref.watch(reportRepositoryProvider);
   return repo.getStockAlertsReport();
+});
+
+final topProductsRangeProvider = StateProvider<DateTimeRange>((ref) {
+  final now = DateTime.now();
+  final day = DateTime(now.year, now.month, now.day);
+  return DateTimeRange(start: day, end: day);
+});
+
+final topProductsLimitProvider = StateProvider<int>((ref) => 10);
+
+final topProductsReportProvider = FutureProvider<TopProductsData>((ref) async {
+  final range = ref.watch(topProductsRangeProvider);
+  final limit = ref.watch(topProductsLimitProvider);
+  final repo = ref.watch(reportRepositoryProvider);
+  return repo.getTopProductsReport(from: range.start, to: range.end, limit: limit);
 });
