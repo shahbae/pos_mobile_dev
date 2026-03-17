@@ -301,6 +301,7 @@ class _FilterBottomSheet extends ConsumerStatefulWidget {
 
 class _FilterBottomSheetState extends ConsumerState<_FilterBottomSheet> {
   String? _type;
+  String? _status;
   DateTime? _from;
   DateTime? _to;
 
@@ -308,7 +309,8 @@ class _FilterBottomSheetState extends ConsumerState<_FilterBottomSheet> {
   void initState() {
     super.initState();
     final state = ref.read(transactionHistoryProvider);
-    _type = widget.fixedType ?? state.transactionType;
+    _type = widget.fixedType ?? state.transactionTypes?.first;
+    _status = state.status;
     _from = state.from;
     _to = state.to;
   }
@@ -332,7 +334,9 @@ class _FilterBottomSheetState extends ConsumerState<_FilterBottomSheet> {
                 onPressed: () {
                   ref.read(transactionHistoryProvider.notifier).resetFilters();
                   if (widget.fixedType != null) {
-                     ref.read(transactionHistoryProvider.notifier).setFilter(transactionType: widget.fixedType);
+                    ref.read(transactionHistoryProvider.notifier).setFilter(
+                      transactionType: widget.fixedType,
+                    );
                   }
                   Navigator.pop(context);
                 },
@@ -367,6 +371,30 @@ class _FilterBottomSheetState extends ConsumerState<_FilterBottomSheet> {
             ),
             const SizedBox(height: 24),
           ],
+          const Text("Status", style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _FilterChip(
+                label: "Semua",
+                selected: _status == null,
+                onSelected: (v) => setState(() => _status = null),
+              ),
+              _FilterChip(
+                label: "Paid",
+                selected: _status == 'paid',
+                onSelected: (v) => setState(() => _status = 'paid'),
+              ),
+              _FilterChip(
+                label: "Unpaid",
+                selected: _status == 'unpaid',
+                onSelected: (v) => setState(() => _status = 'unpaid'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
           const Text("Rentang Waktu", style: TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           Row(
@@ -411,6 +439,7 @@ class _FilterBottomSheetState extends ConsumerState<_FilterBottomSheet> {
               onPressed: () {
                  ref.read(transactionHistoryProvider.notifier).setFilter(
                   transactionType: _type,
+                  status: _status,
                   from: _from,
                   to: _to,
                 );

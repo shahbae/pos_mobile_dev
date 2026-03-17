@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:pos_mobile/data/models/dashboard_operational_model.dart';
 import 'package:pos_mobile/presentation/pages/expenses/expense_list_page.dart';
 import 'package:pos_mobile/presentation/pages/purchases/purchase_list_page.dart';
 import 'package:pos_mobile/presentation/pages/transactions/transaction_history_page.dart';
@@ -68,12 +69,10 @@ class HomeTab extends ConsumerWidget {
                 data: (data) {
                   return Column(
                     children: [
-                      _OperationalChartCard(
+                      _RevenueChartCard(
                         title: isToday ? "Grafik Hari Ini" : "Grafik Periode",
-                        purchases: data.purchases.totalAmountNum,
-                        expenses: data.expenses.totalAmountNum,
-                        openBills: data.openBills.totalAmountNum,
-                        net: data.netNum,
+                        chart: data.chart,
+                        primaryTransactionType: data.primaryTransactionType,
                       ),
                       const SizedBox(height: 12),
                       Row(
@@ -187,40 +186,55 @@ class HomeTab extends ConsumerWidget {
   }
 }
 
-class _OperationalChartCard extends StatelessWidget {
+class _RevenueChartCard extends StatelessWidget {
   final String title;
-  final num purchases;
-  final num expenses;
-  final num openBills;
-  final num net;
+  final DashboardOperationalChart? chart;
+  final String? primaryTransactionType;
 
-  const _OperationalChartCard({
+  const _RevenueChartCard({
     required this.title,
-    required this.purchases,
-    required this.expenses,
-    required this.openBills,
-    required this.net,
+    required this.chart,
+    required this.primaryTransactionType,
   });
 
   @override
   Widget build(BuildContext context) {
-    final items = <_ChartItem>[
-      _ChartItem(label: "Pembelian", value: purchases, color: Colors.orange),
-      _ChartItem(label: "Pengeluaran", value: expenses, color: Colors.red),
-      _ChartItem(label: "Open Bills", value: openBills, color: Colors.purple),
-      _ChartItem(
-        label: "Net",
-        value: net,
-        color: net >= 0 ? AppTheme.brandBlue : AppTheme.danger,
-      ),
-    ];
+    final points = chart?.points ?? const <DashboardOperationalChartPoint>[];
+    if (points.isEmpty) return const SizedBox.shrink();
 
-    num maxAbs = 0;
-    for (final it in items) {
-      final v = it.value.abs();
-      if (v > maxAbs) maxAbs = v;
+    final primaryValues = points.map((e) => e.primaryRevenueNum).toList();
+    final totalValues = points.map((e) => e.revenueTotalNum).toList();
+
+    bool hasPrimary = false;
+    for (final v in primaryValues) {
+      if (v != 0) {
+        hasPrimary = true;
+        break;
+      }
     }
-    if (maxAbs <= 0) maxAbs = 1;
+
+    final values = hasPrimary ? primaryValues : totalValues;
+    num maxValue = 0;
+    num sumValue = 0;
+    for (final v in values) {
+      if (v > maxValue) maxValue = v;
+      sumValue += v;
+    }
+    if (maxValue <= 0) maxValue = 1;
+
+    final intervalText = (chart?.interval ?? '').toString();
+    final primaryText = (primaryTransactionType ?? '').isEmpty
+        ? null
+        : primaryTransactionType!.toUpperCase();
+    final subtitle = <String>[
+      if (intervalText.isNotEmpty) intervalText,
+      if (primaryText != null) "Primary $primaryText",
+    ].join(" • ");
+
+    final timeFmt = DateFormat('HH:mm', 'id_ID');
+    final startLabel = timeFmt.format(points.first.time);
+    final midLabel = timeFmt.format(points[points.length ~/ 2].time);
+    final endLabel = timeFmt.format(points.last.time);
 
     return Container(
       width: double.infinity,
@@ -233,28 +247,86 @@ class _OperationalChartCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontWeight: FontWeight.w900,
-              color: AppTheme.textPrimary,
-              fontSize: 14,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        color: AppTheme.textPrimary,
+                        fontSize: 14,
+                      ),
+                    ),
+                    if (subtitle.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Text(
+                formatRupiah(sumValue),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           SizedBox(
-            height: 130,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                for (final it in items) ...[
-                  Expanded(
-                    child: _Bar(item: it, maxAbs: maxAbs),
-                  ),
-                  if (it != items.last) const SizedBox(width: 10),
-                ],
-              ],
+            height: 140,
+            width: double.infinity,
+            child: CustomPaint(
+              painter: _RevenueLineChartPainter(
+                values: values,
+                maxValue: maxValue,
+                color: AppTheme.brandBlue,
+              ),
             ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Text(
+                startLabel,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                midLabel,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                endLabel,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -262,77 +334,90 @@ class _OperationalChartCard extends StatelessWidget {
   }
 }
 
-class _ChartItem {
-  final String label;
-  final num value;
+class _RevenueLineChartPainter extends CustomPainter {
+  final List<num> values;
+  final num maxValue;
   final Color color;
 
-  const _ChartItem({
-    required this.label,
-    required this.value,
+  const _RevenueLineChartPainter({
+    required this.values,
+    required this.maxValue,
     required this.color,
   });
-}
-
-class _Bar extends StatelessWidget {
-  final _ChartItem item;
-  final num maxAbs;
-
-  const _Bar({required this.item, required this.maxAbs});
 
   @override
-  Widget build(BuildContext context) {
-    final ratio = (item.value.abs() / maxAbs).clamp(0, 1);
-    final barHeight = 86 * ratio;
+  void paint(Canvas canvas, Size size) {
+    final bgPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(
-          child: Align(
-            alignment: Alignment.bottomCenter,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 350),
-              curve: Curves.easeOutCubic,
-              height: barHeight <= 0 ? 6 : barHeight.toDouble() + 6,
-              decoration: BoxDecoration(
-                color: item.color.withOpacity(0.18),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: item.color.withOpacity(0.28)),
-              ),
-              padding: const EdgeInsets.all(10),
-              child: Align(
-                alignment: Alignment.topLeft,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.topLeft,
-                  child: Text(
-                    formatRupiah(item.value),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                      color: item.color,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          item.label,
-          textAlign: TextAlign.center,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: AppTheme.textSecondary,
-          ),
-        ),
-      ],
-    );
+    final linePaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.2
+      ..strokeCap = StrokeCap.round;
+
+    final fillPaint = Paint()
+      ..color = color.withOpacity(0.16)
+      ..style = PaintingStyle.fill;
+
+    final dotPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    final count = values.length;
+    if (count < 2) return;
+
+    final left = 2.0;
+    final top = 6.0;
+    final right = size.width - 2.0;
+    final bottom = size.height - 8.0;
+    final w = (right - left).clamp(0, double.infinity);
+    final h = (bottom - top).clamp(0, double.infinity);
+
+    for (var i = 0; i < 4; i++) {
+      final y = top + (h / 3) * i;
+      bgPaint.color = AppTheme.borderLight.withOpacity(0.7);
+      canvas.drawLine(Offset(left, y), Offset(right, y), bgPaint);
+    }
+
+    final path = Path();
+    final fillPath = Path();
+    for (var i = 0; i < count; i++) {
+      final x = left + (w * i / (count - 1));
+      final v = values[i];
+      final ratio = (v / maxValue).clamp(0, 1);
+      final y = top + (h * (1 - ratio));
+      if (i == 0) {
+        path.moveTo(x, y);
+        fillPath.moveTo(x, bottom);
+        fillPath.lineTo(x, y);
+      } else {
+        path.lineTo(x, y);
+        fillPath.lineTo(x, y);
+      }
+    }
+    fillPath.lineTo(right, bottom);
+    fillPath.close();
+
+    canvas.drawPath(fillPath, fillPaint);
+    canvas.drawPath(path, linePaint);
+
+    final lastX = left + w;
+    final lastRatio = (values.last / maxValue).clamp(0, 1);
+    final lastY = top + (h * (1 - lastRatio));
+    canvas.drawCircle(Offset(lastX, lastY), 3.4, dotPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _RevenueLineChartPainter oldDelegate) {
+    if (oldDelegate.maxValue != maxValue) return true;
+    if (oldDelegate.color != color) return true;
+    if (oldDelegate.values.length != values.length) return true;
+    for (var i = 0; i < values.length; i++) {
+      if (oldDelegate.values[i] != values[i]) return true;
+    }
+    return false;
   }
 }
 

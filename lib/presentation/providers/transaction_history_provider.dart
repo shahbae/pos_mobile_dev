@@ -7,7 +7,8 @@ class TransactionHistoryState {
   final bool loading;
   final bool hasMore;
   final int page;
-  final String? transactionType;
+  final List<String>? transactionTypes;
+  final String? status;
   final DateTime? from;
   final DateTime? to;
 
@@ -16,7 +17,8 @@ class TransactionHistoryState {
     this.loading = false,
     this.hasMore = true,
     this.page = 1,
-    this.transactionType,
+    this.transactionTypes,
+    this.status,
     this.from,
     this.to,
   });
@@ -26,7 +28,8 @@ class TransactionHistoryState {
     bool? loading,
     bool? hasMore,
     int? page,
-    String? transactionType,
+    List<String>? transactionTypes,
+    String? status,
     DateTime? from,
     DateTime? to,
   }) {
@@ -35,7 +38,8 @@ class TransactionHistoryState {
       loading: loading ?? this.loading,
       hasMore: hasMore ?? this.hasMore,
       page: page ?? this.page,
-      transactionType: transactionType ?? this.transactionType,
+      transactionTypes: transactionTypes ?? this.transactionTypes,
+      status: status ?? this.status,
       from: from ?? this.from,
       to: to ?? this.to,
     );
@@ -67,7 +71,8 @@ class TransactionHistoryNotifier extends StateNotifier<TransactionHistoryState> 
       final result = await repo.getTransactions(
         page: page,
         limit: 20,
-        transactionType: state.transactionType,
+        transactionTypes: state.transactionTypes,
+        status: state.status,
         from: state.from != null ? _formatDate(state.from!) : null,
         to: state.to != null ? _formatDate(state.to!) : null,
       );
@@ -84,9 +89,19 @@ class TransactionHistoryNotifier extends StateNotifier<TransactionHistoryState> 
     }
   }
 
-  void setFilter({String? transactionType, DateTime? from, DateTime? to}) {
-    state = state.copyWith(
-      transactionType: transactionType,
+  void setFilter({
+    String? transactionType,
+    List<String>? transactionTypes,
+    String? status,
+    DateTime? from,
+    DateTime? to,
+  }) {
+    final resolvedTypes = transactionTypes ??
+        (transactionType == null ? null : <String>[transactionType]);
+
+    state = TransactionHistoryState(
+      transactionTypes: resolvedTypes,
+      status: status,
       from: from,
       to: to,
     );

@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dio/dio.dart';
 import 'package:pos_mobile/data/models/transaction_history_model.dart';
 import 'package:pos_mobile/data/services/api_services.dart';
 import 'package:pos_mobile/data/services/api_provider.dart';
@@ -15,17 +16,26 @@ class TransactionRepository {
   Future<TransactionHistoryResponse> getTransactions({
     int page = 1,
     int limit = 20,
-    String? transactionType,
+    List<String>? transactionTypes,
+    String? status,
     String? from,
     String? to,
   }) async {
-    final res = await api.dio.get('/transactions', queryParameters: {
+    final query = <String, dynamic>{
       'page': page,
       'limit': limit,
-      if (transactionType != null) 'transaction_type': transactionType,
+      if (transactionTypes != null && transactionTypes.isNotEmpty)
+        'transaction_type': transactionTypes,
+      if (status != null) 'status': status,
       if (from != null) 'from': from,
       if (to != null) 'to': to,
-    });
+    };
+
+    final res = await api.dio.get(
+      '/transactions',
+      queryParameters: query,
+      options: Options(listFormat: ListFormat.multi),
+    );
 
     return TransactionHistoryResponse.fromJson(res.data);
   }

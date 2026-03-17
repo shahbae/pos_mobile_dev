@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pos_mobile/presentation/pages/reports/daily_report_page.dart';
+import 'package:pos_mobile/presentation/pages/reports/profit_report_page.dart';
+import 'package:pos_mobile/presentation/pages/reports/stock_alerts_report_page.dart';
 import 'package:pos_mobile/presentation/pages/transactions/transaction_history_page.dart';
 import 'package:pos_mobile/presentation/providers/tenant_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
@@ -22,7 +25,52 @@ class ReportTab extends ConsumerWidget {
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 24),
-          
+
+          _ReportMenuCard(
+            title: "Laporan Harian",
+            subtitle: "Ringkasan transaksi per hari",
+            icon: Icons.calendar_today_outlined,
+            color: Colors.teal,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const DailyReportPage()),
+              );
+            },
+          ),
+
+          const SizedBox(height: 16),
+
+          _ReportMenuCard(
+            title: "Laporan Profit",
+            subtitle: "Ringkasan laba rugi",
+            icon: Icons.stacked_line_chart_outlined,
+            color: Colors.indigo,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ProfitReportPage()),
+              );
+            },
+          ),
+
+          const SizedBox(height: 16),
+
+          _ReportMenuCard(
+            title: "Stok Menipis",
+            subtitle: "Daftar produk di bawah threshold",
+            icon: Icons.warning_amber_rounded,
+            color: Colors.redAccent,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const StockAlertsReportPage()),
+              );
+            },
+          ),
+
+          const SizedBox(height: 16),
+
           if (businessType == 'laundry' || businessType == null)
             _ReportMenuCard(
               title: "Riwayat Transaksi Layanan",
@@ -33,14 +81,16 @@ class ReportTab extends ConsumerWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const TransactionHistoryListPage(transactionType: 'service'),
+                    builder: (_) => const TransactionHistoryListPage(
+                      transactionType: 'service',
+                    ),
                   ),
                 );
               },
             ),
-          
+
           const SizedBox(height: 16),
-          
+
           if (businessType != 'laundry' || businessType == null)
             _ReportMenuCard(
               title: "Riwayat Transaksi Produk",
@@ -51,7 +101,9 @@ class ReportTab extends ConsumerWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const TransactionHistoryListPage(transactionType: 'sale'),
+                    builder: (_) => const TransactionHistoryListPage(
+                      transactionType: 'sale',
+                    ),
                   ),
                 );
               },
@@ -96,7 +148,10 @@ class _ReportMenuCard extends StatelessWidget {
           child: Icon(icon, color: color),
         ),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        subtitle: Text(
+          subtitle,
+          style: const TextStyle(fontSize: 12, color: Colors.grey),
+        ),
         trailing: const Icon(Icons.chevron_right),
         onTap: onTap,
       ),
