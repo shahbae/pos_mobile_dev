@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/data/models/daily_report_model.dart';
+import 'package:pos_mobile/data/models/payments_report_model.dart';
 import 'package:pos_mobile/data/models/profit_report_model.dart';
 import 'package:pos_mobile/data/models/stock_alerts_report_model.dart';
 import 'package:pos_mobile/data/models/top_products_report_model.dart';
@@ -53,4 +54,16 @@ final topProductsReportProvider = FutureProvider<TopProductsData>((ref) async {
   final limit = ref.watch(topProductsLimitProvider);
   final repo = ref.watch(reportRepositoryProvider);
   return repo.getTopProductsReport(from: range.start, to: range.end, limit: limit);
+});
+
+final paymentsReportRangeProvider = StateProvider<DateTimeRange>((ref) {
+  final now = DateTime.now();
+  final day = DateTime(now.year, now.month, now.day);
+  return DateTimeRange(start: day, end: day);
+});
+
+final paymentsReportProvider = FutureProvider<PaymentsReportData>((ref) async {
+  final range = ref.watch(paymentsReportRangeProvider);
+  final repo = ref.watch(reportRepositoryProvider);
+  return repo.getPaymentsReport(from: range.start, to: range.end);
 });
