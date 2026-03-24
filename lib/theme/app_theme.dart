@@ -9,7 +9,8 @@ class AppTheme {
   static const Color textPrimary = Color(0xFF111827);
   static const Color textSecondary = Color(0xFF6B7280);
 
-  static const Color brandBlue = Color(0xFF3B82F6);
+  static const Color brandBlue = Color(0xFF22C55E);
+  static const Color brandGreenDark = Color(0xFF14532D);
   static const Color danger = Color(0xFFDC2626);
 
   // ===== TEXT SYSTEM =====

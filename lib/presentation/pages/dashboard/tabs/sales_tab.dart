@@ -10,7 +10,11 @@ class SalesTab extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.shopping_cart_outlined, size: 80, color: Colors.blue),
+          Icon(
+            Icons.shopping_cart_outlined,
+            size: 80,
+            color: Theme.of(context).colorScheme.primary,
+          ),
           const SizedBox(height: 24),
           const Text(
             "Mulai Transaksi Produk",

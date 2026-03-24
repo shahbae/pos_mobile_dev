@@ -133,14 +133,16 @@ class _TransactionItemCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: transaction.transactionType == 'service' 
                 ? Colors.purple.withOpacity(0.1) 
-                : Colors.blue.withOpacity(0.1),
+                : AppTheme.brandBlue.withOpacity(0.1),
             shape: BoxShape.circle,
           ),
           child: Icon(
             transaction.transactionType == 'service' 
                 ? Icons.miscellaneous_services_outlined 
                 : Icons.inventory_2_outlined,
-            color: transaction.transactionType == 'service' ? Colors.purple : Colors.blue,
+            color: transaction.transactionType == 'service'
+                ? Colors.purple
+                : AppTheme.brandBlue,
           ),
         ),
         title: Text(

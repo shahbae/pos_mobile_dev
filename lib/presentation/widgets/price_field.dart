@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:pos_mobile/theme/app_theme.dart';
 
 class PriceField extends StatefulWidget {
   final String label;
@@ -71,7 +72,7 @@ class _PriceFieldState extends State<PriceField> {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Color(0xFF3B82F6)),
+            borderSide: const BorderSide(color: AppTheme.brandBlue),
           ),
         ),
       ),

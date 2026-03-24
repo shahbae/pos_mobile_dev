@@ -12,6 +12,7 @@ import 'package:pos_mobile/presentation/pages/dashboard/tabs/setting_tab.dart';
 import 'package:pos_mobile/presentation/pages/product_transactions/product_transaction_page.dart';
 import 'package:pos_mobile/presentation/pages/service_transactions/service_transaction_page.dart';
 import 'package:pos_mobile/presentation/providers/tenant_provider.dart';
+import 'package:pos_mobile/theme/app_theme.dart';
 
 class DashboardPage extends ConsumerWidget {
   const DashboardPage({super.key});
@@ -31,29 +32,29 @@ class DashboardPage extends ConsumerWidget {
       SettingTab(),
     ];
 
+    const titles = [
+      'Dashboard',
+      'Transaksi',
+      'Manajemen Stok',
+      'Laporan',
+      'Pengaturan',
+    ];
+
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
 
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 0,
-        title: const Text(
-          "JAIA POS",
-          style: TextStyle(
+        centerTitle: true,
+        title: Text(
+          titles[index],
+          style: const TextStyle(
             fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: Colors.blue,
+            fontWeight: FontWeight.w700,
+            color: AppTheme.textPrimary,
           ),
         ),
-
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await ref.read(authProvider.notifier).logout();
-            },
-          ),
-        ],
       ),
 
       body: SafeArea(
@@ -69,10 +70,10 @@ class DashboardPage extends ConsumerWidget {
       floatingActionButton: isTablet
           ? null
           : Container(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 boxShadow: [
                   BoxShadow(
-                    color: Color(0x553B82F6), // biru transparan
+                    color: AppTheme.brandBlue.withOpacity(0.33),
                     blurRadius: 22,
                     spreadRadius: 4,
                     offset: Offset(0, 4),
@@ -80,20 +81,24 @@ class DashboardPage extends ConsumerWidget {
                 ],
               ),
               child: FloatingActionButton(
-                backgroundColor: const Color(0xFF3B82F6),
+                backgroundColor: AppTheme.brandBlue,
                 shape: const CircleBorder(),
                 onPressed: () {
                   final businessType = tenantAsync.valueOrNull?.businessType;
-                  
+
                   if (businessType == 'laundry') {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const ServiceTransactionPage()),
+                      MaterialPageRoute(
+                        builder: (_) => const ServiceTransactionPage(),
+                      ),
                     );
                   } else {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const ProductTransactionPage()),
+                      MaterialPageRoute(
+                        builder: (_) => const ProductTransactionPage(),
+                      ),
                     );
                   }
                 },
@@ -115,8 +120,12 @@ class _Sidebar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return NavigationRail(
-      backgroundColor: const Color(0xFF0F172A),
-      indicatorColor: const Color(0xFF1E293B),
+      backgroundColor: AppTheme.brandGreenDark,
+      indicatorColor: Colors.white.withOpacity(0.20),
+      selectedIconTheme: const IconThemeData(color: Colors.white),
+      unselectedIconTheme: const IconThemeData(color: Colors.white70),
+      selectedLabelTextStyle: const TextStyle(color: Colors.white),
+      unselectedLabelTextStyle: const TextStyle(color: Colors.white70),
       selectedIndex: index,
       labelType: NavigationRailLabelType.all,
       onDestinationSelected: (value) =>
@@ -139,15 +148,6 @@ class _Sidebar extends ConsumerWidget {
           label: Text("Pengaturan"),
         ),
       ],
-      trailing: Padding(
-        padding: const EdgeInsets.only(bottom: 16),
-        child: IconButton(
-          icon: const Icon(Icons.logout, color: Colors.white70),
-          onPressed: () async {
-            await ref.read(authProvider.notifier).logout();
-          },
-        ),
-      ),
     );
   }
 }
@@ -160,7 +160,7 @@ class _BottomBar extends ConsumerWidget {
     final index = ref.watch(dashboardIndexProvider);
 
     return BottomAppBar(
-      color: const Color(0xFF0F172A),
+      color: AppTheme.brandGreenDark,
       height: 70,
       shape: const CircularNotchedRectangle(),
 
@@ -229,12 +229,12 @@ class _NavItem extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: active ? const Color(0xFF3B82F6) : Colors.white54),
+          Icon(icon, color: active ? Colors.white : Colors.white70),
           Text(
             label,
             style: TextStyle(
               fontSize: 12,
-              color: active ? const Color(0xFF3B82F6) : Colors.white54,
+              color: active ? Colors.white : Colors.white70,
             ),
           ),
         ],

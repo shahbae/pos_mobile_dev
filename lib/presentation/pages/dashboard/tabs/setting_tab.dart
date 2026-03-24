@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
+import 'package:pos_mobile/theme/app_theme.dart';
 import '../../../pages/suppliers/supplier_list_page.dart';
 import '../../../pages/customers/customer_list_page.dart';
 import '../../../pages/employees/employee_list_page.dart';
@@ -13,93 +14,187 @@ class SettingTab extends ConsumerWidget {
     final theme = Theme.of(context);
     final auth = ref.watch(authProvider);
     final isStaff = auth.role == 'staff';
+    final accent = theme.colorScheme.primary;
+    final bottomInset = MediaQuery.of(context).padding.bottom;
 
-    return Scaffold(
-      backgroundColor: theme.colorScheme.surface,
-
-      appBar: AppBar(
-        title: const Text("Pengaturan"),
-        backgroundColor: theme.colorScheme.surface,
-        elevation: 0,
-      ),
-
-      body: ListView(
-        children: [
-          const SizedBox(height: 4),
-
-          ListTile(
-            leading: Icon(
-              Icons.factory_outlined,
-              color: theme.colorScheme.primary,
-            ),
-
-            title: Text(
-              "Pemasok",
-              style: TextStyle(
-                color: Colors.grey.shade900,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-
-            trailing: Icon(Icons.chevron_right, color: Colors.grey.shade500),
-
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const SupplierListPage()),
-              );
-            },
+    return ListView(
+      padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + bottomInset + 96),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: accent.withOpacity(0.10),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: accent.withOpacity(0.20)),
           ),
-
-          Divider(color: Colors.grey.shade300),
-
-          ListTile(
-            leading: Icon(
-              Icons.people_alt_outlined,
-              color: theme.colorScheme.primary,
-            ),
-            title: Text(
-              "Pelanggan",
-              style: TextStyle(
-                color: Colors.grey.shade900,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            trailing: Icon(Icons.chevron_right, color: Colors.grey.shade500),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const CustomerListPage()),
-              );
-            },
-          ),
-
-          Divider(color: Colors.grey.shade300),
-
-          if (!isStaff) ...[
-            ListTile(
-              leading: Icon(
-                Icons.badge_outlined,
-                color: theme.colorScheme.primary,
-              ),
-              title: Text(
-                "Karyawan",
-                style: TextStyle(
-                  color: Colors.grey.shade900,
-                  fontWeight: FontWeight.w500,
+          child: Row(
+            children: [
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Atur Bisnis Anda",
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        color: AppTheme.textPrimary,
+                        fontSize: 16,
+                      ),
+                    ),
+                    SizedBox(height: 6),
+                    Text(
+                      "Kelola data master dan preferensi aplikasi.",
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              trailing: Icon(Icons.chevron_right, color: Colors.grey.shade500),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const EmployeeListPage()),
-                );
-              },
-            ),
-            Divider(color: Colors.grey.shade300),
-          ],
+              const SizedBox(width: 12),
+              Icon(Icons.settings_outlined, color: accent, size: 28),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        _SettingMenuCard(
+          title: "Pemasok",
+          subtitle: "Kelola daftar pemasok",
+          icon: Icons.factory_outlined,
+          color: accent,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SupplierListPage()),
+            );
+          },
+        ),
+        const SizedBox(height: 16),
+        _SettingMenuCard(
+          title: "Pelanggan",
+          subtitle: "Kelola daftar pelanggan",
+          icon: Icons.people_alt_outlined,
+          color: accent,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const CustomerListPage()),
+            );
+          },
+        ),
+        if (!isStaff) ...[
+          const SizedBox(height: 16),
+          _SettingMenuCard(
+            title: "Karyawan",
+            subtitle: "Kelola akun karyawan",
+            icon: Icons.badge_outlined,
+            color: accent,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const EmployeeListPage()),
+              );
+            },
+          ),
         ],
+        const SizedBox(height: 16),
+        _SettingMenuCard(
+          title: "Logout",
+          subtitle: "Keluar dari akun saat ini",
+          icon: Icons.logout,
+          color: AppTheme.danger,
+          onTap: () async {
+            await ref.read(authProvider.notifier).logout();
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _SettingMenuCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _SettingMenuCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppTheme.borderLight),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: color, size: 22),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      color: AppTheme.textPrimary,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: AppTheme.bgLight,
+                border: Border.all(color: AppTheme.borderLight),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.chevron_right,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

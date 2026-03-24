@@ -17,20 +17,57 @@ class ReportTab extends ConsumerWidget {
     final tenantAsync = ref.watch(tenantProvider);
     final businessType = tenantAsync.valueOrNull?.businessType;
     final bottomInset = MediaQuery.of(context).padding.bottom;
+    const accent = Color(0xFF22C55E);
 
     return ListView(
       padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + bottomInset + 96),
       children: [
-        const Text(
-          "Laporan & Riwayat",
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+        // const _Header(),
+        // const SizedBox(height: 14),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: accent.withOpacity(0.10),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: accent.withOpacity(0.20)),
+          ),
+          child: const Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Kelola Bisnis Lebih Mudah",
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        color: AppTheme.textPrimary,
+                        fontSize: 16,
+                      ),
+                    ),
+                    SizedBox(height: 6),
+                    Text(
+                      "Pantau laporan, pembayaran, dan riwayat transaksi dalam satu tempat.",
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(width: 12),
+              Icon(Icons.insights_outlined, color: accent, size: 28),
+            ],
+          ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
         _ReportMenuCard(
           title: "Laporan Harian",
           subtitle: "Ringkasan transaksi per hari",
           icon: Icons.calendar_today_outlined,
-          color: Colors.teal,
+          color: accent,
           onTap: () {
             Navigator.push(
               context,
@@ -43,7 +80,7 @@ class ReportTab extends ConsumerWidget {
           title: "Laporan Profit",
           subtitle: "Ringkasan laba rugi",
           icon: Icons.stacked_line_chart_outlined,
-          color: Colors.indigo,
+          color: accent,
           onTap: () {
             Navigator.push(
               context,
@@ -56,7 +93,7 @@ class ReportTab extends ConsumerWidget {
           title: "Stok Menipis",
           subtitle: "Daftar produk di bawah threshold",
           icon: Icons.warning_amber_rounded,
-          color: Colors.redAccent,
+          color: accent,
           onTap: () {
             Navigator.push(
               context,
@@ -69,7 +106,7 @@ class ReportTab extends ConsumerWidget {
           title: "Top Products",
           subtitle: "Produk terlaris berdasarkan revenue",
           icon: Icons.emoji_events_outlined,
-          color: Colors.orange,
+          color: accent,
           onTap: () {
             Navigator.push(
               context,
@@ -82,7 +119,7 @@ class ReportTab extends ConsumerWidget {
           title: "Laporan Pembayaran",
           subtitle: "Ringkasan pembayaran per metode",
           icon: Icons.payments_outlined,
-          color: Colors.green,
+          color: accent,
           onTap: () {
             Navigator.push(
               context,
@@ -96,7 +133,7 @@ class ReportTab extends ConsumerWidget {
             title: "Riwayat Transaksi Layanan",
             subtitle: "Lihat daftar transaksi jasa laundry",
             icon: Icons.miscellaneous_services_outlined,
-            color: Colors.purple,
+            color: accent,
             onTap: () {
               Navigator.push(
                 context,
@@ -115,7 +152,7 @@ class ReportTab extends ConsumerWidget {
             title: "Riwayat Transaksi Produk",
             subtitle: "Lihat daftar penjualan barang/produk",
             icon: Icons.inventory_2_outlined,
-            color: Colors.blue,
+            color: accent,
             onTap: () {
               Navigator.push(
                 context,
@@ -126,6 +163,36 @@ class ReportTab extends ConsumerWidget {
               );
             },
           ),
+      ],
+    );
+  }
+}
+
+class _Header extends StatelessWidget {
+  const _Header();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Ringkasan & riwayat transaksi",
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w900,
+            color: AppTheme.textPrimary,
+          ),
+        ),
+        SizedBox(height: 2),
+        Text(
+          "Ringkasan & riwayat transaksi",
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.textSecondary,
+          ),
+        ),
       ],
     );
   }
@@ -148,29 +215,70 @@ class _ReportMenuCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.borderLight),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(16),
-        leading: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(icon, color: color),
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppTheme.borderLight),
         ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(
-          subtitle,
-          style: const TextStyle(fontSize: 12, color: Colors.grey),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: color, size: 22),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      color: AppTheme.textPrimary,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: AppTheme.bgLight,
+                border: Border.all(color: AppTheme.borderLight),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.chevron_right,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+          ],
         ),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: onTap,
       ),
     );
   }

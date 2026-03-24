@@ -70,7 +70,10 @@ class EmployeeListPage extends ConsumerWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             IconButton(
-                              icon: const Icon(Icons.edit_outlined, color: Colors.blue),
+                              icon: const Icon(
+                                Icons.edit_outlined,
+                                color: AppTheme.brandBlue,
+                              ),
                               onPressed: () {
                                 Navigator.push(
                                   context,
