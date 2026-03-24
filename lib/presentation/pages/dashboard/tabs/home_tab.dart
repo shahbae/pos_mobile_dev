@@ -16,38 +16,36 @@ class HomeTab extends ConsumerWidget {
     return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
-  String _fmtRange(DateTimeRange range) {
+  String _fmtDate(DateTime date) {
     final fmt = DateFormat('dd MMM yyyy', 'id_ID');
-    final start = DateTime(
-      range.start.year,
-      range.start.month,
-      range.start.day,
-    );
-    final end = DateTime(range.end.year, range.end.month, range.end.day);
-    if (start == end) return fmt.format(range.start);
-    return "${fmt.format(range.start)} - ${fmt.format(range.end)}";
+    final d = DateTime(date.year, date.month, date.day);
+    return fmt.format(d);
   }
 
-  Future<void> _pickRange(BuildContext context, WidgetRef ref) async {
-    final current = ref.read(dashboardDateRangeProvider);
-    final picked = await showDateRangePicker(
+  Future<void> _pickDate(BuildContext context, WidgetRef ref) async {
+    final current = ref.read(dashboardDateProvider);
+    final picked = await showDatePicker(
       context: context,
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
-      initialDateRange: current,
-      helpText: 'Pilih Rentang Tanggal',
+      initialDate: current,
+      helpText: 'Pilih Tanggal',
     );
 
     if (picked == null) return;
-    ref.read(dashboardDateRangeProvider.notifier).state = picked;
+    ref.read(dashboardDateProvider.notifier).state = DateTime(
+      picked.year,
+      picked.month,
+      picked.day,
+    );
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final range = ref.watch(dashboardDateRangeProvider);
+    final date = ref.watch(dashboardDateProvider);
     final operationalAsync = ref.watch(dashboardOperationalProvider);
     final now = DateTime.now();
-    final isToday = _isSameDay(range.start, now) && _isSameDay(range.end, now);
+    final isToday = _isSameDay(date, now);
 
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
@@ -61,8 +59,8 @@ class HomeTab extends ConsumerWidget {
             physics: const AlwaysScrollableScrollPhysics(),
             children: [
               _Header(
-                rangeText: _fmtRange(range),
-                onPickRange: () => _pickRange(context, ref),
+                dateText: _fmtDate(date),
+                onPickDate: () => _pickDate(context, ref),
               ),
               const SizedBox(height: 14),
               operationalAsync.when(
@@ -422,10 +420,10 @@ class _RevenueLineChartPainter extends CustomPainter {
 }
 
 class _Header extends StatelessWidget {
-  final String rangeText;
-  final VoidCallback onPickRange;
+  final String dateText;
+  final VoidCallback onPickDate;
 
-  const _Header({required this.rangeText, required this.onPickRange});
+  const _Header({required this.dateText, required this.onPickDate});
 
   @override
   Widget build(BuildContext context) {
@@ -457,7 +455,7 @@ class _Header extends StatelessWidget {
         ),
         InkWell(
           borderRadius: BorderRadius.circular(999),
-          onTap: onPickRange,
+          onTap: onPickDate,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
@@ -475,7 +473,7 @@ class _Header extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  rangeText,
+                  dateText,
                   style: const TextStyle(
                     color: AppTheme.textPrimary,
                     fontWeight: FontWeight.w600,

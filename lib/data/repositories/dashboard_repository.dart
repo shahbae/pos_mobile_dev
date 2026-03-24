@@ -8,13 +8,12 @@ class DashboardRepository {
   DashboardRepository(this.api);
 
   Future<DashboardOperationalData> getOperational({
-    required DateTime from,
-    required DateTime to,
+    required DateTime date,
   }) async {
     final fmt = DateFormat('yyyy-MM-dd');
     final res = await api.dio.get(
       '/dashboard/operational',
-      queryParameters: {'from': fmt.format(from), 'to': fmt.format(to)},
+      queryParameters: {'date': fmt.format(date)},
     );
 
     if (res.statusCode != 200 || res.data['success'] != true) {

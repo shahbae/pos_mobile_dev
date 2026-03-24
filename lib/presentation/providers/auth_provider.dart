@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
 
@@ -49,8 +51,15 @@ final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
 
 class AuthNotifier extends StateNotifier<AuthState> {
   final AuthRepository repo;
+  late final StreamSubscription<void> _storageSub;
 
   AuthNotifier(this.repo) : super(const AuthState(status: AuthStatus.unknown)) {
+    _storageSub = SecureStorage.changes.listen((_) async {
+      final hasAccess = await SecureStorage.getAccessToken() != null;
+      if (!hasAccess && state.status != AuthStatus.unauthenticated) {
+        state = state.copyWith(status: AuthStatus.unauthenticated, role: null);
+      }
+    });
     _init();
   }
 
@@ -82,8 +91,28 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final hasToken = await SecureStorage.hasTokens();
 
       if (!hasToken) {
+        if (kDebugMode) {
+          debugPrint('Auth init | no access token | unauthenticated');
+        }
         state = state.copyWith(status: AuthStatus.unauthenticated, role: null);
         return;
+      }
+
+      final rememberMe = await SecureStorage.getRememberMe();
+      if (rememberMe == false) {
+        if (kDebugMode) {
+          debugPrint('Auth init | rememberMe=false | clearing tokens');
+        }
+        await SecureStorage.clear();
+        state = state.copyWith(status: AuthStatus.unauthenticated, role: null);
+        return;
+      }
+
+      if (kDebugMode) {
+        final hasRefresh = await SecureStorage.getRefreshToken() != null;
+        debugPrint(
+          'Auth init | rememberMe=${rememberMe ?? 'null'} | refreshExists=$hasRefresh',
+        );
       }
 
       final accessToken = await SecureStorage.getAccessToken();
@@ -122,11 +151,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
   /// ---------------------------------------------------
   /// LOGIN
   /// ---------------------------------------------------
-  Future<void> login(String email, String password) async {
+  Future<void> login(
+    String email,
+    String password, {
+    required bool rememberMe,
+  }) async {
     state = state.copyWith(loading: true, error: null);
 
     try {
-      await repo.login(email, password);
+      await repo.login(email, password, rememberMe: rememberMe);
 
       final accessToken = await SecureStorage.getAccessToken();
       final role = accessToken == null
@@ -138,6 +171,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
         loading: false,
         role: role,
       );
+
+      if (kDebugMode) {
+        debugPrint('Auth state | authenticated | role=${role ?? '-'}');
+      }
     } catch (e) {
       state = state.copyWith(
         loading: false,
@@ -155,5 +192,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } finally {
       state = state.copyWith(status: AuthStatus.unauthenticated, role: null);
     }
+  }
+
+  @override
+  void dispose() {
+    _storageSub.cancel();
+    super.dispose();
   }
 }

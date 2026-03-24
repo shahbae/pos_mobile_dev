@@ -23,6 +23,8 @@ class DashboardPage extends ConsumerWidget {
     final tenantAsync = ref.watch(tenantProvider);
     final shortest = MediaQuery.of(context).size.shortestSide;
     final isTablet = shortest >= 600;
+    final theme = Theme.of(context);
+    final titleColor = index == 1 ? AppTheme.textPrimary : theme.colorScheme.primary;
 
     final pages = const [
       HomeTab(),
@@ -44,15 +46,15 @@ class DashboardPage extends ConsumerWidget {
       backgroundColor: Theme.of(context).colorScheme.surface,
 
       appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.surface,
+        backgroundColor: theme.colorScheme.surface,
         elevation: 0,
         centerTitle: true,
         title: Text(
           titles[index],
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w700,
-            color: AppTheme.textPrimary,
+            color: titleColor,
           ),
         ),
       ),

@@ -77,28 +77,50 @@ class DashboardOperationalChart {
   }
 }
 
+class DashboardStockAlerts {
+  final int threshold;
+  final List<dynamic> rows;
+
+  const DashboardStockAlerts({required this.threshold, required this.rows});
+
+  factory DashboardStockAlerts.fromJson(Map<String, dynamic> json) {
+    int parseInt(dynamic raw) {
+      if (raw is int) return raw;
+      if (raw is num) return raw.toInt();
+      return int.tryParse(raw?.toString() ?? '') ?? 0;
+    }
+
+    return DashboardStockAlerts(
+      threshold: parseInt(json['threshold']),
+      rows: (json['rows'] as List?) ?? const [],
+    );
+  }
+}
+
 class DashboardOperationalData {
-  final DateTime from;
-  final DateTime to;
+  final DateTime date;
   final String? primaryTransactionType;
+  final DashboardOperationalSummary primarySales;
   final List<dynamic> sales;
   final DashboardOperationalSummary purchases;
   final DashboardOperationalSummary expenses;
   final String net;
   final List<dynamic> payments;
   final DashboardOperationalSummary openBills;
+  final DashboardStockAlerts stockAlerts;
   final DashboardOperationalChart? chart;
 
   const DashboardOperationalData({
-    required this.from,
-    required this.to,
+    required this.date,
     required this.primaryTransactionType,
+    required this.primarySales,
     required this.sales,
     required this.purchases,
     required this.expenses,
     required this.net,
     required this.payments,
     required this.openBills,
+    required this.stockAlerts,
     required this.chart,
   });
 
@@ -106,12 +128,17 @@ class DashboardOperationalData {
 
   factory DashboardOperationalData.fromJson(Map<String, dynamic> json) {
     final chartJson = (json['chart'] as Map?)?.cast<String, dynamic>();
+    final dateStr = (json['date'] ?? json['from'] ?? '').toString();
+    final parsedDate = DateTime.tryParse(dateStr) ?? DateTime(1970);
 
     return DashboardOperationalData(
-      from: DateTime.parse(json['from'] as String),
-      to: DateTime.parse(json['to'] as String),
+      date: parsedDate,
       primaryTransactionType: (json['primary_transaction_type'] as String?)
           ?.toLowerCase(),
+      primarySales: DashboardOperationalSummary.fromJson(
+        (json['primary_sales'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{},
+      ),
       sales: (json['sales'] as List?) ?? const [],
       purchases: DashboardOperationalSummary.fromJson(
         (json['purchases'] as Map?)?.cast<String, dynamic>() ??
@@ -125,6 +152,10 @@ class DashboardOperationalData {
       payments: (json['payments'] as List?) ?? const [],
       openBills: DashboardOperationalSummary.fromJson(
         (json['open_bills'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{},
+      ),
+      stockAlerts: DashboardStockAlerts.fromJson(
+        (json['stock_alerts'] as Map?)?.cast<String, dynamic>() ??
             const <String, dynamic>{},
       ),
       chart: chartJson == null

@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:pos_mobile/data/services/api_services.dart';
 import '../services/secure_storage.dart';
 
@@ -7,11 +8,15 @@ class AuthRepository {
 
   AuthRepository(this.api);
 
-  Future<void> login(String email, String password) async {
+  Future<void> login(
+    String email,
+    String password, {
+    required bool rememberMe,
+  }) async {
     try {
       final res = await api.dio.post(
         '/auth/login',
-        data: {'email': email, 'password': password},
+        data: {'email': email, 'password': password, 'remember_me': rememberMe},
       );
 
       // API response: { success: true/false, data: { access_token, ... } }
@@ -22,12 +27,28 @@ class AuthRepository {
 
       final data = res.data['data'];
       final token = data['access_token'];
+      final refreshToken = data['refresh_token'];
 
       if (token == null) {
         throw 'Token tidak ditemukan pada response API';
       }
 
-      await SecureStorage.saveTokens(accessToken: token);
+      await SecureStorage.saveTokens(
+        accessToken: token,
+        refreshToken: rememberMe ? refreshToken : null,
+      );
+      await SecureStorage.saveRememberMe(rememberMe);
+      if (!rememberMe) {
+        await SecureStorage.clearRefreshToken();
+      }
+
+      if (kDebugMode) {
+        final hasAccess = await SecureStorage.getAccessToken() != null;
+        final hasRefresh = await SecureStorage.getRefreshToken() != null;
+        debugPrint(
+          'Auth login ok | rememberMe=$rememberMe | accessSaved=$hasAccess | refreshSaved=$hasRefresh',
+        );
+      }
     } on DioException catch (e) {
       final msg = e.response?.data?['message'];
       throw msg ?? 'Login gagal';

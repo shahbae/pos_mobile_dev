@@ -43,6 +43,7 @@ class MyApp extends ConsumerWidget {
     }
 
     return MaterialApp(
+      key: ValueKey(auth.status),
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       home: page,

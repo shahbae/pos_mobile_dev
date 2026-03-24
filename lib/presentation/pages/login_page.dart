@@ -14,6 +14,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   bool _obscure = true;
+  bool _rememberMe = false;
 
   @override
   void dispose() {
@@ -143,14 +144,38 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
                           const SizedBox(height: 12),
 
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: Text(
-                              "Lupa Kata Sandi?",
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.primary,
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    Checkbox(
+                                      value: _rememberMe,
+                                      onChanged: auth.loading
+                                          ? null
+                                          : (v) => setState(
+                                              () => _rememberMe = v ?? false,
+                                            ),
+                                    ),
+                                    const Flexible(
+                                      child: Text(
+                                        "Ingat saya",
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
+                              Text(
+                                "Lupa Kata Sandi?",
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                              ),
+                            ],
                           ),
 
                           const SizedBox(height: 12),
@@ -184,6 +209,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                             .login(
                                               _emailCtrl.text.trim(),
                                               _passCtrl.text.trim(),
+                                              rememberMe: _rememberMe,
                                             );
                                       }
                                     },

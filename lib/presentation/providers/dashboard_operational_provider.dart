@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/data/models/dashboard_operational_model.dart';
 import 'package:pos_mobile/data/repositories/dashboard_repository.dart';
@@ -9,16 +8,15 @@ final dashboardRepositoryProvider = Provider<DashboardRepository>((ref) {
   return DashboardRepository(api);
 });
 
-final dashboardDateRangeProvider = StateProvider<DateTimeRange>((ref) {
+final dashboardDateProvider = StateProvider<DateTime>((ref) {
   final now = DateTime.now();
-  final day = DateTime(now.year, now.month, now.day);
-  return DateTimeRange(start: day, end: day);
+  return DateTime(now.year, now.month, now.day);
 });
 
 final dashboardOperationalProvider = FutureProvider<DashboardOperationalData>((
   ref,
 ) async {
-  final range = ref.watch(dashboardDateRangeProvider);
+  final date = ref.watch(dashboardDateProvider);
   final repo = ref.watch(dashboardRepositoryProvider);
-  return repo.getOperational(from: range.start, to: range.end);
+  return repo.getOperational(date: date);
 });
