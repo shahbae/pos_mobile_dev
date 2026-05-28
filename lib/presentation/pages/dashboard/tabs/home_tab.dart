@@ -5,7 +5,9 @@ import 'package:pos_mobile/data/models/dashboard_operational_model.dart';
 import 'package:pos_mobile/presentation/pages/expenses/expense_list_page.dart';
 import 'package:pos_mobile/presentation/pages/purchases/purchase_list_page.dart';
 import 'package:pos_mobile/presentation/pages/transactions/transaction_history_page.dart';
+import 'package:pos_mobile/presentation/providers/branch_provider.dart';
 import 'package:pos_mobile/presentation/providers/dashboard_operational_provider.dart';
+import 'package:pos_mobile/presentation/widgets/branch_switch_sheet.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/utils/currency.dart';
 
@@ -419,66 +421,118 @@ class _RevenueLineChartPainter extends CustomPainter {
   }
 }
 
-class _Header extends StatelessWidget {
+class _Header extends ConsumerWidget {
   final String dateText;
   final VoidCallback onPickDate;
 
   const _Header({required this.dateText, required this.onPickDate});
 
   @override
-  Widget build(BuildContext context) {
-    return Row(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentBranch = ref.watch(currentBranchProvider);
+    final accent = Theme.of(context).colorScheme.primary;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                "Beranda",
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: AppTheme.textPrimary,
+        Row(
+          children: [
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Beranda",
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    "Ringkasan operasional",
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            InkWell(
+              borderRadius: BorderRadius.circular(999),
+              onTap: onPickDate,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(color: AppTheme.borderLight),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.date_range_outlined,
+                      size: 18,
+                      color: AppTheme.textPrimary,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      dateText,
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              SizedBox(height: 2),
-              Text(
-                "Ringkasan operasional",
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: AppTheme.textSecondary,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
+        const SizedBox(height: 10),
         InkWell(
           borderRadius: BorderRadius.circular(999),
-          onTap: onPickDate,
+          onTap: () => showBranchSwitchSheet(context),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
             decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: AppTheme.borderLight),
+              color: currentBranch != null
+                  ? accent.withOpacity(0.08)
+                  : Colors.white,
+              border: Border.all(
+                color: currentBranch != null
+                    ? accent.withOpacity(0.35)
+                    : AppTheme.borderLight,
+              ),
               borderRadius: BorderRadius.circular(999),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
-                  Icons.date_range_outlined,
-                  size: 18,
-                  color: AppTheme.textPrimary,
+                Icon(
+                  Icons.store_outlined,
+                  size: 15,
+                  color: currentBranch != null ? accent : AppTheme.textSecondary,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 Text(
-                  dateText,
-                  style: const TextStyle(
-                    color: AppTheme.textPrimary,
-                    fontWeight: FontWeight.w600,
+                  currentBranch?.name ?? 'Pilih Cabang',
+                  style: TextStyle(
                     fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: currentBranch != null ? accent : AppTheme.textSecondary,
                   ),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 16,
+                  color: currentBranch != null ? accent : AppTheme.textSecondary,
                 ),
               ],
             ),

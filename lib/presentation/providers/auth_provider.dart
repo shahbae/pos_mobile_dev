@@ -16,12 +16,14 @@ class AuthState {
   final bool loading;
   final String? error;
   final String? role;
+  final int? branchId;
 
   const AuthState({
     required this.status,
     this.loading = false,
     this.error,
     this.role,
+    this.branchId,
   });
 
   AuthState copyWith({
@@ -29,12 +31,14 @@ class AuthState {
     bool? loading,
     Object? error = _noChange,
     Object? role = _noChange,
+    Object? branchId = _noChange,
   }) {
     return AuthState(
       status: status ?? this.status,
       loading: loading ?? this.loading,
       error: error == _noChange ? this.error : error as String?,
       role: role == _noChange ? this.role : role as String?,
+      branchId: branchId == _noChange ? this.branchId : branchId as int?,
     );
   }
 }
@@ -84,6 +88,26 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (_) {
       return null;
     }
+  }
+
+  int? _extractBranchIdFromToken(String token) {
+    try {
+      final claims = JwtDecoder.decode(token);
+      final raw = claims['branch_id'] ?? claims['branchId'];
+      if (raw is int) return raw;
+      if (raw is String) return int.tryParse(raw);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> reloadFromToken() async {
+    final token = await SecureStorage.getAccessToken();
+    if (token == null) return;
+    final role = _extractRoleFromToken(token);
+    final branchId = _extractBranchIdFromToken(token);
+    state = state.copyWith(role: role, branchId: branchId);
   }
 
   Future<void> _init() async {
@@ -139,9 +163,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
         return;
       }
       final role = _extractRoleFromToken(latestToken);
+      final branchId = _extractBranchIdFromToken(latestToken);
 
       // Success
-      state = state.copyWith(status: AuthStatus.authenticated, role: role);
+      state = state.copyWith(status: AuthStatus.authenticated, role: role, branchId: branchId);
     } catch (e) {
       // Fail-safe → jangan bikin app stuck
       await logout();
@@ -162,14 +187,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await repo.login(email, password, rememberMe: rememberMe);
 
       final accessToken = await SecureStorage.getAccessToken();
-      final role = accessToken == null
-          ? null
-          : _extractRoleFromToken(accessToken);
+      final role = accessToken == null ? null : _extractRoleFromToken(accessToken);
+      final branchId = accessToken == null ? null : _extractBranchIdFromToken(accessToken);
 
       state = state.copyWith(
         status: AuthStatus.authenticated,
         loading: false,
         role: role,
+        branchId: branchId,
       );
 
       if (kDebugMode) {
