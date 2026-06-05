@@ -42,6 +42,18 @@ class DashboardPage extends ConsumerWidget {
       'Pengaturan',
     ];
 
+    void startTransaction() {
+      final businessType = tenantAsync.valueOrNull?.businessType;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => businessType == 'laundry'
+              ? const ServiceTransactionPage()
+              : const ProductTransactionPage(),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
 
@@ -62,7 +74,7 @@ class DashboardPage extends ConsumerWidget {
       body: SafeArea(
         child: Row(
           children: [
-            if (isTablet) _Sidebar(index: index),
+            if (isTablet) _Sidebar(index: index, onNewTransaction: startTransaction),
 
             Expanded(child: pages[index]),
           ],
@@ -85,25 +97,7 @@ class DashboardPage extends ConsumerWidget {
               child: FloatingActionButton(
                 backgroundColor: AppTheme.brandBlue,
                 shape: const CircleBorder(),
-                onPressed: () {
-                  final businessType = tenantAsync.valueOrNull?.businessType;
-
-                  if (businessType == 'laundry') {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const ServiceTransactionPage(),
-                      ),
-                    );
-                  } else {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const ProductTransactionPage(),
-                      ),
-                    );
-                  }
-                },
+                onPressed: startTransaction,
                 child: const Icon(Icons.add, size: 28, color: Colors.white),
               ),
             ),
@@ -117,39 +111,69 @@ class DashboardPage extends ConsumerWidget {
 
 class _Sidebar extends ConsumerWidget {
   final int index;
-  const _Sidebar({required this.index});
+  final VoidCallback onNewTransaction;
+  const _Sidebar({required this.index, required this.onNewTransaction});
+
+  // Posisi menu rail -> index halaman sebenarnya.
+  // (index 1 = SalesTab placeholder, diakses lewat tombol transaksi baru)
+  static const _pageIndices = [0, 2, 3, 4];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return NavigationRail(
-      backgroundColor: AppTheme.brandGreenDark,
-      indicatorColor: Colors.white.withOpacity(0.20),
-      selectedIconTheme: const IconThemeData(color: Colors.white),
-      unselectedIconTheme: const IconThemeData(color: Colors.white70),
-      selectedLabelTextStyle: const TextStyle(color: Colors.white),
-      unselectedLabelTextStyle: const TextStyle(color: Colors.white70),
-      selectedIndex: index,
-      labelType: NavigationRailLabelType.all,
-      onDestinationSelected: (value) =>
-          ref.read(dashboardIndexProvider.notifier).state = value,
-      destinations: const [
-        NavigationRailDestination(
-          icon: Icon(Icons.home_outlined),
-          label: Text("Beranda"),
-        ),
-        NavigationRailDestination(
-          icon: Icon(Icons.inventory_2_outlined),
-          label: Text("Stok"),
-        ),
-        NavigationRailDestination(
-          icon: Icon(Icons.bar_chart_outlined),
-          label: Text("Laporan"),
-        ),
-        NavigationRailDestination(
-          icon: Icon(Icons.settings_outlined),
-          label: Text("Pengaturan"),
-        ),
-      ],
+    final selected = _pageIndices.indexOf(index);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: IntrinsicHeight(
+              child: NavigationRail(
+                backgroundColor: AppTheme.brandGreenDark,
+                indicatorColor: Colors.white.withOpacity(0.20),
+                selectedIconTheme: const IconThemeData(color: Colors.white),
+                unselectedIconTheme: const IconThemeData(color: Colors.white70),
+                selectedLabelTextStyle: const TextStyle(color: Colors.white),
+                unselectedLabelTextStyle: const TextStyle(color: Colors.white70),
+                selectedIndex: selected < 0 ? null : selected,
+                labelType: NavigationRailLabelType.all,
+                leading: Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: FloatingActionButton(
+                    heroTag: 'tabletNewTransaction',
+                    backgroundColor: Colors.white,
+                    foregroundColor: AppTheme.brandGreenDark,
+                    elevation: 0,
+                    tooltip: 'Transaksi Baru',
+                    onPressed: onNewTransaction,
+                    child: const Icon(Icons.add, size: 28),
+                  ),
+                ),
+                onDestinationSelected: (value) =>
+                    ref.read(dashboardIndexProvider.notifier).state = _pageIndices[value],
+                destinations: const [
+                  NavigationRailDestination(
+                    icon: Icon(Icons.home_outlined),
+                    label: Text("Beranda"),
+                  ),
+                  NavigationRailDestination(
+                    icon: Icon(Icons.inventory_2_outlined),
+                    label: Text("Stok"),
+                  ),
+                  NavigationRailDestination(
+                    icon: Icon(Icons.bar_chart_outlined),
+                    label: Text("Laporan"),
+                  ),
+                  NavigationRailDestination(
+                    icon: Icon(Icons.settings_outlined),
+                    label: Text("Pengaturan"),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

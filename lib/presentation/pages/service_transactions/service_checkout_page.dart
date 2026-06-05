@@ -14,7 +14,8 @@ class ServiceCheckoutPage extends ConsumerStatefulWidget {
   const ServiceCheckoutPage({super.key});
 
   @override
-  ConsumerState<ServiceCheckoutPage> createState() => _ServiceCheckoutPageState();
+  ConsumerState<ServiceCheckoutPage> createState() =>
+      _ServiceCheckoutPageState();
 }
 
 class _ServiceCheckoutPageState extends ConsumerState<ServiceCheckoutPage> {
@@ -47,30 +48,42 @@ class _ServiceCheckoutPageState extends ConsumerState<ServiceCheckoutPage> {
             // Select Customer
             ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.person_outline, size: 28, color: AppTheme.brandBlue),
+              leading: const Icon(
+                Icons.person_outline,
+                size: 28,
+                color: AppTheme.brandBlue,
+              ),
               title: Text(
-                cartState.selectedCustomer?.name ?? 'Pilih Pelanggan (Opsional)',
+                cartState.selectedCustomer?.name ??
+                    'Pilih Pelanggan (Opsional)',
                 style: TextStyle(
-                  color: cartState.selectedCustomer == null ? Colors.grey : AppTheme.textPrimary,
+                  color: cartState.selectedCustomer == null
+                      ? Colors.grey
+                      : AppTheme.textPrimary,
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              trailing: cartState.selectedCustomer != null 
-                ? IconButton(
-                    icon: const Icon(Icons.close, color: Colors.grey),
-                    onPressed: () => ref.read(serviceTransactionProvider.notifier).setCustomer(null),
-                  )
-                : const Icon(Icons.chevron_right),
+              trailing: cartState.selectedCustomer != null
+                  ? IconButton(
+                      icon: const Icon(Icons.close, color: Colors.grey),
+                      onPressed: () => ref
+                          .read(serviceTransactionProvider.notifier)
+                          .setCustomer(null),
+                    )
+                  : const Icon(Icons.chevron_right),
               onTap: () async {
                 final Map<String, dynamic>? result = await Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const CustomerListPage(isSelectionMode: true),
+                    builder: (_) =>
+                        const CustomerListPage(isSelectionMode: true),
                   ),
                 );
-                
+
                 if (result != null && result['customer'] != null) {
-                   ref.read(serviceTransactionProvider.notifier).setCustomer(result['customer'] as Customer);
+                  ref
+                      .read(serviceTransactionProvider.notifier)
+                      .setCustomer(result['customer'] as Customer);
                 }
               },
             ),
@@ -95,19 +108,23 @@ class _ServiceCheckoutPageState extends ConsumerState<ServiceCheckoutPage> {
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: cartState.cart.length,
-                separatorBuilder: (context, index) => const Divider(color: AppTheme.borderLight, height: 1),
+                separatorBuilder: (context, index) =>
+                    const Divider(color: AppTheme.borderLight, height: 1),
                 itemBuilder: (context, index) {
                   final service = cartState.cart.keys.elementAt(index);
                   final quantity = cartState.cart[service]!;
                   final subtotal = service.priceNum * quantity;
-                  
+
                   String qStr = quantity.toString();
                   if (qStr.endsWith('.0')) {
                     qStr = qStr.substring(0, qStr.length - 2);
                   }
 
                   return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
                     child: Row(
                       children: [
                         Expanded(
@@ -125,7 +142,10 @@ class _ServiceCheckoutPageState extends ConsumerState<ServiceCheckoutPage> {
                               const SizedBox(height: 4),
                               Text(
                                 "${formatRupiah(service.priceNum)} x $qStr",
-                                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                                style: const TextStyle(
+                                  color: AppTheme.textSecondary,
+                                  fontSize: 13,
+                                ),
                               ),
                             ],
                           ),
@@ -145,10 +165,14 @@ class _ServiceCheckoutPageState extends ConsumerState<ServiceCheckoutPage> {
                                     .updateQuantity(service, quantity - 1),
                               ),
                               InkWell(
-                                onTap: () => _showQuantityDialog(context, ref, service),
+                                onTap: () =>
+                                    _showQuantityDialog(context, ref, service),
                                 borderRadius: BorderRadius.circular(8),
                                 child: Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 4,
+                                  ),
                                   child: Text(
                                     qStr,
                                     style: const TextStyle(
@@ -203,7 +227,7 @@ class _ServiceCheckoutPageState extends ConsumerState<ServiceCheckoutPage> {
                 ),
                 const SizedBox(width: 16),
                 _PaymentMethodCard(
-                  label: "Transfer",
+                  label: "QRIS",
                   icon: Icons.account_balance_outlined,
                   isSelected: _paymentMethod == 'bank_transfer',
                   onTap: () => setState(() => _paymentMethod = 'bank_transfer'),
@@ -239,7 +263,11 @@ class _ServiceCheckoutPageState extends ConsumerState<ServiceCheckoutPage> {
                 ),
                 decoration: const InputDecoration(
                   prefixText: "Rp ",
-                  prefixStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 20, fontWeight: FontWeight.w600),
+                  prefixStyle: TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                  ),
                   filled: false,
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
@@ -255,13 +283,16 @@ class _ServiceCheckoutPageState extends ConsumerState<ServiceCheckoutPage> {
                 onPressed: cartState.isLoading
                     ? null
                     : () async {
-                        final rawPaidAmount = _paidAmountController.text.replaceAll('.', '');
+                        final rawPaidAmount = _paidAmountController.text
+                            .replaceAll('.', '');
                         final paidValue = double.tryParse(rawPaidAmount) ?? 0;
-                        
+
                         if (paidValue < cartState.totalPrice) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text("Jumlah bayar kurang dari total belanja"),
+                              content: Text(
+                                "Jumlah bayar kurang dari total belanja",
+                              ),
                               backgroundColor: Colors.orange,
                               behavior: SnackBarBehavior.floating,
                             ),
@@ -269,15 +300,21 @@ class _ServiceCheckoutPageState extends ConsumerState<ServiceCheckoutPage> {
                           return;
                         }
 
-                        ref.read(serviceTransactionProvider.notifier).updatePayment(_paymentMethod, paidValue);
+                        ref
+                            .read(serviceTransactionProvider.notifier)
+                            .updatePayment(_paymentMethod, paidValue);
 
                         try {
-                          final res = await ref.read(serviceTransactionProvider.notifier).checkout();
+                          final res = await ref
+                              .read(serviceTransactionProvider.notifier)
+                              .checkout();
                           if (mounted) {
                             Navigator.pushReplacement(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => ServiceTransactionSuccessPage(invoiceNumber: res.invoiceNumber),
+                                builder: (_) => ServiceTransactionSuccessPage(
+                                  invoiceNumber: res.invoiceNumber,
+                                ),
                               ),
                             );
                           }
@@ -296,7 +333,9 @@ class _ServiceCheckoutPageState extends ConsumerState<ServiceCheckoutPage> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.brandBlue,
                   padding: const EdgeInsets.symmetric(vertical: 20),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
                   elevation: 8,
                   shadowColor: AppTheme.brandBlue.withOpacity(0.4),
                 ),
@@ -304,7 +343,10 @@ class _ServiceCheckoutPageState extends ConsumerState<ServiceCheckoutPage> {
                     ? const CircularProgressIndicator(color: Colors.white)
                     : Text(
                         "Konfirmasi & Bayar ${formatRupiah(cartState.totalPrice)}",
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
               ),
             ),
@@ -315,14 +357,21 @@ class _ServiceCheckoutPageState extends ConsumerState<ServiceCheckoutPage> {
     );
   }
 
-  void _showQuantityDialog(BuildContext context, WidgetRef ref, ServiceModel service) {
+  void _showQuantityDialog(
+    BuildContext context,
+    WidgetRef ref,
+    ServiceModel service,
+  ) {
     final qtyController = TextEditingController();
     final cartState = ref.read(serviceTransactionProvider);
     if (cartState.cart.containsKey(service)) {
-       qtyController.text = cartState.cart[service].toString();
-       if (qtyController.text.endsWith('.0')) {
-         qtyController.text = qtyController.text.substring(0, qtyController.text.length - 2);
-       }
+      qtyController.text = cartState.cart[service].toString();
+      if (qtyController.text.endsWith('.0')) {
+        qtyController.text = qtyController.text.substring(
+          0,
+          qtyController.text.length - 2,
+        );
+      }
     }
 
     showDialog(
@@ -335,16 +384,21 @@ class _ServiceCheckoutPageState extends ConsumerState<ServiceCheckoutPage> {
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: InputDecoration(
               hintText: 'Misal: 1.5',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
           ),
           actions: [
             TextButton(
               onPressed: () {
-                ref.read(serviceTransactionProvider.notifier).removeFromCart(service);
+                ref
+                    .read(serviceTransactionProvider.notifier)
+                    .removeFromCart(service);
                 Navigator.pop(ctx);
-                if (ref.read(serviceTransactionProvider).cart.isEmpty && mounted) {
-                   Navigator.pop(context);
+                if (ref.read(serviceTransactionProvider).cart.isEmpty &&
+                    mounted) {
+                  Navigator.pop(context);
                 }
               },
               child: const Text("Hapus", style: TextStyle(color: Colors.red)),
@@ -354,20 +408,32 @@ class _ServiceCheckoutPageState extends ConsumerState<ServiceCheckoutPage> {
               child: const Text("Batal"),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.brandBlue),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.brandBlue,
+              ),
               onPressed: () {
-                final val = double.tryParse(qtyController.text.replaceAll(',', '.')) ?? 0;
+                final val =
+                    double.tryParse(qtyController.text.replaceAll(',', '.')) ??
+                    0;
                 if (val > 0) {
-                  ref.read(serviceTransactionProvider.notifier).updateQuantity(service, val);
+                  ref
+                      .read(serviceTransactionProvider.notifier)
+                      .updateQuantity(service, val);
                 } else {
-                  ref.read(serviceTransactionProvider.notifier).removeFromCart(service);
+                  ref
+                      .read(serviceTransactionProvider.notifier)
+                      .removeFromCart(service);
                 }
                 Navigator.pop(ctx);
-                if (ref.read(serviceTransactionProvider).cart.isEmpty && mounted) {
-                   Navigator.pop(context);
+                if (ref.read(serviceTransactionProvider).cart.isEmpty &&
+                    mounted) {
+                  Navigator.pop(context);
                 }
               },
-              child: const Text("Simpan", style: TextStyle(color: Colors.white)),
+              child: const Text(
+                "Simpan",
+                style: TextStyle(color: Colors.white),
+              ),
             ),
           ],
         );
@@ -416,7 +482,11 @@ class _PaymentMethodCard extends StatelessWidget {
           ),
           child: Column(
             children: [
-              Icon(icon, color: isSelected ? Colors.white : AppTheme.textSecondary, size: 32),
+              Icon(
+                icon,
+                color: isSelected ? Colors.white : AppTheme.textSecondary,
+                size: 32,
+              ),
               const SizedBox(height: 12),
               Text(
                 label,

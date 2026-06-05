@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/presentation/providers/transaction_history_provider.dart';
+import 'package:pos_mobile/presentation/pages/transactions/receipt_page.dart';
 import 'package:pos_mobile/utils/currency.dart';
 
 class TransactionHistoryListPage extends ConsumerStatefulWidget {
@@ -265,6 +266,29 @@ class _TransactionDetailBottomSheet extends ConsumerWidget {
               error: (err, _) => Center(child: Text("Gagal memuat data pembayaran: $err")),
             ),
           ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ReceiptPage(invoiceNo: transaction.invoiceNumber),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.print_outlined),
+              label: const Text("Cetak Nota", style: TextStyle(fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.brandBlue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -283,10 +307,17 @@ class _DetailRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label, style: const TextStyle(color: Colors.grey)),
-          Text(value, style: TextStyle(fontWeight: FontWeight.bold, color: valueColor)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: TextStyle(fontWeight: FontWeight.bold, color: valueColor),
+            ),
+          ),
         ],
       ),
     );

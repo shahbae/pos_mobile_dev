@@ -191,7 +191,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                 ),
                 const SizedBox(width: 16),
                 _PaymentMethodCard(
-                  label: "Transfer",
+                  label: "QRIS",
                   icon: Icons.account_balance_outlined,
                   isSelected: _paymentMethod == 'bank_transfer',
                   onTap: () => setState(() => _paymentMethod = 'bank_transfer'),

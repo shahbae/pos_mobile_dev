@@ -56,7 +56,10 @@ class HomeTab extends ConsumerWidget {
           onRefresh: () async {
             ref.invalidate(dashboardOperationalProvider);
           },
-          child: ListView(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 720),
+              child: ListView(
             padding: const EdgeInsets.all(20),
             physics: const AlwaysScrollableScrollPhysics(),
             children: [
@@ -179,6 +182,8 @@ class HomeTab extends ConsumerWidget {
                 },
               ),
             ],
+              ),
+            ),
           ),
         ),
       ),
