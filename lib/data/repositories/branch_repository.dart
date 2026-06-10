@@ -23,6 +23,28 @@ class BranchRepository {
     }
   }
 
+  Future<void> createBranch(Map<String, dynamic> data) async {
+    try {
+      final res = await api.dio.post('/branches', data: data);
+      if (res.data is Map && res.data['success'] == false) {
+        throw res.data['message'] ?? 'Gagal menambah cabang';
+      }
+    } on DioException catch (e) {
+      throw e.response?.data?['message'] ?? 'Gagal menambah cabang';
+    }
+  }
+
+  Future<void> updateBranch(int id, Map<String, dynamic> data) async {
+    try {
+      final res = await api.dio.put('/branches/$id', data: data);
+      if (res.data is Map && res.data['success'] == false) {
+        throw res.data['message'] ?? 'Gagal memperbarui cabang';
+      }
+    } on DioException catch (e) {
+      throw e.response?.data?['message'] ?? 'Gagal memperbarui cabang';
+    }
+  }
+
   Future<void> switchBranch(int branchId) async {
     try {
       final res = await api.dio.post(

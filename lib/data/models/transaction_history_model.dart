@@ -1,11 +1,13 @@
 class TransactionHistoryModel {
   final int id;
-  final String transactionType;
+  final String transactionType; // pos | purchase
   final String totalAmount;
   final String createdAt;
   final String invoiceNumber;
   final String paymentMethod;
   final String status;
+  final int? supplierId;
+  final String? note;
 
   TransactionHistoryModel({
     required this.id,
@@ -15,19 +17,24 @@ class TransactionHistoryModel {
     required this.invoiceNumber,
     required this.paymentMethod,
     required this.status,
+    this.supplierId,
+    this.note,
   });
 
   double get totalAmountNum => double.tryParse(totalAmount) ?? 0;
+  bool get isPurchase => transactionType == 'purchase';
 
   factory TransactionHistoryModel.fromJson(Map<String, dynamic> json) {
     return TransactionHistoryModel(
       id: json['id'] ?? 0,
       transactionType: json['transaction_type'] ?? '',
-      totalAmount: json['total_amount'] ?? '0',
+      totalAmount: json['total_amount']?.toString() ?? '0',
       createdAt: json['created_at'] ?? '',
       invoiceNumber: json['invoice_number'] ?? '',
       paymentMethod: json['payment_method'] ?? '',
       status: json['status'] ?? '',
+      supplierId: json['supplier_id'],
+      note: json['note'],
     );
   }
 }

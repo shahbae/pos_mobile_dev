@@ -47,10 +47,10 @@ class _TransactionHistoryListPageState extends ConsumerState<TransactionHistoryL
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(transactionHistoryProvider);
-    final title = widget.transactionType == 'service' 
-        ? "Riwayat Transaksi Layanan" 
-        : widget.transactionType == 'sale' 
-            ? "Riwayat Transaksi Produk" 
+    final title = widget.transactionType == 'pos'
+        ? "Riwayat Penjualan"
+        : widget.transactionType == 'purchase'
+            ? "Riwayat Pembelian"
             : "Riwayat Transaksi";
 
     return Scaffold(
@@ -132,23 +132,27 @@ class _TransactionItemCard extends StatelessWidget {
         leading: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: transaction.transactionType == 'service' 
-                ? Colors.purple.withOpacity(0.1) 
+            color: transaction.isPurchase
+                ? Colors.orange.withOpacity(0.1)
                 : AppTheme.brandBlue.withOpacity(0.1),
             shape: BoxShape.circle,
           ),
           child: Icon(
-            transaction.transactionType == 'service' 
-                ? Icons.miscellaneous_services_outlined 
+            transaction.isPurchase
+                ? Icons.shopping_cart_checkout_outlined
                 : Icons.inventory_2_outlined,
-            color: transaction.transactionType == 'service'
-                ? Colors.purple
-                : AppTheme.brandBlue,
+            color: transaction.isPurchase ? Colors.orange : AppTheme.brandBlue,
           ),
         ),
         title: Text(
-          transaction.invoiceNumber,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          transaction.isPurchase
+              ? (transaction.note != null && (transaction.note as String).isNotEmpty
+                  ? transaction.note
+                  : 'Pembelian #${transaction.id}')
+              : (transaction.invoiceNumber.isNotEmpty
+                  ? transaction.invoiceNumber
+                  : 'Transaksi #${transaction.id}'),
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -169,13 +173,15 @@ class _TransactionItemCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
-                color: transaction.status == 'paid' ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
+                color: transaction.isPurchase
+                    ? Colors.orange.withOpacity(0.1)
+                    : AppTheme.brandBlue.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
-                transaction.status.toUpperCase(),
+                transaction.isPurchase ? 'PEMBELIAN' : 'PENJUALAN',
                 style: TextStyle(
-                  color: transaction.status == 'paid' ? Colors.green : Colors.orange,
+                  color: transaction.isPurchase ? Colors.orange : AppTheme.brandBlue,
                   fontSize: 10,
                   fontWeight: FontWeight.bold,
                 ),
@@ -228,7 +234,7 @@ class _TransactionDetailBottomSheet extends ConsumerWidget {
           const Divider(),
           const SizedBox(height: 16),
           _DetailRow(label: "No. Invoice", value: transaction.invoiceNumber),
-          _DetailRow(label: "Tipe", value: transaction.transactionType == 'service' ? "Layanan" : "Produk"),
+          _DetailRow(label: "Tipe", value: transaction.isPurchase ? "Pembelian" : "Penjualan"),
           _DetailRow(label: "Status", value: transaction.status.toUpperCase()),
           _DetailRow(label: "Total Tagihan", value: formatRupiah(transaction.totalAmountNum), valueColor: AppTheme.brandBlue),
           const SizedBox(height: 24),
@@ -267,28 +273,29 @@ class _TransactionDetailBottomSheet extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ReceiptPage(invoiceNo: transaction.invoiceNumber),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.print_outlined),
-              label: const Text("Cetak Nota", style: TextStyle(fontWeight: FontWeight.bold)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.brandBlue,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          if (!transaction.isPurchase && transaction.invoiceNumber.toString().isNotEmpty)
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ReceiptPage(invoiceNo: transaction.invoiceNumber),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.print_outlined),
+                label: const Text("Cetak Nota", style: TextStyle(fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.brandBlue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -381,24 +388,24 @@ class _FilterBottomSheetState extends ConsumerState<_FilterBottomSheet> {
           if (widget.fixedType == null) ...[
             const Text("Tipe Transaksi", style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
-            Row(
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
                 _FilterChip(
                   label: "Semua",
                   selected: _type == null,
                   onSelected: (v) => setState(() => _type = null),
                 ),
-                const SizedBox(width: 8),
                 _FilterChip(
-                  label: "Produk",
-                  selected: _type == 'sale',
-                  onSelected: (v) => setState(() => _type = 'sale'),
+                  label: "Penjualan",
+                  selected: _type == 'pos',
+                  onSelected: (v) => setState(() => _type = 'pos'),
                 ),
-                const SizedBox(width: 8),
                 _FilterChip(
-                  label: "Layanan",
-                  selected: _type == 'service',
-                  onSelected: (v) => setState(() => _type = 'service'),
+                  label: "Pembelian",
+                  selected: _type == 'purchase',
+                  onSelected: (v) => setState(() => _type = 'purchase'),
                 ),
               ],
             ),

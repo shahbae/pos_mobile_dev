@@ -103,14 +103,6 @@ class StockTab extends ConsumerWidget {
           const SizedBox(height: 16),
           _menuItem(
             context,
-            icon: Icons.playlist_add_check_circle_outlined,
-            title: "Penyesuaian Stok",
-            subtitle: "Catat perubahan stok barang",
-            disabled: true,
-          ),
-          const SizedBox(height: 16),
-          _menuItem(
-            context,
             icon: Icons.history_outlined,
             title: "Riwayat Mutasi Stok",
             subtitle: "Lihat keluar / masuk stok",

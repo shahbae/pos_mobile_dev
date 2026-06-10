@@ -12,10 +12,10 @@ class ReceiptRepository {
   final ApiService api;
   ReceiptRepository(this.api);
 
-  /// Ambil data nota berdasarkan nomor invoice.
-  /// Endpoint: GET /api/v1/transactions/{invoice_no}
+  /// Ambil data nota berdasarkan nomor invoice (untuk reprint).
+  /// Endpoint: GET /product-transactions/{invoice_no}
   Future<Receipt> getReceipt(String invoiceNo) async {
-    final res = await api.dio.get('/api/v1/transactions/$invoiceNo');
+    final res = await api.dio.get('/product-transactions/$invoiceNo');
     return Receipt.fromJson(res.data);
   }
 }

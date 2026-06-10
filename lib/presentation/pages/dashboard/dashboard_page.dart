@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/presentation/pages/dashboard/tabs/stock_tab.dart';
 
-import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/dashboard_index_provider.dart';
 
 import 'package:pos_mobile/presentation/pages/dashboard/tabs/home_tab.dart';
@@ -10,8 +9,6 @@ import 'package:pos_mobile/presentation/pages/dashboard/tabs/sales_tab.dart';
 import 'package:pos_mobile/presentation/pages/dashboard/tabs/report_tab.dart';
 import 'package:pos_mobile/presentation/pages/dashboard/tabs/setting_tab.dart';
 import 'package:pos_mobile/presentation/pages/product_transactions/product_transaction_page.dart';
-import 'package:pos_mobile/presentation/pages/service_transactions/service_transaction_page.dart';
-import 'package:pos_mobile/presentation/providers/tenant_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
 class DashboardPage extends ConsumerWidget {
@@ -20,7 +17,6 @@ class DashboardPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final index = ref.watch(dashboardIndexProvider);
-    final tenantAsync = ref.watch(tenantProvider);
     final shortest = MediaQuery.of(context).size.shortestSide;
     final isTablet = shortest >= 600;
     final theme = Theme.of(context);
@@ -43,14 +39,9 @@ class DashboardPage extends ConsumerWidget {
     ];
 
     void startTransaction() {
-      final businessType = tenantAsync.valueOrNull?.businessType;
       Navigator.push(
         context,
-        MaterialPageRoute(
-          builder: (_) => businessType == 'laundry'
-              ? const ServiceTransactionPage()
-              : const ProductTransactionPage(),
-        ),
+        MaterialPageRoute(builder: (_) => const ProductTransactionPage()),
       );
     }
 

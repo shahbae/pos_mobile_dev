@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
+import '../../../pages/branches/branch_list_page.dart';
+import '../../../pages/shifts/shift_page.dart';
 import '../../../pages/suppliers/supplier_list_page.dart';
 import '../../../pages/customers/customer_list_page.dart';
 import '../../../pages/employees/employee_list_page.dart';
@@ -13,7 +15,10 @@ class SettingTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final auth = ref.watch(authProvider);
-    final isStaff = auth.role == 'staff';
+    final role = auth.role;
+    // Hak akses sesuai role BE: owner|supervisor|leader|finance|kasir|karyawan|produksi
+    final canManageEmployees = role == 'owner' || role == 'supervisor';
+    final canManageBranches = role == 'owner';
     final accent = theme.colorScheme.primary;
     final bottomInset = MediaQuery.of(context).padding.bottom;
 
@@ -84,7 +89,7 @@ class SettingTab extends ConsumerWidget {
             );
           },
         ),
-        if (!isStaff) ...[
+        if (canManageEmployees) ...[
           const SizedBox(height: 16),
           _SettingMenuCard(
             title: "Karyawan",
@@ -95,6 +100,34 @@ class SettingTab extends ConsumerWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const EmployeeListPage()),
+              );
+            },
+          ),
+        ],
+        const SizedBox(height: 16),
+        _SettingMenuCard(
+          title: "Shift Kasir",
+          subtitle: "Buka / tutup shift & rekap kas",
+          icon: Icons.point_of_sale_outlined,
+          color: accent,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ShiftPage()),
+            );
+          },
+        ),
+        if (canManageBranches) ...[
+          const SizedBox(height: 16),
+          _SettingMenuCard(
+            title: "Cabang",
+            subtitle: "Kelola cabang & catatan nota",
+            icon: Icons.store_mall_directory_outlined,
+            color: accent,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const BranchListPage()),
               );
             },
           ),

@@ -1,5 +1,6 @@
+import 'dart:math';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:pos_mobile/data/models/customer_model.dart';
 import 'package:pos_mobile/data/models/product_model.dart';
 import 'package:pos_mobile/data/models/product_transaction_model.dart';
 import 'package:pos_mobile/data/repositories/product_transaction_repository.dart';
@@ -25,14 +26,12 @@ class ProductTransactionState {
   final bool isLoading;
   final String? error;
   final ProductTransactionResponse? lastResponse;
-  final Customer? selectedCustomer;
 
   ProductTransactionState({
     this.items = const [],
     this.isLoading = false,
     this.error,
     this.lastResponse,
-    this.selectedCustomer,
   });
 
   double get total => items.fold(0, (sum, item) => sum + item.subtotal);
@@ -42,14 +41,12 @@ class ProductTransactionState {
     bool? isLoading,
     String? error,
     ProductTransactionResponse? lastResponse,
-    Customer? selectedCustomer,
   }) {
     return ProductTransactionState(
       items: items ?? this.items,
       isLoading: isLoading ?? this.isLoading,
       error: error,
       lastResponse: lastResponse ?? this.lastResponse,
-      selectedCustomer: selectedCustomer ?? this.selectedCustomer,
     );
   }
 }
@@ -64,10 +61,6 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
   final ProductTransactionRepository repo;
 
   ProductTransactionNotifier(this.repo) : super(ProductTransactionState());
-
-  void setCustomer(Customer? customer) {
-    state = state.copyWith(selectedCustomer: customer);
-  }
 
   void addToCart(Product product) {
     final existingIndex = state.items.indexWhere((item) => item.product.id == product.id);
@@ -108,13 +101,15 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
   }
 
   void clearCart() {
-    state = state.copyWith(items: [], lastResponse: null, error: null, selectedCustomer: null);
+    state = state.copyWith(items: [], lastResponse: null, error: null);
   }
 
   Future<void> submitTransaction({
     required String paymentMethod,
-    required String paidAmount,
-    int? customerId,
+    required int paid,
+    int discount = 0,
+    String? paymentRef,
+    String? customerName,
   }) async {
     if (state.items.isEmpty) return;
 
@@ -128,8 +123,11 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
               ))
           .toList(),
       paymentMethod: paymentMethod,
-      paidAmount: paidAmount,
-      customerId: customerId ?? state.selectedCustomer?.id,
+      paid: paid,
+      discount: discount,
+      paymentRef: paymentRef,
+      customerName: customerName,
+      idempotencyKey: _genIdempotencyKey(),
     );
 
     try {
@@ -138,7 +136,6 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
         isLoading: false,
         lastResponse: response,
         items: [], // Clear cart on success
-        selectedCustomer: null, // Clear customer on success
       );
     } catch (e) {
       state = state.copyWith(
@@ -146,5 +143,13 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
         error: e.toString(),
       );
     }
+  }
+
+  /// Idempotency key unik per submit (cegah transaksi dobel saat retry).
+  String _genIdempotencyKey() {
+    final rnd = Random();
+    String seg(int n) =>
+        List.generate(n, (_) => rnd.nextInt(16).toRadixString(16)).join();
+    return '${seg(8)}-${seg(4)}-4${seg(3)}-${seg(4)}-${seg(12)}';
   }
 }

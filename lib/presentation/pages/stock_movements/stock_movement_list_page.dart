@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/stock_movement_provider.dart';
 import '../../providers/product_provider.dart';
 import '../../../data/models/stock_movement_model.dart';
-import 'stock_movement_form_page.dart';
 
 class StockMovementListPage extends ConsumerStatefulWidget {
   const StockMovementListPage({super.key});
@@ -30,20 +29,6 @@ class _StockMovementListPageState extends ConsumerState<StockMovementListPage> {
         title: const Text("Riwayat Mutasi Stok"),
         backgroundColor: theme.colorScheme.surface,
         elevation: 0,
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        icon: const Icon(Icons.add),
-        label: const Text('Catat Mutasi'),
-        onPressed: () async {
-          final created = await Navigator.push(
-            context,
-            MaterialPageRoute(
-                builder: (_) => const StockMovementFormPage()),
-          );
-          if (created == true) {
-            ref.invalidate(stockMovementListProvider);
-          }
-        },
       ),
       body: Column(
         children: [

@@ -6,7 +6,6 @@ import 'package:pos_mobile/presentation/pages/reports/profit_report_page.dart';
 import 'package:pos_mobile/presentation/pages/reports/stock_alerts_report_page.dart';
 import 'package:pos_mobile/presentation/pages/reports/top_products_report_page.dart';
 import 'package:pos_mobile/presentation/pages/transactions/transaction_history_page.dart';
-import 'package:pos_mobile/presentation/providers/tenant_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
 class ReportTab extends ConsumerWidget {
@@ -14,8 +13,6 @@ class ReportTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tenantAsync = ref.watch(tenantProvider);
-    final businessType = tenantAsync.valueOrNull?.businessType;
     final bottomInset = MediaQuery.of(context).padding.bottom;
     const accent = Color(0xFF22C55E);
 
@@ -128,70 +125,19 @@ class ReportTab extends ConsumerWidget {
           },
         ),
         const SizedBox(height: 16),
-        if (businessType == 'laundry' || businessType == null) ...[
-          _ReportMenuCard(
-            title: "Riwayat Transaksi Layanan",
-            subtitle: "Lihat daftar transaksi jasa laundry",
-            icon: Icons.miscellaneous_services_outlined,
-            color: accent,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const TransactionHistoryListPage(
-                    transactionType: 'service',
-                  ),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 16),
-        ],
-        if (businessType != 'laundry' || businessType == null)
-          _ReportMenuCard(
-            title: "Riwayat Transaksi Produk",
-            subtitle: "Lihat daftar penjualan barang/produk",
-            icon: Icons.inventory_2_outlined,
-            color: accent,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      const TransactionHistoryListPage(transactionType: 'sale'),
-                ),
-              );
-            },
-          ),
-      ],
-    );
-  }
-}
-
-class _Header extends StatelessWidget {
-  const _Header();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          "Ringkasan & riwayat transaksi",
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.w900,
-            color: AppTheme.textPrimary,
-          ),
-        ),
-        SizedBox(height: 2),
-        Text(
-          "Ringkasan & riwayat transaksi",
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: AppTheme.textSecondary,
-          ),
+        _ReportMenuCard(
+          title: "Riwayat Transaksi",
+          subtitle: "Lihat penjualan & pembelian",
+          icon: Icons.receipt_long_outlined,
+          color: accent,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const TransactionHistoryListPage(),
+              ),
+            );
+          },
         ),
       ],
     );

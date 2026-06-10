@@ -2,23 +2,32 @@ import 'package:flutter/foundation.dart';
 
 class ProductTransactionRequest {
   final List<TransactionItem> items;
-  final String paymentMethod;
-  final String paidAmount;
-  final int? customerId;
+  final String paymentMethod; // CASH | TRANSFER | QRIS | DEBIT | CREDIT | EWALLET
+  final int paid; // integer rupiah
+  final int discount; // integer rupiah
+  final String? paymentRef; // nomor referensi untuk non-cash
+  final String? customerName; // atas nama (free text), opsional
+  final String? idempotencyKey;
 
   ProductTransactionRequest({
     required this.items,
     required this.paymentMethod,
-    required this.paidAmount,
-    this.customerId,
+    required this.paid,
+    this.discount = 0,
+    this.paymentRef,
+    this.customerName,
+    this.idempotencyKey,
   });
 
   Map<String, dynamic> toJson() {
     return {
-      'items': items.map((i) => i.toJson()).toList(),
       'payment_method': paymentMethod,
-      'paid_amount': paidAmount,
-      if (customerId != null) 'customer_id': customerId,
+      'payment_ref': paymentRef,
+      'paid': paid,
+      'discount': discount,
+      'items': items.map((i) => i.toJson()).toList(),
+      if (customerName != null && customerName!.isNotEmpty) 'customer_name': customerName,
+      if (idempotencyKey != null) 'idempotency_key': idempotencyKey,
     };
   }
 }
@@ -35,7 +44,7 @@ class TransactionItem {
   Map<String, dynamic> toJson() {
     return {
       'product_id': productId,
-      'quantity': quantity,
+      'qty': quantity,
     };
   }
 }

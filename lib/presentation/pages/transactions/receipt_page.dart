@@ -363,13 +363,22 @@ class _PaidBadge extends StatelessWidget {
 }
 
 String _paymentLabel(String method) {
-  switch (method) {
+  switch (method.toLowerCase()) {
     case 'cash':
       return 'Tunai';
+    case 'transfer':
     case 'bank_transfer':
+      return 'Transfer';
+    case 'qris':
       return 'QRIS';
+    case 'debit':
+      return 'Debit';
+    case 'credit':
+      return 'Kredit';
+    case 'ewallet':
+      return 'E-Wallet';
     default:
-      return 'Bayar';
+      return method.isEmpty ? 'Bayar' : method.toUpperCase();
   }
 }
 
