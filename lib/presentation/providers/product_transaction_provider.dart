@@ -2,48 +2,149 @@ import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/data/models/product_model.dart';
+import 'package:pos_mobile/data/models/promo_model.dart';
+import 'package:pos_mobile/data/models/topping_model.dart';
 import 'package:pos_mobile/data/models/product_transaction_model.dart';
 import 'package:pos_mobile/data/repositories/product_transaction_repository.dart';
 
+/// Topping terpilih pada satu baris cart (menyimpan harga untuk kalkulasi).
+class CartTopping {
+  final Topping topping;
+  final int qty;
+
+  CartTopping({required this.topping, this.qty = 1});
+
+  int get lineTotal => topping.price * qty;
+
+  ToppingSelection toSelection() => ToppingSelection(toppingId: topping.id, qty: qty);
+}
+
 class CartItem {
+  /// Id unik baris — satu produk bisa muncul beberapa baris dengan topping berbeda.
+  final int lineId;
   final Product product;
   final int quantity;
+  final List<CartTopping> freeToppings; // gratis, tidak menambah subtotal
+  final List<CartTopping> extraToppings; // berbayar
 
-  CartItem({required this.product, required this.quantity});
+  CartItem({
+    required this.lineId,
+    required this.product,
+    required this.quantity,
+    this.freeToppings = const [],
+    this.extraToppings = const [],
+  });
 
-  CartItem copyWith({int? quantity}) {
+  CartItem copyWith({
+    int? quantity,
+    List<CartTopping>? freeToppings,
+    List<CartTopping>? extraToppings,
+  }) {
     return CartItem(
+      lineId: lineId,
       product: product,
       quantity: quantity ?? this.quantity,
+      freeToppings: freeToppings ?? this.freeToppings,
+      extraToppings: extraToppings ?? this.extraToppings,
     );
   }
 
-  double get subtotal => (product.sellingPriceNum * quantity).toDouble();
+  bool get hasToppings => freeToppings.isNotEmpty || extraToppings.isNotEmpty;
+
+  int get extraToppingTotal => extraToppings.fold(0, (s, t) => s + t.lineTotal);
+
+  /// (harga produk + extra topping) × qty
+  num get subtotal => (product.sellingPriceNum + extraToppingTotal) * quantity;
+
+  TransactionItem toTransactionItem() => TransactionItem(
+        productId: product.id,
+        quantity: quantity,
+        freeToppings: freeToppings.map((t) => t.toSelection()).toList(),
+        extraToppings: extraToppings.map((t) => t.toSelection()).toList(),
+      );
+}
+
+/// Item gratis (bonus) yang dipilih lewat promo — ditambahkan di atas item
+/// yang dibayar, tidak mengurangi item yang dibeli. Bisa diberi topping:
+/// free topping (dalam slot) gratis, extra topping tetap ditagih.
+class PromoFreeSelection {
+  final Product product;
+  final int qty;
+  final List<CartTopping> freeToppings;
+  final List<CartTopping> extraToppings;
+
+  PromoFreeSelection({
+    required this.product,
+    required this.qty,
+    this.freeToppings = const [],
+    this.extraToppings = const [],
+  });
+
+  /// Nilai produk yang digratiskan (dipotong promo).
+  num get productValue => product.sellingPriceNum * qty;
+
+  /// Nilai extra topping yang TETAP ditagih.
+  num get extraValue => extraToppings.fold(0, (s, t) => s + t.lineTotal);
+
+  PromoFreeSelection copyWith({int? qty}) => PromoFreeSelection(
+        product: product,
+        qty: qty ?? this.qty,
+        freeToppings: freeToppings,
+        extraToppings: extraToppings,
+      );
 }
 
 class ProductTransactionState {
   final List<CartItem> items;
+  final Promo? selectedPromo;
+  final List<PromoFreeSelection> promoFreeItems;
   final bool isLoading;
   final String? error;
   final ProductTransactionResponse? lastResponse;
 
   ProductTransactionState({
     this.items = const [],
+    this.selectedPromo,
+    this.promoFreeItems = const [],
     this.isLoading = false,
     this.error,
     this.lastResponse,
   });
 
-  double get total => items.fold(0, (sum, item) => sum + item.subtotal);
+  /// Subtotal item yang dibayar (produk + extra topping). Dasar pemicu promo.
+  num get paidSubtotal => items.fold(0, (sum, item) => sum + item.subtotal);
+
+  /// Jumlah item yang dibayar (qty keranjang) — dasar hitung bonus gratis.
+  int get paidQty => items.fold(0, (sum, item) => sum + item.quantity);
+
+  /// Nilai produk gratis (bonus) yang dipotong promo.
+  num get promoDiscount => promoFreeItems.fold(0, (sum, p) => sum + p.productValue);
+
+  /// Nilai extra topping pada item bonus yang tetap ditagih.
+  num get bonusExtraValue => promoFreeItems.fold(0, (sum, p) => sum + p.extraValue);
+
+  /// Jumlah item gratis (bonus) yang sudah dipilih.
+  int get selectedFreeQty => promoFreeItems.fold(0, (s, p) => s + p.qty);
+
+  /// Subtotal kotor termasuk produk gratis + extra toppingnya (selaras nota BE).
+  num get subtotal => paidSubtotal + promoDiscount + bonusExtraValue;
+
+  /// Total akhir = item dibayar + extra topping item bonus (produk bonus gratis).
+  num get total => (paidSubtotal + bonusExtraValue).clamp(0, double.infinity);
 
   ProductTransactionState copyWith({
     List<CartItem>? items,
+    Promo? selectedPromo,
+    bool clearPromo = false,
+    List<PromoFreeSelection>? promoFreeItems,
     bool? isLoading,
     String? error,
     ProductTransactionResponse? lastResponse,
   }) {
     return ProductTransactionState(
       items: items ?? this.items,
+      selectedPromo: clearPromo ? null : (selectedPromo ?? this.selectedPromo),
+      promoFreeItems: promoFreeItems ?? this.promoFreeItems,
       isLoading: isLoading ?? this.isLoading,
       error: error,
       lastResponse: lastResponse ?? this.lastResponse,
@@ -59,49 +160,137 @@ final productTransactionProvider =
 
 class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> {
   final ProductTransactionRepository repo;
+  int _lineCounter = 0;
 
   ProductTransactionNotifier(this.repo) : super(ProductTransactionState());
 
-  void addToCart(Product product) {
-    final existingIndex = state.items.indexWhere((item) => item.product.id == product.id);
+  int _nextLineId() => ++_lineCounter;
 
-    if (existingIndex != -1) {
-      final updatedItems = List<CartItem>.from(state.items);
-      updatedItems[existingIndex] = updatedItems[existingIndex].copyWith(
-        quantity: updatedItems[existingIndex].quantity + 1,
-      );
-      state = state.copyWith(items: updatedItems);
+  /// Tambah produk tanpa topping — digabung ke baris polos yang sudah ada.
+  void addToCart(Product product) {
+    final idx = state.items.indexWhere(
+      (i) => i.product.id == product.id && !i.hasToppings,
+    );
+    if (idx != -1) {
+      final updated = List<CartItem>.from(state.items);
+      updated[idx] = updated[idx].copyWith(quantity: updated[idx].quantity + 1);
+      state = state.copyWith(items: updated);
     } else {
-      state = state.copyWith(
-        items: [...state.items, CartItem(product: product, quantity: 1)],
-      );
+      state = state.copyWith(items: [
+        ...state.items,
+        CartItem(lineId: _nextLineId(), product: product, quantity: 1),
+      ]);
     }
   }
 
-  void removeFromCart(int productId) {
-    state = state.copyWith(
-      items: state.items.where((item) => item.product.id != productId).toList(),
-    );
+  /// Tambah baris baru dengan topping (selalu baris terpisah).
+  void addLineWithToppings(
+    Product product, {
+    int quantity = 1,
+    List<CartTopping> freeToppings = const [],
+    List<CartTopping> extraToppings = const [],
+  }) {
+    state = state.copyWith(items: [
+      ...state.items,
+      CartItem(
+        lineId: _nextLineId(),
+        product: product,
+        quantity: quantity,
+        freeToppings: freeToppings,
+        extraToppings: extraToppings,
+      ),
+    ]);
   }
 
-  void updateQuantity(int productId, int quantity) {
+  void updateLineToppings(
+    int lineId, {
+    required List<CartTopping> freeToppings,
+    required List<CartTopping> extraToppings,
+  }) {
+    final updated = state.items
+        .map((i) => i.lineId == lineId
+            ? i.copyWith(freeToppings: freeToppings, extraToppings: extraToppings)
+            : i)
+        .toList();
+    state = state.copyWith(items: updated);
+  }
+
+  void removeLine(int lineId) {
+    state = state.copyWith(
+      items: state.items.where((i) => i.lineId != lineId).toList(),
+    );
+    _reconcilePromo();
+  }
+
+  void updateQuantity(int lineId, int quantity) {
     if (quantity <= 0) {
-      removeFromCart(productId);
+      removeLine(lineId);
       return;
     }
-
-    final updatedItems = state.items.map((item) {
-      if (item.product.id == productId) {
-        return item.copyWith(quantity: quantity);
-      }
-      return item;
-    }).toList();
-
-    state = state.copyWith(items: updatedItems);
+    final updated = state.items
+        .map((i) => i.lineId == lineId ? i.copyWith(quantity: quantity) : i)
+        .toList();
+    state = state.copyWith(items: updated);
+    _reconcilePromo();
   }
 
   void clearCart() {
-    state = state.copyWith(items: [], lastResponse: null, error: null);
+    state = ProductTransactionState();
+  }
+
+  // ── Promo ──────────────────────────────────────────────
+  void selectPromo(Promo? promo) {
+    if (promo == null) {
+      state = state.copyWith(clearPromo: true, promoFreeItems: []);
+    } else {
+      state = state.copyWith(selectedPromo: promo);
+      _reconcilePromo();
+    }
+  }
+
+  /// Set item gratis (bonus) untuk sebuah produk, beserta toppingnya (0 = hapus).
+  void setPromoFreeItem(
+    Product product, {
+    required int qty,
+    List<CartTopping> freeToppings = const [],
+    List<CartTopping> extraToppings = const [],
+  }) {
+    final list = state.promoFreeItems.where((p) => p.product.id != product.id).toList();
+    if (qty > 0) {
+      list.add(PromoFreeSelection(
+        product: product,
+        qty: qty,
+        freeToppings: freeToppings,
+        extraToppings: extraToppings,
+      ));
+    }
+    state = state.copyWith(promoFreeItems: list);
+    _reconcilePromo();
+  }
+
+  void removePromoFreeItem(int productId) {
+    state = state.copyWith(
+      promoFreeItems: state.promoFreeItems.where((p) => p.product.id != productId).toList(),
+    );
+  }
+
+  /// Pastikan total item gratis tidak melebihi kuota dari item yang dibayar.
+  void _reconcilePromo() {
+    final promo = state.selectedPromo;
+    if (promo == null || state.promoFreeItems.isEmpty) return;
+
+    final maxFree = promo.maxFreeQty(state.paidQty);
+
+    int remaining = maxFree;
+    final reconciled = <PromoFreeSelection>[];
+    for (final p in state.promoFreeItems) {
+      final allowed = min(p.qty, remaining);
+      if (allowed > 0) {
+        reconciled.add(p.copyWith(qty: allowed)); // pertahankan topping
+        remaining -= allowed;
+      }
+    }
+    state = state.copyWith(promoFreeItems: reconciled);
   }
 
   Future<void> submitTransaction({
@@ -115,13 +304,33 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
 
     state = state.copyWith(isLoading: true, error: null);
 
+    final promo = state.selectedPromo;
+    final freeSelections = (promo == null) ? const <PromoFreeSelection>[] : state.promoFreeItems;
+
+    final promoFreeItems = freeSelections
+        .map((p) => PromoFreeItem(
+              promoId: promo!.id,
+              productId: p.product.id,
+              qty: p.qty,
+            ))
+        .toList();
+
+    // items[] memuat item dibayar + item gratis (bonus, beserta toppingnya).
+    // Extra topping pada item bonus tetap ditagih → dikirim di items[], TIDAK
+    // di promo_free_items, sehingga BE hanya menggratiskan harga produknya.
+    final items = [
+      ...state.items.map((i) => i.toTransactionItem()),
+      ...freeSelections.map((p) => TransactionItem(
+            productId: p.product.id,
+            quantity: p.qty,
+            freeToppings: p.freeToppings.map((t) => t.toSelection()).toList(),
+            extraToppings: p.extraToppings.map((t) => t.toSelection()).toList(),
+          )),
+    ];
+
     final request = ProductTransactionRequest(
-      items: state.items
-          .map((item) => TransactionItem(
-                productId: item.product.id,
-                quantity: item.quantity,
-              ))
-          .toList(),
+      items: items,
+      promoFreeItems: promoFreeItems,
       paymentMethod: paymentMethod,
       paid: paid,
       discount: discount,
@@ -132,16 +341,9 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
 
     try {
       final response = await repo.createTransaction(request);
-      state = state.copyWith(
-        isLoading: false,
-        lastResponse: response,
-        items: [], // Clear cart on success
-      );
+      state = ProductTransactionState(lastResponse: response); // reset cart on success
     } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        error: e.toString(),
-      );
+      state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
 

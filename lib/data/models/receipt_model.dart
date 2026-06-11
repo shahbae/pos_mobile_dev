@@ -6,9 +6,12 @@ class Receipt {
   final String invoiceNo;
   final DateTime? createdAt;
   final String cashierName;
+  final String? customerName;
   final List<ReceiptItem> items;
   final num subtotal;
   final num discount;
+  final num promoDiscount;
+  final List<ReceiptPromo> promos;
   final num tax;
   final num total;
   final num paid;
@@ -21,9 +24,12 @@ class Receipt {
     required this.invoiceNo,
     required this.createdAt,
     required this.cashierName,
+    this.customerName,
     required this.items,
     required this.subtotal,
     required this.discount,
+    this.promoDiscount = 0,
+    this.promos = const [],
     required this.tax,
     required this.total,
     required this.paid,
@@ -36,14 +42,20 @@ class Receipt {
   factory Receipt.fromJson(Map<String, dynamic> json) {
     final data = (json['data'] is Map) ? json['data'] as Map<String, dynamic> : json;
     final List<dynamic> itemsJson = data['items'] ?? [];
+    final List<dynamic> promosJson = data['promos'] ?? [];
 
     return Receipt(
       invoiceNo: data['invoice_no']?.toString() ?? '',
       createdAt: DateTime.tryParse(data['created_at']?.toString() ?? ''),
       cashierName: data['cashier_name']?.toString() ?? '-',
+      customerName: (data['customer_name']?.toString().trim().isEmpty ?? true)
+          ? null
+          : data['customer_name'].toString(),
       items: itemsJson.map((i) => ReceiptItem.fromJson(i as Map<String, dynamic>)).toList(),
       subtotal: _num(data['subtotal']),
       discount: _num(data['discount']),
+      promoDiscount: _num(data['promo_discount']),
+      promos: promosJson.map((p) => ReceiptPromo.fromJson(p as Map<String, dynamic>)).toList(),
       tax: _num(data['tax']),
       total: _num(data['total']),
       paid: _num(data['paid']),
@@ -59,16 +71,57 @@ class ReceiptItem {
   final String name;
   final int qty;
   final num price;
+  final List<ReceiptTopping> toppings;
 
-  ReceiptItem({required this.name, required this.qty, required this.price});
+  ReceiptItem({
+    required this.name,
+    required this.qty,
+    required this.price,
+    this.toppings = const [],
+  });
 
   num get lineTotal => price * qty;
 
   factory ReceiptItem.fromJson(Map<String, dynamic> json) {
+    final List<dynamic> toppingsJson = json['toppings'] ?? [];
     return ReceiptItem(
       name: json['name']?.toString() ?? '',
       qty: _num(json['qty']).toInt(),
       price: _num(json['price']),
+      toppings: toppingsJson.map((t) => ReceiptTopping.fromJson(t as Map<String, dynamic>)).toList(),
+    );
+  }
+}
+
+class ReceiptTopping {
+  final String name;
+  final int qty;
+  final num price; // 0 = gratis, >0 = berbayar
+
+  ReceiptTopping({required this.name, required this.qty, required this.price});
+
+  bool get isFree => price <= 0;
+  num get lineTotal => price * qty;
+
+  factory ReceiptTopping.fromJson(Map<String, dynamic> json) {
+    return ReceiptTopping(
+      name: json['name']?.toString() ?? '',
+      qty: _num(json['qty']).toInt(),
+      price: _num(json['price']),
+    );
+  }
+}
+
+class ReceiptPromo {
+  final String name;
+  final num discount;
+
+  ReceiptPromo({required this.name, required this.discount});
+
+  factory ReceiptPromo.fromJson(Map<String, dynamic> json) {
+    return ReceiptPromo(
+      name: json['name']?.toString() ?? '',
+      discount: _num(json['discount']),
     );
   }
 }

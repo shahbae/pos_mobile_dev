@@ -188,6 +188,8 @@ class _ReceiptPreview extends StatelessWidget {
                     if (receipt.createdAt != null)
                       _InfoLine(label: 'Tanggal', value: dateFmt.format(receipt.createdAt!.toLocal())),
                     _InfoLine(label: 'Kasir', value: receipt.cashierName),
+                    if (receipt.customerName != null)
+                      _InfoLine(label: 'Pelanggan', value: receipt.customerName!),
                     _InfoLine(label: 'Pembayaran', value: _paymentLabel(receipt.paymentMethod)),
                   ],
                 ),
@@ -213,31 +215,60 @@ class _ReceiptPreview extends StatelessWidget {
                     ),
                     ...receipt.items.map((item) => Padding(
                           padding: const EdgeInsets.symmetric(vertical: 5),
-                          child: Row(
+                          child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      item.name,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        color: AppTheme.textPrimary,
-                                        fontSize: 14,
-                                      ),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          item.name,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            color: AppTheme.textPrimary,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          '${item.qty} x ${formatRupiah(item.price)}',
+                                          style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                                        ),
+                                      ],
                                     ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      '${item.qty} x ${formatRupiah(item.price)}',
-                                      style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
-                                    ),
-                                  ],
-                                ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(formatRupiah(item.lineTotal), style: _moneyStyle),
+                                ],
                               ),
-                              const SizedBox(width: 12),
-                              Text(formatRupiah(item.lineTotal), style: _moneyStyle),
+                              // Topping per item (gratis / berbayar)
+                              ...item.toppings.map((t) => Padding(
+                                    padding: const EdgeInsets.only(left: 10, top: 2),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            '+ ${t.name} ×${t.qty}'
+                                            '${t.isFree ? ' (gratis)' : ''}',
+                                            style: TextStyle(
+                                              color: t.isFree ? Colors.green.shade700 : AppTheme.textSecondary,
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                        ),
+                                        if (!t.isFree)
+                                          Text(formatRupiah(t.lineTotal),
+                                              style: const TextStyle(
+                                                  color: AppTheme.textSecondary,
+                                                  fontSize: 11,
+                                                  fontFamily: 'monospace')),
+                                      ],
+                                    ),
+                                  )),
                             ],
                           ),
                         )),
@@ -251,6 +282,12 @@ class _ReceiptPreview extends StatelessWidget {
                 child: Column(
                   children: [
                     _AmountLine(label: 'Subtotal', value: receipt.subtotal),
+                    ...receipt.promos.map((p) => _AmountLine(
+                          label: p.name,
+                          value: -p.discount,
+                        )),
+                    if (receipt.promos.isEmpty && receipt.promoDiscount > 0)
+                      _AmountLine(label: 'Diskon Promo', value: -receipt.promoDiscount),
                     if (receipt.discount > 0) _AmountLine(label: 'Diskon', value: -receipt.discount),
                     if (receipt.tax > 0) _AmountLine(label: 'Pajak', value: receipt.tax),
                     const SizedBox(height: 10),

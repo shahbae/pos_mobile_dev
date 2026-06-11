@@ -8,6 +8,8 @@ class Product {
   final String purchasePrice;
   final String sellingPrice;
   final String? profitMargin;
+  final int freeToppingSlots;
+  final bool hasFreeToppings;
   final String? createdAt;
 
   Product({
@@ -20,11 +22,14 @@ class Product {
     required this.purchasePrice,
     required this.sellingPrice,
     this.profitMargin,
+    this.freeToppingSlots = 0,
+    this.hasFreeToppings = false,
     this.createdAt,
   });
 
   factory Product.fromJson(Map<String, dynamic> j) {
     final cat = j['category'] as Map<String, dynamic>?;
+    final slots = (j['free_topping_slots'] as num?)?.toInt() ?? 0;
 
     return Product(
       id: j['id'],
@@ -36,6 +41,8 @@ class Product {
       purchasePrice: j['purchase_price']?.toString() ?? '0',
       sellingPrice: j['selling_price']?.toString() ?? '0',
       profitMargin: j['profit_margin']?.toString(),
+      freeToppingSlots: slots,
+      hasFreeToppings: j['has_free_toppings'] as bool? ?? (slots > 0),
       createdAt: j['created_at'],
     );
   }

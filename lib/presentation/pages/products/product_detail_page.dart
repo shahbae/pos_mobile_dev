@@ -71,6 +71,10 @@ class ProductDetailPage extends ConsumerWidget {
                         formatRupiah(product.sellingPriceNum)),
                     _row("Profit",
                         formatRupiah(product.profitMarginNum)),
+                    _row("Slot Topping Gratis",
+                        product.freeToppingSlots > 0
+                            ? "${product.freeToppingSlots} topping"
+                            : "Tidak ada"),
                     _row("Dibuat", _formatDate(product.createdAt)),
                   ],
                 ),

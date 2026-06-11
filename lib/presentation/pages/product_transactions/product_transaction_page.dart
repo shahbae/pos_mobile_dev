@@ -4,6 +4,7 @@ import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/presentation/providers/product_pagination_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_transaction_provider.dart';
 import 'package:pos_mobile/presentation/pages/product_transactions/checkout_page.dart';
+import 'package:pos_mobile/presentation/widgets/topping_picker_sheet.dart';
 import 'package:pos_mobile/utils/currency.dart';
 
 class ProductTransactionPage extends ConsumerWidget {
@@ -72,7 +73,22 @@ class ProductTransactionPage extends ConsumerWidget {
                         ),
                         child: InkWell(
                           borderRadius: BorderRadius.circular(20),
-                          onTap: () => ref.read(productTransactionProvider.notifier).addToCart(product),
+                          onTap: () async {
+                            final notifier = ref.read(productTransactionProvider.notifier);
+                            if (product.hasFreeToppings) {
+                              final result = await showToppingPicker(context, product: product);
+                              if (result != null) {
+                                notifier.addLineWithToppings(
+                                  product,
+                                  quantity: result.quantity,
+                                  freeToppings: result.freeToppings,
+                                  extraToppings: result.extraToppings,
+                                );
+                              }
+                            } else {
+                              notifier.addToCart(product);
+                            }
+                          },
                           child: Padding(
                             padding: const EdgeInsets.all(12),
                             child: Column(

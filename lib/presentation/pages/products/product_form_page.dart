@@ -24,6 +24,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
   late final TextEditingController _sku;
   late final TextEditingController _buy;
   late final TextEditingController _sell;
+  late final TextEditingController _freeSlots;
 
   int? _selectedCategoryId;
 
@@ -43,6 +44,9 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
     _sku = TextEditingController(text: widget.product?.sku ?? '');
     _buy = TextEditingController();
     _sell = TextEditingController();
+    _freeSlots = TextEditingController(
+      text: (widget.product?.freeToppingSlots ?? 0).toString(),
+    );
 
     _selectedCategoryId = widget.product?.categoryId;
     debugPrint('[ProductForm] Init edit mode: product.categoryId=${widget.product?.categoryId}');
@@ -73,6 +77,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
     _sku.dispose();
     _buy.dispose();
     _sell.dispose();
+    _freeSlots.dispose();
     _animCtrl.dispose();
     super.dispose();
   }
@@ -93,6 +98,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
       'category_id': _selectedCategoryId,
       'purchase_price': '$buyDigits.00',
       'selling_price': '$sellDigits.00',
+      'free_topping_slots': int.tryParse(_freeSlots.text.trim()) ?? 0,
     };
 
     debugPrint('[ProductForm] payload=$payload');
@@ -329,6 +335,17 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
                           controller: _sell,
                           required: true,
                         ),
+
+                        const SizedBox(height: 18),
+
+                        // Slot Topping Gratis
+                        _buildField(
+                          label: 'Slot Topping Gratis',
+                          hint: '0 = tidak ada topping gratis',
+                          controller: _freeSlots,
+                          icon: Icons.local_pizza_outlined,
+                          keyboardType: TextInputType.number,
+                        ),
                       ],
                     ),
                   ),
@@ -518,6 +535,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
     required TextEditingController controller,
     required IconData icon,
     bool required = false,
+    TextInputType? keyboardType,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -543,6 +561,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage>
         const SizedBox(height: 8),
         TextFormField(
           controller: controller,
+          keyboardType: keyboardType,
           style: const TextStyle(fontSize: 14, color: Color(0xFF111827)),
           validator: required
               ? (v) =>

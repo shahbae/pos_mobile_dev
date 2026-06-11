@@ -60,6 +60,9 @@ class ThermalPrinterService {
       bytes += g.text('Tanggal: ${_dateFmt.format(r.createdAt!.toLocal())}');
     }
     bytes += g.text('Kasir : ${r.cashierName}');
+    if (r.customerName != null) {
+      bytes += g.text('Plgn  : ${r.customerName}');
+    }
     bytes += g.text('Bayar : ${_paymentLabel(r.paymentMethod)}');
     bytes += g.hr();
 
@@ -74,11 +77,32 @@ class ThermalPrinterService {
           styles: const PosStyles(align: PosAlign.right),
         ),
       ]);
+      // Topping per item
+      for (final t in item.toppings) {
+        bytes += g.row([
+          PosColumn(
+            text: '  + ${t.name} x${t.qty}${t.isFree ? ' (gratis)' : ''}',
+            width: 8,
+          ),
+          PosColumn(
+            text: t.isFree ? '' : _money.format(t.lineTotal),
+            width: 4,
+            styles: const PosStyles(align: PosAlign.right),
+          ),
+        ]);
+      }
     }
     bytes += g.hr();
 
     // Ringkasan
     bytes += _summaryRow(g, 'Subtotal', r.subtotal);
+    if (r.promos.isNotEmpty) {
+      for (final p in r.promos) {
+        bytes += _summaryRow(g, p.name, -p.discount);
+      }
+    } else if (r.promoDiscount > 0) {
+      bytes += _summaryRow(g, 'Diskon Promo', -r.promoDiscount);
+    }
     if (r.discount > 0) bytes += _summaryRow(g, 'Diskon', -r.discount);
     if (r.tax > 0) bytes += _summaryRow(g, 'Pajak', r.tax);
     bytes += g.hr();
