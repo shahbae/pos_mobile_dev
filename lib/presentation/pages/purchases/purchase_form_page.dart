@@ -4,7 +4,8 @@ import 'package:intl/intl.dart';
 
 import '../../providers/purchase_provider.dart';
 import '../../providers/supplier_provider.dart';
-import '../../providers/product_provider.dart';
+import '../../providers/material_provider.dart';
+import '../../providers/topping_provider.dart';
 
 class PurchaseFormPage extends ConsumerStatefulWidget {
   const PurchaseFormPage({super.key});
@@ -14,10 +15,16 @@ class PurchaseFormPage extends ConsumerStatefulWidget {
 }
 
 class _PurchaseItem {
-  int? productId;
+  /// "m:<id>" untuk material, "t:<id>" untuk topping.
+  String? refKey;
   int quantity = 1;
   TextEditingController qtyController = TextEditingController(text: '1');
   TextEditingController costController = TextEditingController();
+
+  int? get materialId =>
+      (refKey != null && refKey!.startsWith('m:')) ? int.tryParse(refKey!.substring(2)) : null;
+  int? get toppingId =>
+      (refKey != null && refKey!.startsWith('t:')) ? int.tryParse(refKey!.substring(2)) : null;
 
   _PurchaseItem() {
     qtyController.addListener(() {
@@ -71,16 +78,16 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
     if (!_formKey.currentState!.validate()) return;
     if (_items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Minimal harus ada 1 produk')),
+        const SnackBar(content: Text('Minimal harus ada 1 material')),
       );
       return;
     }
 
-    // Validate that all items have a selected product and valid price
+    // Validate that all items have a selected material/topping
     for (int i = 0; i < _items.length; i++) {
-      if (_items[i].productId == null) {
+      if (_items[i].refKey == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Produk baris ke-${i + 1} belum dipilih')),
+          SnackBar(content: Text('Item baris ke-${i + 1} belum dipilih')),
         );
         return;
       }
@@ -92,17 +99,20 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
 
     final List<Map<String, dynamic>> itemsPayload = _items.map((it) {
       final reqDigits = it.costController.text.replaceAll(RegExp(r'[^0-9]'), '');
+      final cost = reqDigits.isEmpty ? '0' : reqDigits;
       return {
-        'product_id': it.productId,
-        'quantity': it.quantity,
-        'unit_cost': '$reqDigits.00',
+        if (it.materialId != null) 'material_id': it.materialId,
+        if (it.toppingId != null) 'topping_id': it.toppingId,
+        'quantity': it.quantity.toString(), // BE expects string
+        'unit_cost': '$cost.00',
       };
     }).toList();
 
+    final note = _noteController.text.trim();
     final payload = {
       'supplier_id': _selectedSupplierId,
       'items': itemsPayload,
-      'note': _noteController.text.trim(),
+      if (note.isNotEmpty) 'note': note,
     };
 
     debugPrint('[PurchaseForm] payload=$payload');
@@ -137,11 +147,11 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
       debugPrint('Error submit: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Row(
+          content: Row(
             children: [
-              Icon(Icons.error_outline, color: Colors.white, size: 20),
-              SizedBox(width: 10),
-              Text('Terjadi kesalahan saat menyimpan'),
+              const Icon(Icons.error_outline, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              Expanded(child: Text('Gagal menyimpan: $e')),
             ],
           ),
           backgroundColor: const Color(0xFFEF4444),
@@ -164,7 +174,8 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
     
     // Watch providers for dropdowns
     final suppliersAsync = ref.watch(supplierListProvider(null));
-    final productsAsync = ref.watch(productListProvider(null));
+    final materialsAsync = ref.watch(materialListProvider);
+    final toppingsAsync = ref.watch(toppingListProvider);
 
     // Calculate Grand Total for UI
     int totalEstimated = 0;
@@ -318,7 +329,7 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text(
-                      'Daftar Produk',
+                      'Daftar Item',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
@@ -358,7 +369,7 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text('Produk #${i + 1}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                              Text('Item #${i + 1}', style: const TextStyle(fontWeight: FontWeight.w600)),
                               if (_items.length > 1)
                                 IconButton(
                                   icon: const Icon(Icons.close, color: Colors.grey, size: 20),
@@ -374,40 +385,63 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
                           ),
                           const SizedBox(height: 8),
                           
-                          // Dropdown Product
-                          productsAsync.when(
-                            data: (products) {
-                              if (item.productId != null && !products.any((p) => p.id == item.productId)) {
-                                item.productId = null;
-                              }
-                              return DropdownButtonFormField<int>(
-                                value: item.productId,
-                                validator: (v) => v == null ? 'Produk wajib dipilih' : null,
-                                decoration: InputDecoration(
-                                  hintText: 'Pilih produk...',
-                                  filled: true,
-                                  fillColor: const Color(0xFFF9FAFB),
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-                                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-                                ),
-                                items: products.map((p) => DropdownMenuItem(value: p.id, child: Text(p.name))).toList(),
-                                onChanged: (v) {
-                                  setState(() {
-                                    item.productId = v;
-                                    // Bawa harga belinya sbg default (jika ada)
-                                    final prObj = products.firstWhere((element) => element.id == v);
-                                    final purchasePrice = prObj.purchasePriceNum.toInt();
-                                    if(purchasePrice > 0){
-                                      item.costController.text = _formatter.format(purchasePrice);
-                                    }
-                                  });
-                                },
-                              );
-                            },
-                            loading: () => const Center(child: CircularProgressIndicator()),
-                            error: (_, __) => const Text('Gagal meload produk'),
-                          ),
+                          // Dropdown Material / Topping
+                          Builder(builder: (_) {
+                            if (materialsAsync.isLoading || toppingsAsync.isLoading) {
+                              return const Center(child: CircularProgressIndicator());
+                            }
+                            if (materialsAsync.hasError && toppingsAsync.hasError) {
+                              return const Text('Gagal memuat material & topping');
+                            }
+                            final materials = materialsAsync.valueOrNull ?? [];
+                            final toppings = toppingsAsync.valueOrNull ?? [];
+                            final validKeys = {
+                              ...materials.map((m) => 'm:${m.id}'),
+                              ...toppings.map((t) => 't:${t.id}'),
+                            };
+                            if (item.refKey != null && !validKeys.contains(item.refKey)) {
+                              item.refKey = null;
+                            }
+                            return DropdownButtonFormField<String>(
+                              value: item.refKey,
+                              isExpanded: true,
+                              validator: (v) => v == null ? 'Item wajib dipilih' : null,
+                              decoration: InputDecoration(
+                                hintText: 'Pilih material / topping...',
+                                filled: true,
+                                fillColor: const Color(0xFFF9FAFB),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                              ),
+                              items: [
+                                ...materials.map((m) => DropdownMenuItem(
+                                      value: 'm:${m.id}',
+                                      child: Text('${m.name} — Material', overflow: TextOverflow.ellipsis),
+                                    )),
+                                ...toppings.map((t) => DropdownMenuItem(
+                                      value: 't:${t.id}',
+                                      child: Text('${t.name} — Topping', overflow: TextOverflow.ellipsis),
+                                    )),
+                              ],
+                              onChanged: (v) {
+                                setState(() {
+                                  item.refKey = v;
+                                  // Bawa harga beli sebagai default (jika ada).
+                                  int price = 0;
+                                  if (v != null && v.startsWith('m:')) {
+                                    final m = materials.firstWhere((e) => 'm:${e.id}' == v);
+                                    price = int.tryParse((m.purchasePrice ?? '').replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+                                  } else if (v != null && v.startsWith('t:')) {
+                                    price = toppings.firstWhere((e) => 't:${e.id}' == v).price;
+                                  }
+                                  if (price > 0) {
+                                    item.costController.text = _formatter.format(price);
+                                  }
+                                });
+                              },
+                            );
+                          }),
 
                           const SizedBox(height: 16),
 

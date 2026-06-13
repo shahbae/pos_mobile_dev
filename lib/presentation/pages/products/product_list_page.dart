@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/product_provider.dart';
 import '../../../data/models/product_model.dart';
 import 'product_detail_page.dart';
-import 'product_form_page.dart';
 import '../../../utils/currency.dart';
 
 class ProductListPage extends ConsumerStatefulWidget {
@@ -135,18 +134,6 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
             ),
           ),
         ),
-      ),
-
-      floatingActionButton: FloatingActionButton(
-        child: const Icon(Icons.add),
-        onPressed: () async {
-          final created = await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const ProductFormPage()),
-          );
-
-          if (created == true) _load(reset: true);
-        },
       ),
 
       body: isInitialLoading

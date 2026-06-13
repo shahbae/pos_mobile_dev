@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import 'package:pos_mobile/data/models/dashboard_operational_model.dart';
 import 'package:pos_mobile/presentation/pages/expenses/expense_list_page.dart';
 import 'package:pos_mobile/presentation/pages/purchases/purchase_list_page.dart';
-import 'package:pos_mobile/presentation/pages/transactions/transaction_history_page.dart';
 import 'package:pos_mobile/presentation/providers/branch_provider.dart';
 import 'package:pos_mobile/presentation/providers/dashboard_operational_provider.dart';
 import 'package:pos_mobile/presentation/widgets/branch_switch_sheet.dart';
@@ -14,40 +13,9 @@ import 'package:pos_mobile/utils/currency.dart';
 class HomeTab extends ConsumerWidget {
   const HomeTab({super.key});
 
-  bool _isSameDay(DateTime a, DateTime b) {
-    return a.year == b.year && a.month == b.month && a.day == b.day;
-  }
-
-  String _fmtDate(DateTime date) {
-    final fmt = DateFormat('dd MMM yyyy', 'id_ID');
-    final d = DateTime(date.year, date.month, date.day);
-    return fmt.format(d);
-  }
-
-  Future<void> _pickDate(BuildContext context, WidgetRef ref) async {
-    final current = ref.read(dashboardDateProvider);
-    final picked = await showDatePicker(
-      context: context,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-      initialDate: current,
-      helpText: 'Pilih Tanggal',
-    );
-
-    if (picked == null) return;
-    ref.read(dashboardDateProvider.notifier).state = DateTime(
-      picked.year,
-      picked.month,
-      picked.day,
-    );
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final date = ref.watch(dashboardDateProvider);
     final operationalAsync = ref.watch(dashboardOperationalProvider);
-    final now = DateTime.now();
-    final isToday = _isSameDay(date, now);
 
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
@@ -63,17 +31,14 @@ class HomeTab extends ConsumerWidget {
             padding: const EdgeInsets.all(20),
             physics: const AlwaysScrollableScrollPhysics(),
             children: [
-              _Header(
-                dateText: _fmtDate(date),
-                onPickDate: () => _pickDate(context, ref),
-              ),
+              const _Header(),
               const SizedBox(height: 14),
               operationalAsync.when(
                 data: (data) {
                   return Column(
                     children: [
                       _RevenueChartCard(
-                        title: isToday ? "Grafik Hari Ini" : "Grafik Periode",
+                        title: "Grafik Hari Ini",
                         chart: data.chart,
                         primaryTransactionType: data.primaryTransactionType,
                       ),
@@ -112,51 +77,6 @@ class HomeTab extends ConsumerWidget {
                                   context,
                                   MaterialPageRoute(
                                     builder: (_) => const ExpenseListPage(),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _SummaryCard(
-                              title: "Open Bills",
-                              value: formatRupiah(
-                                data.openBills.totalAmountNum,
-                              ),
-                              subtitle: "${data.openBills.count} tagihan",
-                              icon: Icons.receipt_long_outlined,
-                              iconColor: Colors.purple,
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        const TransactionHistoryListPage(),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _SummaryCard(
-                              title: "Net",
-                              value: formatRupiah(data.netNum),
-                              subtitle:
-                                  "Sales ${data.sales.length} • Payments ${data.payments.length}",
-                              icon: Icons.trending_up_outlined,
-                              iconColor: AppTheme.brandBlue,
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        const TransactionHistoryListPage(),
                                   ),
                                 );
                               },
@@ -427,10 +347,7 @@ class _RevenueLineChartPainter extends CustomPainter {
 }
 
 class _Header extends ConsumerWidget {
-  final String dateText;
-  final VoidCallback onPickDate;
-
-  const _Header({required this.dateText, required this.onPickDate});
+  const _Header();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -440,61 +357,24 @@ class _Header extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
+        const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Beranda",
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: AppTheme.textPrimary,
-                    ),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    "Ringkasan operasional",
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: AppTheme.textSecondary,
-                    ),
-                  ),
-                ],
+            Text(
+              "Beranda",
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: AppTheme.textPrimary,
               ),
             ),
-            InkWell(
-              borderRadius: BorderRadius.circular(999),
-              onTap: onPickDate,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: AppTheme.borderLight),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.date_range_outlined,
-                      size: 18,
-                      color: AppTheme.textPrimary,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      dateText,
-                      style: const TextStyle(
-                        color: AppTheme.textPrimary,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
+            SizedBox(height: 2),
+            Text(
+              "Ringkasan operasional",
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: AppTheme.textSecondary,
               ),
             ),
           ],

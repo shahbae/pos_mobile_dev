@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../services/api_services.dart';
 import '../models/purchase_model.dart';
@@ -36,8 +37,15 @@ class PurchaseRepository {
   }
 
   Future<Map<String, dynamic>> createPurchase(Map<String, dynamic> data) async {
-    final res = await api.dio.post('/purchases', data: data);
-    return res.data;
+    try {
+      final res = await api.dio.post('/purchases', data: data);
+      return res.data;
+    } on DioException catch (e) {
+      debugPrint('[PurchaseRepo] create error ${e.response?.statusCode}: ${e.response?.data}');
+      final body = e.response?.data;
+      final msg = (body is Map) ? (body['message'] ?? body['error']) : null;
+      throw msg?.toString() ?? 'Gagal menyimpan pembelian (${e.response?.statusCode ?? e.message})';
+    }
   }
 
   Future<PurchaseModel> getPurchaseDetail(int id) async {

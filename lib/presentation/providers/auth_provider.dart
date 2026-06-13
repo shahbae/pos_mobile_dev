@@ -3,9 +3,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
 
+import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/data/repositories/auth_repository.dart';
 import 'package:pos_mobile/data/services/api_provider.dart';
 import 'package:pos_mobile/data/services/secure_storage.dart';
+
+const _accessDeniedMsg =
+    'Akses ditolak. Role Anda tidak diizinkan menggunakan aplikasi ini.';
 
 enum AuthStatus { unknown, authenticated, unauthenticated }
 
@@ -165,6 +169,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final role = _extractRoleFromToken(latestToken);
       final branchId = _extractBranchIdFromToken(latestToken);
 
+      // Role tidak diizinkan → tolak masuk.
+      if (accessForRole(role) == AppAccess.denied) {
+        await repo.logout();
+        state = state.copyWith(
+          status: AuthStatus.unauthenticated,
+          role: null,
+          error: _accessDeniedMsg,
+        );
+        return;
+      }
+
       // Success
       state = state.copyWith(status: AuthStatus.authenticated, role: role, branchId: branchId);
     } catch (e) {
@@ -189,6 +204,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final accessToken = await SecureStorage.getAccessToken();
       final role = accessToken == null ? null : _extractRoleFromToken(accessToken);
       final branchId = accessToken == null ? null : _extractBranchIdFromToken(accessToken);
+
+      // Role tidak diizinkan → batalkan login, bersihkan token.
+      if (accessForRole(role) == AppAccess.denied) {
+        await repo.logout();
+        state = state.copyWith(
+          status: AuthStatus.unauthenticated,
+          loading: false,
+          role: null,
+          error: _accessDeniedMsg,
+        );
+        return;
+      }
 
       state = state.copyWith(
         status: AuthStatus.authenticated,

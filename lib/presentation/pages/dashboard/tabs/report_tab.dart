@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/presentation/pages/reports/daily_report_page.dart';
 import 'package:pos_mobile/presentation/pages/reports/payments_report_page.dart';
-import 'package:pos_mobile/presentation/pages/reports/profit_report_page.dart';
 import 'package:pos_mobile/presentation/pages/reports/stock_alerts_report_page.dart';
-import 'package:pos_mobile/presentation/pages/reports/top_products_report_page.dart';
 import 'package:pos_mobile/presentation/pages/transactions/transaction_history_page.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
@@ -74,19 +72,6 @@ class ReportTab extends ConsumerWidget {
         ),
         const SizedBox(height: 16),
         _ReportMenuCard(
-          title: "Laporan Profit",
-          subtitle: "Ringkasan laba rugi",
-          icon: Icons.stacked_line_chart_outlined,
-          color: accent,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ProfitReportPage()),
-            );
-          },
-        ),
-        const SizedBox(height: 16),
-        _ReportMenuCard(
           title: "Stok Menipis",
           subtitle: "Daftar produk di bawah threshold",
           icon: Icons.warning_amber_rounded,
@@ -95,19 +80,6 @@ class ReportTab extends ConsumerWidget {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const StockAlertsReportPage()),
-            );
-          },
-        ),
-        const SizedBox(height: 16),
-        _ReportMenuCard(
-          title: "Top Products",
-          subtitle: "Produk terlaris berdasarkan revenue",
-          icon: Icons.emoji_events_outlined,
-          color: accent,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const TopProductsReportPage()),
             );
           },
         ),

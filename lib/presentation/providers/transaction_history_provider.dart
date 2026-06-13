@@ -67,14 +67,17 @@ class TransactionHistoryNotifier extends StateNotifier<TransactionHistoryState> 
     final page = reset ? 1 : state.page;
     state = state.copyWith(loading: true);
 
+    // Riwayat transaksi dibatasi hanya hari ini.
+    final today = _formatDate(DateTime.now());
+
     try {
       final result = await repo.getTransactions(
         page: page,
         limit: 20,
         transactionTypes: state.transactionTypes,
         status: state.status,
-        from: state.from != null ? _formatDate(state.from!) : null,
-        to: state.to != null ? _formatDate(state.to!) : null,
+        from: today,
+        to: today,
       );
 
       state = state.copyWith(

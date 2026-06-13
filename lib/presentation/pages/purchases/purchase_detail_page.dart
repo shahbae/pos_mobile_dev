@@ -26,9 +26,13 @@ class PurchaseDetailPage extends ConsumerWidget {
         data: (purchase) => _buildContent(context, purchase),
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(
-          child: Text(
-            'Gagal memuat detail pembelian',
-            style: TextStyle(color: Colors.red.shade400),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              'Gagal memuat detail pembelian:\n$e',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.red.shade400),
+            ),
           ),
         ),
       ),
@@ -89,7 +93,7 @@ class PurchaseDetailPage extends ConsumerWidget {
           // ITEMS LIST
           // =====================
           const Text(
-            "Daftar Produk",
+            "Daftar Item",
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 12),
@@ -102,7 +106,7 @@ class PurchaseDetailPage extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: Colors.grey.shade300),
               ),
-              child: const Center(child: Text("Tidak ada produk didalam catatan pembelian.")),
+              child: const Center(child: Text("Tidak ada item didalam catatan pembelian.")),
             )
           else
             ListView.separated(
@@ -123,32 +127,59 @@ class PurchaseDetailPage extends ConsumerWidget {
                     border: Border.all(color: Colors.grey.shade300),
                   ),
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           color: theme.colorScheme.primary.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Icon(Icons.inventory_2_outlined, color: theme.colorScheme.primary, size: 24),
+                        child: Icon(
+                          item.typeLabel == 'Topping' ? Icons.icecream_outlined : Icons.inventory_2_outlined,
+                          color: theme.colorScheme.primary,
+                          size: 22,
+                        ),
                       ),
-                      const SizedBox(width: 16),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              item.productName ?? "Produk #${item.productId ?? 'Unknown'}",
-                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                              item.displayName,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15, height: 1.25),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              "${item.quantity} x ${formatRupiah(unitCost)}",
-                              style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                if (item.typeLabel != null) ...[
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.shade100,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(item.typeLabel!,
+                                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.grey.shade600)),
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
+                                Flexible(
+                                  child: Text(
+                                    "${item.quantity} x ${formatRupiah(unitCost)}",
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
                       ),
+                      const SizedBox(width: 8),
                       Text(
                         formatRupiah(subtotal),
                         style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),

@@ -651,7 +651,11 @@ class _PrinterPickerSheetState extends ConsumerState<PrinterPickerSheet> {
               : const Icon(Icons.chevron_right),
           onTap: busy
               ? null
-              : () => ref.read(printerProvider.notifier).connectAndPrint(device, widget.receipt),
+              : () => ref.read(printerProvider.notifier).connectAndPrint(
+                    mac: device.macAdress,
+                    name: device.name,
+                    receipt: widget.receipt,
+                  ),
         );
       },
     );

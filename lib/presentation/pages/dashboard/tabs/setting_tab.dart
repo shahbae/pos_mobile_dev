@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
-import '../../../pages/branches/branch_list_page.dart';
 import '../../../pages/shifts/shift_page.dart';
-import '../../../pages/suppliers/supplier_list_page.dart';
-import '../../../pages/customers/customer_list_page.dart';
-import '../../../pages/employees/employee_list_page.dart';
+import '../../../pages/settings/printer_settings_page.dart';
 
 class SettingTab extends ConsumerWidget {
   const SettingTab({super.key});
@@ -16,9 +14,8 @@ class SettingTab extends ConsumerWidget {
     final theme = Theme.of(context);
     final auth = ref.watch(authProvider);
     final role = auth.role;
-    // Hak akses sesuai role BE: owner|supervisor|leader|finance|kasir|karyawan|produksi
-    final canManageEmployees = role == 'owner' || role == 'supervisor';
-    final canManageBranches = role == 'owner';
+    // Role stok-saja: hanya boleh Logout di Pengaturan.
+    final isStockOnly = accessForRole(role) == AppAccess.stockOnly;
     final accent = theme.colorScheme.primary;
     final bottomInset = MediaQuery.of(context).padding.bottom;
 
@@ -63,47 +60,7 @@ class SettingTab extends ConsumerWidget {
             ],
           ),
         ),
-        const SizedBox(height: 16),
-        _SettingMenuCard(
-          title: "Pemasok",
-          subtitle: "Kelola daftar pemasok",
-          icon: Icons.factory_outlined,
-          color: accent,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SupplierListPage()),
-            );
-          },
-        ),
-        const SizedBox(height: 16),
-        _SettingMenuCard(
-          title: "Pelanggan",
-          subtitle: "Kelola daftar pelanggan",
-          icon: Icons.people_alt_outlined,
-          color: accent,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const CustomerListPage()),
-            );
-          },
-        ),
-        if (canManageEmployees) ...[
-          const SizedBox(height: 16),
-          _SettingMenuCard(
-            title: "Karyawan",
-            subtitle: "Kelola akun karyawan",
-            icon: Icons.badge_outlined,
-            color: accent,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const EmployeeListPage()),
-              );
-            },
-          ),
-        ],
+        if (!isStockOnly) ...[
         const SizedBox(height: 16),
         _SettingMenuCard(
           title: "Shift Kasir",
@@ -117,20 +74,19 @@ class SettingTab extends ConsumerWidget {
             );
           },
         ),
-        if (canManageBranches) ...[
-          const SizedBox(height: 16),
-          _SettingMenuCard(
-            title: "Cabang",
-            subtitle: "Kelola cabang & catatan nota",
-            icon: Icons.store_mall_directory_outlined,
-            color: accent,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const BranchListPage()),
-              );
-            },
-          ),
+        const SizedBox(height: 16),
+        _SettingMenuCard(
+          title: "Perangkat Cetak",
+          subtitle: "Printer default & cetak otomatis",
+          icon: Icons.print_outlined,
+          color: accent,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const PrinterSettingsPage()),
+            );
+          },
+        ),
         ],
         const SizedBox(height: 16),
         _SettingMenuCard(

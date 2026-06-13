@@ -31,6 +31,22 @@ class ThermalPrinterService {
     return PrintBluetoothThermal.writeBytes(bytes);
   }
 
+  /// Kirim tes cetak singkat untuk verifikasi koneksi printer.
+  Future<bool> printTest({PaperSize paperSize = PaperSize.mm58}) async {
+    final profile = await CapabilityProfile.load();
+    final g = Generator(paperSize, profile);
+    List<int> bytes = [];
+    bytes += g.text('TES CETAK',
+        styles: const PosStyles(
+            align: PosAlign.center, bold: true, height: PosTextSize.size2, width: PosTextSize.size2));
+    bytes += g.hr();
+    bytes += g.text('Printer berhasil terhubung', styles: const PosStyles(align: PosAlign.center));
+    bytes += g.text(_dateFmt.format(DateTime.now()), styles: const PosStyles(align: PosAlign.center));
+    bytes += g.feed(2);
+    bytes += g.cut();
+    return PrintBluetoothThermal.writeBytes(bytes);
+  }
+
   Future<List<int>> _buildBytes(Receipt r, PaperSize paperSize) async {
     final profile = await CapabilityProfile.load();
     final g = Generator(paperSize, profile);

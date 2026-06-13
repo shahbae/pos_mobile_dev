@@ -342,8 +342,6 @@ class _FilterBottomSheet extends ConsumerStatefulWidget {
 class _FilterBottomSheetState extends ConsumerState<_FilterBottomSheet> {
   String? _type;
   String? _status;
-  DateTime? _from;
-  DateTime? _to;
 
   @override
   void initState() {
@@ -351,8 +349,6 @@ class _FilterBottomSheetState extends ConsumerState<_FilterBottomSheet> {
     final state = ref.read(transactionHistoryProvider);
     _type = widget.fixedType ?? state.transactionTypes?.first;
     _status = state.status;
-    _from = state.from;
-    _to = state.to;
   }
 
   @override
@@ -434,44 +430,6 @@ class _FilterBottomSheetState extends ConsumerState<_FilterBottomSheet> {
               ),
             ],
           ),
-          const SizedBox(height: 24),
-          const Text("Rentang Waktu", style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _DatePickerButton(
-                  label: "Dari",
-                  date: _from,
-                  onTap: () async {
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: _from ?? DateTime.now(),
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime.now(),
-                    );
-                    if (picked != null) setState(() => _from = picked);
-                  },
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _DatePickerButton(
-                  label: "Sampai",
-                  date: _to,
-                  onTap: () async {
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: _to ?? DateTime.now(),
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime.now(),
-                    );
-                    if (picked != null) setState(() => _to = picked);
-                  },
-                ),
-              ),
-            ],
-          ),
           const SizedBox(height: 32),
           SizedBox(
             width: double.infinity,
@@ -480,8 +438,6 @@ class _FilterBottomSheetState extends ConsumerState<_FilterBottomSheet> {
                  ref.read(transactionHistoryProvider.notifier).setFilter(
                   transactionType: _type,
                   status: _status,
-                  from: _from,
-                  to: _to,
                 );
                 Navigator.pop(context);
               },
@@ -522,36 +478,3 @@ class _FilterChip extends StatelessWidget {
   }
 }
 
-class _DatePickerButton extends StatelessWidget {
-  final String label;
-  final DateTime? date;
-  final VoidCallback onTap;
-
-  const _DatePickerButton({required this.label, required this.date, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: AppTheme.bgLight,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppTheme.borderLight),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
-            const SizedBox(height: 4),
-            Text(
-              date != null ? DateFormat('dd/MM/yyyy').format(date!) : "-",
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

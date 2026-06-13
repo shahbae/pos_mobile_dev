@@ -12,3 +12,9 @@ final stockLevelProvider = FutureProvider.family<StockLevelModel?, int>((ref, pr
   final repo = ref.watch(stockLevelRepositoryProvider);
   return repo.getStockLevel(productId);
 });
+
+/// Daftar stok semua material (untuk halaman Stok Material / adjust).
+final materialStockLevelsProvider =
+    FutureProvider.autoDispose<List<StockLevelModel>>((ref) async {
+  return ref.watch(stockLevelRepositoryProvider).getMaterialStockLevels();
+});

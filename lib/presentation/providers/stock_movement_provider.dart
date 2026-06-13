@@ -8,9 +8,9 @@ final stockMovementRepositoryProvider = Provider<StockMovementRepository>((ref) 
   return StockMovementRepository(api);
 });
 
-// Used to fetch stock movements. Can pass a product ID.
+// Ambil mutasi stok (material-level). Param opsional: material_id.
 final stockMovementListProvider =
-    FutureProvider.family<List<StockMovementModel>, int?>((ref, productId) async {
+    FutureProvider.family<List<StockMovementModel>, int?>((ref, materialId) async {
   final repo = ref.watch(stockMovementRepositoryProvider);
-  return repo.getStockMovements(productId: productId);
+  return repo.getStockMovements(materialId: materialId);
 });

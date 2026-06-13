@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/stock_movement_provider.dart';
-import '../../providers/product_provider.dart';
+import '../../providers/material_provider.dart';
+import '../../../data/models/material_model.dart';
 import '../../../data/models/stock_movement_model.dart';
 
 class StockMovementListPage extends ConsumerStatefulWidget {
@@ -14,14 +15,17 @@ class StockMovementListPage extends ConsumerStatefulWidget {
 }
 
 class _StockMovementListPageState extends ConsumerState<StockMovementListPage> {
-  int? _selectedProductId;
+  int? _selectedMaterialId;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final productsAsync = ref.watch(productListProvider(null));
+    final materialsAsync = ref.watch(materialListProvider);
     final movementsAsync =
-        ref.watch(stockMovementListProvider(_selectedProductId));
+        ref.watch(stockMovementListProvider(_selectedMaterialId));
+    final names = {
+      for (final m in (materialsAsync.valueOrNull ?? const <MaterialItem>[])) m.id: m.name
+    };
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
@@ -43,14 +47,14 @@ class _StockMovementListPageState extends ConsumerState<StockMovementListPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Filter berdasarkan Produk:',
+                  'Filter berdasarkan Material:',
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 8),
-                productsAsync.when(
-                  data: (products) {
+                materialsAsync.when(
+                  data: (materials) {
                     return DropdownButtonFormField<int?>(
-                      value: _selectedProductId,
+                      value: _selectedMaterialId,
                       decoration: InputDecoration(
                         filled: true,
                         fillColor: const Color(0xFFF9FAFB),
@@ -67,25 +71,24 @@ class _StockMovementListPageState extends ConsumerState<StockMovementListPage> {
                       ),
                       items: [
                         const DropdownMenuItem<int?>(
-                            value: null, child: Text('Semua Produk')),
-                        ...products.map(
-                          (p) => DropdownMenuItem<int?>(
-                            value: p.id,
-                            child:
-                                Text(p.name),
+                            value: null, child: Text('Semua Material')),
+                        ...materials.map(
+                          (m) => DropdownMenuItem<int?>(
+                            value: m.id,
+                            child: Text(m.name),
                           ),
                         )
                       ],
                       onChanged: (val) {
                         setState(() {
-                          _selectedProductId = val;
+                          _selectedMaterialId = val;
                         });
                       },
                     );
                   },
                   loading: () =>
                       const Center(child: CircularProgressIndicator()),
-                  error: (_, __) => const Text('Gagal memuat produk'),
+                  error: (_, __) => const Text('Gagal memuat material'),
                 ),
               ],
             ),
@@ -110,7 +113,7 @@ class _StockMovementListPageState extends ConsumerState<StockMovementListPage> {
                   separatorBuilder: (_, __) => const SizedBox(height: 12),
                   itemBuilder: (context, i) {
                     final m = movements[i];
-                    return _buildItem(context, m);
+                    return _buildItem(context, m, names);
                   },
                 );
               },
@@ -124,7 +127,7 @@ class _StockMovementListPageState extends ConsumerState<StockMovementListPage> {
     );
   }
 
-  Widget _buildItem(BuildContext context, StockMovementModel m) {
+  Widget _buildItem(BuildContext context, StockMovementModel m, Map<int, String> names) {
     Color typeColor;
     IconData typeIcon;
     String typeLabel = m.type ?? '';
@@ -209,7 +212,9 @@ class _StockMovementListPageState extends ConsumerState<StockMovementListPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Produk ID #${m.productId}',
+                      m.materialId != null
+                          ? (names[m.materialId] ?? 'Material #${m.materialId}')
+                          : 'Material',
                       style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Color(0xFF111827)),
                     ),
                     const SizedBox(height: 4),

@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/presentation/pages/products/product_list_page.dart';
-import 'package:pos_mobile/presentation/pages/product_categories/product_category_list_page.dart';
-import 'package:pos_mobile/presentation/pages/services/service_list_page.dart';
 import 'package:pos_mobile/presentation/pages/purchases/purchase_list_page.dart';
 import 'package:pos_mobile/presentation/pages/stock_movements/stock_movement_list_page.dart';
+import 'package:pos_mobile/presentation/pages/stock_audits/stock_audit_list_page.dart';
+import 'package:pos_mobile/presentation/pages/stock_levels/stock_level_page.dart';
+import 'package:pos_mobile/presentation/pages/topping_stock/topping_stock_page.dart';
+import 'package:pos_mobile/presentation/pages/topping_stock/topping_stock_movement_page.dart';
 import 'package:pos_mobile/presentation/pages/expenses/expense_list_page.dart';
+import 'package:pos_mobile/core/auth/role_access.dart';
+import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
 class StockTab extends ConsumerWidget {
@@ -16,6 +20,7 @@ class StockTab extends ConsumerWidget {
     final theme = Theme.of(context);
     final accent = theme.colorScheme.primary;
     final bottomInset = MediaQuery.of(context).padding.bottom;
+    final allowed = allowedStockMenus(ref.watch(authProvider).role);
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
@@ -61,88 +66,110 @@ class StockTab extends ConsumerWidget {
               ],
             ),
           ),
-          const SizedBox(height: 16),
-          _menuItem(
-            context,
-            icon: Icons.inventory_2_outlined,
-            title: "Produk",
-            subtitle: "Kelola daftar produk, harga dan stok",
-            onTap: () {
-              Navigator.push(
+          if (allowed.contains(StockMenu.produk)) ...[
+            const SizedBox(height: 16),
+            _menuItem(
+              context,
+              icon: Icons.inventory_2_outlined,
+              title: "Produk",
+              subtitle: "Kelola daftar produk, harga dan stok",
+              onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const ProductListPage()),
-              );
-            },
-          ),
-          const SizedBox(height: 16),
-          _menuItem(
-            context,
-            icon: Icons.design_services_outlined,
-            title: "Layanan",
-            subtitle: "Kelola tarif layanan dan jasa",
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const ServiceListPage()),
-              );
-            },
-          ),
-          const SizedBox(height: 16),
-          _menuItem(
-            context,
-            icon: Icons.shopping_cart_checkout_outlined,
-            title: "Pembelian",
-            subtitle: "Catat transaksi pembelian ke supplier",
-            onTap: () {
-              Navigator.push(
+              ),
+            ),
+          ],
+          if (allowed.contains(StockMenu.pembelian)) ...[
+            const SizedBox(height: 16),
+            _menuItem(
+              context,
+              icon: Icons.shopping_cart_checkout_outlined,
+              title: "Pembelian",
+              subtitle: "Catat transaksi pembelian ke supplier",
+              onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const PurchaseListPage()),
-              );
-            },
-          ),
-          const SizedBox(height: 16),
-          _menuItem(
-            context,
-            icon: Icons.history_outlined,
-            title: "Riwayat Mutasi Stok",
-            subtitle: "Lihat keluar / masuk stok",
-            onTap: () {
-              Navigator.push(
+              ),
+            ),
+          ],
+          if (allowed.contains(StockMenu.stokMaterial)) ...[
+            const SizedBox(height: 16),
+            _menuItem(
+              context,
+              icon: Icons.inventory_outlined,
+              title: "Stok Material",
+              subtitle: "Lihat saldo & sesuaikan stok material",
+              onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => const StockMovementListPage(),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 16),
-          _menuItem(
-            context,
-            icon: Icons.category_outlined,
-            title: "Kategori Produk",
-            subtitle: "Kelola pengelompokan produk",
-            onTap: () {
-              Navigator.push(
+                MaterialPageRoute(builder: (_) => const StockLevelPage()),
+              ),
+            ),
+          ],
+          if (allowed.contains(StockMenu.stokTopping)) ...[
+            const SizedBox(height: 16),
+            _menuItem(
+              context,
+              icon: Icons.icecream_outlined,
+              title: "Stok Topping",
+              subtitle: "Lihat saldo & sesuaikan stok topping",
+              onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => const ProductCategoryListPage(),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 16),
-          _menuItem(
-            context,
-            icon: Icons.money_off_csred_outlined,
-            title: "Pengeluaran",
-            subtitle: "Catat biaya operasional & lainnya",
-            onTap: () {
-              Navigator.push(
+                MaterialPageRoute(builder: (_) => const ToppingStockPage()),
+              ),
+            ),
+          ],
+          if (allowed.contains(StockMenu.riwayatMutasi)) ...[
+            const SizedBox(height: 16),
+            _menuItem(
+              context,
+              icon: Icons.history_outlined,
+              title: "Riwayat Mutasi Stok",
+              subtitle: "Lihat keluar / masuk stok",
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const StockMovementListPage()),
+              ),
+            ),
+          ],
+          if (allowed.contains(StockMenu.riwayatTopping)) ...[
+            const SizedBox(height: 16),
+            _menuItem(
+              context,
+              icon: Icons.history_toggle_off_outlined,
+              title: "Riwayat Stok Topping",
+              subtitle: "Lihat keluar / masuk stok topping",
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ToppingStockMovementPage()),
+              ),
+            ),
+          ],
+          if (allowed.contains(StockMenu.auditStok)) ...[
+            const SizedBox(height: 16),
+            _menuItem(
+              context,
+              icon: Icons.fact_check_outlined,
+              title: "Audit Stok",
+              subtitle: "Hitung fisik & sesuaikan stok material",
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const StockAuditListPage()),
+              ),
+            ),
+          ],
+          if (allowed.contains(StockMenu.pengeluaran)) ...[
+            const SizedBox(height: 16),
+            _menuItem(
+              context,
+              icon: Icons.money_off_csred_outlined,
+              title: "Pengeluaran",
+              subtitle: "Catat biaya operasional & lainnya",
+              onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const ExpenseListPage()),
-              );
-            },
-          ),
+              ),
+            ),
+          ],
         ],
       ),
     );

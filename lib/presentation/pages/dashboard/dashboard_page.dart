@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/presentation/pages/dashboard/tabs/stock_tab.dart';
 
+import 'package:pos_mobile/core/auth/role_access.dart';
+import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/dashboard_index_provider.dart';
 
 import 'package:pos_mobile/presentation/pages/dashboard/tabs/home_tab.dart';
@@ -16,7 +18,13 @@ class DashboardPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final index = ref.watch(dashboardIndexProvider);
+    final access = accessForRole(ref.watch(authProvider).role);
+    final isStockOnly = access == AppAccess.stockOnly;
+
+    final rawIndex = ref.watch(dashboardIndexProvider);
+    // Role stok-saja hanya boleh halaman Stok(2) & Pengaturan(4).
+    final index = isStockOnly ? (rawIndex == 4 ? 4 : 2) : rawIndex;
+
     final shortest = MediaQuery.of(context).size.shortestSide;
     final isTablet = shortest >= 600;
     final theme = Theme.of(context);
@@ -65,14 +73,15 @@ class DashboardPage extends ConsumerWidget {
       body: SafeArea(
         child: Row(
           children: [
-            if (isTablet) _Sidebar(index: index, onNewTransaction: startTransaction),
+            if (isTablet)
+              _Sidebar(index: index, isStockOnly: isStockOnly, onNewTransaction: startTransaction),
 
             Expanded(child: pages[index]),
           ],
         ),
       ),
 
-      floatingActionButton: isTablet
+      floatingActionButton: (isTablet || isStockOnly)
           ? null
           : Container(
               decoration: BoxDecoration(
@@ -95,23 +104,56 @@ class DashboardPage extends ConsumerWidget {
 
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
 
-      bottomNavigationBar: isTablet ? null : const _BottomBar(),
+      bottomNavigationBar: isTablet
+          ? null
+          : (isStockOnly ? const _StockOnlyBottomBar() : const _BottomBar()),
     );
   }
 }
 
 class _Sidebar extends ConsumerWidget {
   final int index;
+  final bool isStockOnly;
   final VoidCallback onNewTransaction;
-  const _Sidebar({required this.index, required this.onNewTransaction});
+  const _Sidebar({required this.index, required this.isStockOnly, required this.onNewTransaction});
 
   // Posisi menu rail -> index halaman sebenarnya.
   // (index 1 = SalesTab placeholder, diakses lewat tombol transaksi baru)
-  static const _pageIndices = [0, 2, 3, 4];
+  List<int> get _pageIndices => isStockOnly ? const [2, 4] : const [0, 2, 3, 4];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selected = _pageIndices.indexOf(index);
+
+    final destinations = isStockOnly
+        ? const [
+            NavigationRailDestination(
+              icon: Icon(Icons.inventory_2_outlined),
+              label: Text("Stok"),
+            ),
+            NavigationRailDestination(
+              icon: Icon(Icons.settings_outlined),
+              label: Text("Pengaturan"),
+            ),
+          ]
+        : const [
+            NavigationRailDestination(
+              icon: Icon(Icons.home_outlined),
+              label: Text("Beranda"),
+            ),
+            NavigationRailDestination(
+              icon: Icon(Icons.inventory_2_outlined),
+              label: Text("Stok"),
+            ),
+            NavigationRailDestination(
+              icon: Icon(Icons.bar_chart_outlined),
+              label: Text("Laporan"),
+            ),
+            NavigationRailDestination(
+              icon: Icon(Icons.settings_outlined),
+              label: Text("Pengaturan"),
+            ),
+          ];
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -128,43 +170,63 @@ class _Sidebar extends ConsumerWidget {
                 unselectedLabelTextStyle: const TextStyle(color: Colors.white70),
                 selectedIndex: selected < 0 ? null : selected,
                 labelType: NavigationRailLabelType.all,
-                leading: Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: FloatingActionButton(
-                    heroTag: 'tabletNewTransaction',
-                    backgroundColor: Colors.white,
-                    foregroundColor: AppTheme.brandGreenDark,
-                    elevation: 0,
-                    tooltip: 'Transaksi Baru',
-                    onPressed: onNewTransaction,
-                    child: const Icon(Icons.add, size: 28),
-                  ),
-                ),
+                leading: isStockOnly
+                    ? null
+                    : Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: FloatingActionButton(
+                          heroTag: 'tabletNewTransaction',
+                          backgroundColor: Colors.white,
+                          foregroundColor: AppTheme.brandGreenDark,
+                          elevation: 0,
+                          tooltip: 'Transaksi Baru',
+                          onPressed: onNewTransaction,
+                          child: const Icon(Icons.add, size: 28),
+                        ),
+                      ),
                 onDestinationSelected: (value) =>
                     ref.read(dashboardIndexProvider.notifier).state = _pageIndices[value],
-                destinations: const [
-                  NavigationRailDestination(
-                    icon: Icon(Icons.home_outlined),
-                    label: Text("Beranda"),
-                  ),
-                  NavigationRailDestination(
-                    icon: Icon(Icons.inventory_2_outlined),
-                    label: Text("Stok"),
-                  ),
-                  NavigationRailDestination(
-                    icon: Icon(Icons.bar_chart_outlined),
-                    label: Text("Laporan"),
-                  ),
-                  NavigationRailDestination(
-                    icon: Icon(Icons.settings_outlined),
-                    label: Text("Pengaturan"),
-                  ),
-                ],
+                destinations: destinations,
               ),
             ),
           ),
         );
       },
+    );
+  }
+}
+
+class _StockOnlyBottomBar extends ConsumerWidget {
+  const _StockOnlyBottomBar();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final index = ref.watch(dashboardIndexProvider);
+    final onSettings = index == 4;
+
+    return BottomAppBar(
+      color: AppTheme.brandGreenDark,
+      height: 70,
+      child: Row(
+        children: [
+          Expanded(
+            child: _NavItem(
+              icon: Icons.inventory_2,
+              label: "Stok",
+              active: !onSettings,
+              onTap: () => ref.read(dashboardIndexProvider.notifier).state = 2,
+            ),
+          ),
+          Expanded(
+            child: _NavItem(
+              icon: Icons.settings,
+              label: "Pengaturan",
+              active: onSettings,
+              onTap: () => ref.read(dashboardIndexProvider.notifier).state = 4,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

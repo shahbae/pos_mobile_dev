@@ -112,6 +112,69 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     );
   }
 
+  int _paidValue() => int.tryParse(_paidAmountController.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+
+  void _setPaid(num amount) {
+    _paidAmountController.text = NumberFormat.decimalPattern('id_ID').format(amount);
+    setState(() {});
+  }
+
+  /// Tombol nominal cepat untuk tunai.
+  Widget _quickCash(num total) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _cashChip("Uang Pas", () => _setPaid(total)),
+        for (final amt in const [50000, 100000, 150000, 200000])
+          _cashChip(formatRupiah(amt), () => _setPaid(amt)),
+      ],
+    );
+  }
+
+  Widget _cashChip(String label, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppTheme.brandBlue.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppTheme.brandBlue.withOpacity(0.25)),
+        ),
+        child: Text(label,
+            style: const TextStyle(color: AppTheme.brandBlue, fontWeight: FontWeight.w700, fontSize: 13)),
+      ),
+    );
+  }
+
+  /// Kartu kembalian / kurang, dihitung real-time.
+  Widget _changeCard(num total) {
+    final paid = _paidValue();
+    final change = paid - total;
+    final isEnough = change >= 0;
+    final color = isEnough ? Colors.green : Colors.orange;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(isEnough ? "Kembalian" : "Kurang",
+              style: TextStyle(color: color, fontSize: 15, fontWeight: FontWeight.w700)),
+          Text(formatRupiah(change.abs()),
+              style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.w900)),
+        ],
+      ),
+    );
+  }
+
   Future<void> _editLine(CartItem item) async {
     final result = await showToppingPicker(
       context,
@@ -187,10 +250,12 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
             _whiteBox(
               child: TextField(
                 controller: _customerNameController,
+                textCapitalization: TextCapitalization.words,
                 decoration: const InputDecoration(
                   hintText: "Nama pelanggan",
                   prefixIcon: Icon(Icons.person_outline, color: AppTheme.brandBlue),
                   border: InputBorder.none,
+                  contentPadding: EdgeInsets.symmetric(vertical: 16),
                 ),
               ),
             ),
@@ -236,7 +301,12 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                         label: m.label,
                         icon: m.icon,
                         isSelected: _paymentMethod == m.value,
-                        onTap: () => setState(() => _paymentMethod = m.value),
+                        onTap: () => setState(() {
+                          _paymentMethod = m.value;
+                          // Reset jumlah bayar ke total saat ganti metode.
+                          _paidAmountController.text =
+                              NumberFormat.decimalPattern('id_ID').format(cartState.total);
+                        }),
                       ))
                   .toList(),
             ),
@@ -252,6 +322,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                     hintText: "No. ref / approval code",
                     prefixIcon: Icon(Icons.confirmation_number_outlined, color: AppTheme.brandBlue),
                     border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(vertical: 16),
                   ),
                 ),
               ),
@@ -277,8 +348,14 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                 controller: _paidAmountController,
                 keyboardType: TextInputType.number,
                 textAlign: TextAlign.right,
+                readOnly: !_isCash,
                 inputFormatters: [CurrencyInputFormatter()],
-                style: const TextStyle(color: AppTheme.brandBlue, fontSize: 28, fontWeight: FontWeight.w800),
+                onChanged: (_) => setState(() {}),
+                style: TextStyle(
+                  color: _isCash ? AppTheme.brandBlue : AppTheme.textSecondary,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w800,
+                ),
                 decoration: const InputDecoration(
                   prefixText: "Rp ",
                   prefixStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 20, fontWeight: FontWeight.w600),
@@ -290,6 +367,12 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                 ),
               ),
             ),
+            if (_isCash) ...[
+              const SizedBox(height: 12),
+              _quickCash(cartState.total),
+              const SizedBox(height: 12),
+              _changeCard(cartState.total),
+            ],
             const SizedBox(height: 40),
 
             SizedBox(
@@ -620,7 +703,6 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
 
   Widget _whiteBox({required Widget child}) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),

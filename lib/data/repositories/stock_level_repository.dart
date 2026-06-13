@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../services/api_services.dart';
 import '../models/stock_level_model.dart';
@@ -5,6 +6,30 @@ import '../models/stock_level_model.dart';
 class StockLevelRepository {
   final ApiService api;
   StockLevelRepository(this.api);
+
+  /// Daftar stok level per material (BE sudah material-level).
+  Future<List<StockLevelModel>> getMaterialStockLevels() async {
+    final res = await api.dio.get('/stock-levels');
+    debugPrint('[StockLevelRepo] levels status=${res.statusCode} body=${res.data}');
+    final data = res.data['data'];
+    if (data == null || data is! List) return [];
+    return data.map((e) => StockLevelModel.fromJson(e)).toList();
+  }
+
+  /// Set stok material ke nilai absolut. POST /stock/adjust
+  Future<void> adjustStock({required int materialId, required int newQty}) async {
+    try {
+      await api.dio.post('/stock/adjust', data: {
+        'material_id': materialId,
+        'new_qty': newQty,
+        'reference_type': 'manual',
+      });
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      final m = (data is Map) ? (data['message'] ?? data['error']) : null;
+      throw m?.toString() ?? 'Gagal menyesuaikan stok (${e.response?.statusCode ?? e.message})';
+    }
+  }
 
   Future<StockLevelModel?> getStockLevel(int productId) async {
     try {

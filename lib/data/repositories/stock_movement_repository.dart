@@ -7,12 +7,12 @@ class StockMovementRepository {
   StockMovementRepository(this.api);
 
   Future<List<StockMovementModel>> getStockMovements({
-    int? productId,
+    int? materialId,
   }) async {
     final res = await api.dio.get(
       '/stock-movements',
       queryParameters: {
-        if (productId != null) 'product_id': productId,
+        if (materialId != null) 'material_id': materialId,
       },
     );
 

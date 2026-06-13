@@ -2,11 +2,64 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 
 import 'package:pos_mobile/data/models/receipt_model.dart';
+import 'package:pos_mobile/data/services/printer_prefs.dart';
 import 'package:pos_mobile/data/services/thermal_printer_service.dart';
 
 final thermalPrinterServiceProvider = Provider<ThermalPrinterService>((ref) {
   return ThermalPrinterService();
 });
+
+/// Konfigurasi printer default (tersimpan di prefs).
+class PrinterConfig {
+  final String? mac;
+  final String? name;
+  final bool autoPrint;
+  final bool loaded;
+
+  const PrinterConfig({this.mac, this.name, this.autoPrint = true, this.loaded = false});
+
+  bool get hasPrinter => mac != null && mac!.isNotEmpty;
+
+  PrinterConfig copyWith({String? mac, String? name, bool? autoPrint, bool clearPrinter = false}) {
+    return PrinterConfig(
+      mac: clearPrinter ? null : (mac ?? this.mac),
+      name: clearPrinter ? null : (name ?? this.name),
+      autoPrint: autoPrint ?? this.autoPrint,
+      loaded: true,
+    );
+  }
+}
+
+final printerConfigProvider =
+    StateNotifierProvider<PrinterConfigNotifier, PrinterConfig>((ref) {
+  return PrinterConfigNotifier()..load();
+});
+
+class PrinterConfigNotifier extends StateNotifier<PrinterConfig> {
+  PrinterConfigNotifier() : super(const PrinterConfig());
+
+  Future<void> load() async {
+    final mac = await PrinterPrefs.getMac();
+    final name = await PrinterPrefs.getName();
+    final auto = await PrinterPrefs.getAutoPrint();
+    state = PrinterConfig(mac: mac, name: name, autoPrint: auto, loaded: true);
+  }
+
+  Future<void> setDefaultPrinter(String mac, String name) async {
+    await PrinterPrefs.saveDefault(mac: mac, name: name);
+    state = state.copyWith(mac: mac, name: name);
+  }
+
+  Future<void> clearDefaultPrinter() async {
+    await PrinterPrefs.clearDefault();
+    state = state.copyWith(clearPrinter: true);
+  }
+
+  Future<void> setAutoPrint(bool value) async {
+    await PrinterPrefs.setAutoPrint(value);
+    state = state.copyWith(autoPrint: value);
+  }
+}
 
 enum PrinterPhase { idle, loading, scanning, connecting, printing }
 
@@ -89,25 +142,39 @@ class PrinterNotifier extends StateNotifier<PrinterState> {
     }
   }
 
+  /// Pastikan terhubung ke printer. Bila socket nyangkut → putus lalu retry 1×.
+  Future<bool> _ensureConnected(String mac, String name) async {
+    final already = state.connectedMac == mac && await service.isConnected;
+    if (already) return true;
+
+    state = state.copyWith(phase: PrinterPhase.connecting, error: null, message: null);
+    var connected = await service.connect(mac);
+    if (!connected) {
+      // Socket mungkin masih terbuka dari sesi sebelumnya — putus lalu coba lagi.
+      await service.disconnect;
+      await Future.delayed(const Duration(milliseconds: 400));
+      connected = await service.connect(mac);
+    }
+    if (!connected) {
+      state = state.copyWith(
+        phase: PrinterPhase.idle,
+        connectedMac: null,
+        error: 'Gagal terhubung ke $name.',
+      );
+      return false;
+    }
+    state = state.copyWith(connectedMac: mac);
+    return true;
+  }
+
   /// Hubungkan ke printer, lalu cetak nota.
-  Future<bool> connectAndPrint(BluetoothInfo device, Receipt receipt) async {
+  Future<bool> connectAndPrint({
+    required String mac,
+    required String name,
+    required Receipt receipt,
+  }) async {
     try {
-      // Hubungkan jika belum terhubung ke perangkat yang dipilih.
-      final alreadyConnected =
-          state.connectedMac == device.macAdress && await service.isConnected;
-      if (!alreadyConnected) {
-        state = state.copyWith(phase: PrinterPhase.connecting, error: null, message: null);
-        final connected = await service.connect(device.macAdress);
-        if (!connected) {
-          state = state.copyWith(
-            phase: PrinterPhase.idle,
-            connectedMac: null,
-            error: 'Gagal terhubung ke ${device.name}.',
-          );
-          return false;
-        }
-        state = state.copyWith(connectedMac: device.macAdress);
-      }
+      if (!await _ensureConnected(mac, name)) return false;
 
       state = state.copyWith(phase: PrinterPhase.printing, error: null, message: null);
       final printed = await service.printReceipt(receipt);
@@ -119,6 +186,25 @@ class PrinterNotifier extends StateNotifier<PrinterState> {
       return printed;
     } catch (e) {
       state = state.copyWith(phase: PrinterPhase.idle, error: 'Gagal mencetak: $e');
+      return false;
+    }
+  }
+
+  /// Hubungkan ke printer lalu kirim tes cetak.
+  Future<bool> connectAndTest({required String mac, required String name}) async {
+    try {
+      if (!await _ensureConnected(mac, name)) return false;
+
+      state = state.copyWith(phase: PrinterPhase.printing, error: null, message: null);
+      final ok = await service.printTest();
+      state = state.copyWith(
+        phase: PrinterPhase.idle,
+        message: ok ? 'Tes cetak terkirim.' : null,
+        error: ok ? null : 'Gagal tes cetak.',
+      );
+      return ok;
+    } catch (e) {
+      state = state.copyWith(phase: PrinterPhase.idle, error: 'Gagal tes cetak: $e');
       return false;
     }
   }
