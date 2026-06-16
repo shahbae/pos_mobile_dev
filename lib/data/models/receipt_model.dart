@@ -69,12 +69,14 @@ class Receipt {
 
 class ReceiptItem {
   final String name;
+  final String? variantName; // null bila item tanpa variant
   final int qty;
   final num price;
   final List<ReceiptTopping> toppings;
 
   ReceiptItem({
     required this.name,
+    this.variantName,
     required this.qty,
     required this.price,
     this.toppings = const [],
@@ -82,10 +84,16 @@ class ReceiptItem {
 
   num get lineTotal => price * qty;
 
+  /// Nama tampilan: "Produk - Variant" bila ada variant.
+  String get displayName =>
+      (variantName != null && variantName!.isNotEmpty) ? '$name - $variantName' : name;
+
   factory ReceiptItem.fromJson(Map<String, dynamic> json) {
     final List<dynamic> toppingsJson = json['toppings'] ?? [];
+    final variant = json['variant_name']?.toString();
     return ReceiptItem(
       name: json['name']?.toString() ?? '',
+      variantName: (variant == null || variant.trim().isEmpty) ? null : variant,
       qty: _num(json['qty']).toInt(),
       price: _num(json['price']),
       toppings: toppingsJson.map((t) => ReceiptTopping.fromJson(t as Map<String, dynamic>)).toList(),

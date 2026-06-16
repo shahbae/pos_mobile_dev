@@ -84,7 +84,7 @@ class ThermalPrinterService {
 
     // Item
     for (final item in r.items) {
-      bytes += g.text(item.name, styles: const PosStyles(bold: true));
+      bytes += g.text(item.displayName, styles: const PosStyles(bold: true));
       bytes += g.row([
         PosColumn(text: '  ${item.qty} x ${_money.format(item.price)}', width: 7),
         PosColumn(

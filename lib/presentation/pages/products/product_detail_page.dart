@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/models/product_model.dart';
+import '../../providers/product_provider.dart';
 import '../../../utils/currency.dart';
 
 class ProductDetailPage extends ConsumerWidget {
@@ -83,6 +84,13 @@ class ProductDetailPage extends ConsumerWidget {
               ),
             ),
 
+            const SizedBox(height: 18),
+
+            // =====================
+            // VARIASI / UKURAN
+            // =====================
+            _VariantsSection(productId: product.id),
+
                   ],
                 ),
               ),
@@ -137,5 +145,97 @@ class ProductDetailPage extends ConsumerWidget {
     } catch (_) {
       return dateStr;
     }
+  }
+}
+
+/// Bagian daftar variasi/ukuran produk (read-only) di halaman detail.
+class _VariantsSection extends ConsumerWidget {
+  final int productId;
+  const _VariantsSection({required this.productId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final variantsAsync = ref.watch(productVariantsProvider(productId));
+
+    return variantsAsync.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, _) => Text(
+        'Gagal memuat variasi: $e',
+        style: TextStyle(color: Colors.red.shade400, fontSize: 13),
+      ),
+      data: (variants) {
+        if (variants.isEmpty) return const SizedBox.shrink();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  "Variasi / Ukuran",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.grey.shade900,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  "(${variants.length})",
+                  style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Card(
+              elevation: 0,
+              color: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(color: Colors.grey.shade300),
+              ),
+              child: Column(
+                children: [
+                  for (int i = 0; i < variants.length; i++) ...[
+                    if (i > 0) Divider(color: Colors.grey.shade200, height: 1),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      child: Row(
+                        children: [
+                          Icon(Icons.local_offer_outlined,
+                              size: 18, color: theme.colorScheme.primary),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              variants[i].name,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey.shade900,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            formatRupiah(variants[i].sellingPriceNum),
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 }

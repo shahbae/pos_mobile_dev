@@ -51,12 +51,14 @@ class ProductTransactionRequest {
 
 class TransactionItem {
   final int productId;
+  final int? variantId; // null = pakai harga & resep produk (behavior lama)
   final int quantity;
   final List<ToppingSelection> freeToppings; // include di harga, tidak menambah subtotal
   final List<ToppingSelection> extraToppings; // berbayar
 
   TransactionItem({
     required this.productId,
+    this.variantId,
     required this.quantity,
     this.freeToppings = const [],
     this.extraToppings = const [],
@@ -65,6 +67,7 @@ class TransactionItem {
   Map<String, dynamic> toJson() {
     return {
       'product_id': productId,
+      if (variantId != null) 'variant_id': variantId,
       'qty': quantity,
       if (freeToppings.isNotEmpty)
         'free_toppings': freeToppings.map((t) => t.toJson()).toList(),

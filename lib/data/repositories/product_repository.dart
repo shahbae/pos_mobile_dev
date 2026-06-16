@@ -1,10 +1,25 @@
 import 'package:flutter/foundation.dart';
 import 'package:pos_mobile/data/models/product_model.dart';
+import 'package:pos_mobile/data/models/product_variant_model.dart';
 import 'package:pos_mobile/data/services/api_services.dart';
 
 class ProductRepository {
   final ApiService api;
   ProductRepository(this.api);
+
+  /// Ambil daftar variant sebuah produk. Default hanya yang aktif (untuk POS).
+  /// GET /products/:id/variants
+  Future<List<ProductVariant>> getVariants(int productId, {bool activeOnly = true}) async {
+    final res = await api.dio.get('/products/$productId/variants');
+
+    debugPrint('[ProductRepo] variants($productId) status=${res.statusCode} body=${res.data}');
+
+    final data = res.data['data'];
+    if (data == null || data is! List) return [];
+
+    final list = data.map((e) => ProductVariant.fromJson(e)).toList();
+    return activeOnly ? list.where((v) => v.isActive).toList() : list;
+  }
 
   Future<List<Product>> getProducts({
     int page = 1,

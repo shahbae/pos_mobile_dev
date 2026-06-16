@@ -226,7 +226,7 @@ class _ReceiptPreview extends StatelessWidget {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          item.name,
+                                          item.displayName,
                                           style: const TextStyle(
                                             fontWeight: FontWeight.w700,
                                             color: AppTheme.textPrimary,

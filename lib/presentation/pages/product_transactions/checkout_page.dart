@@ -205,6 +205,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     if (result == null) return;
     ref.read(productTransactionProvider.notifier).addLineWithToppings(
           item.product,
+          variant: item.variant,
           quantity: result.quantity,
           freeToppings: result.freeToppings,
           extraToppings: result.extraToppings,
@@ -418,11 +419,11 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(item.product.name,
+                    Text(item.displayName,
                         style: const TextStyle(
                             color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 15)),
                     const SizedBox(height: 2),
-                    Text(formatRupiah(item.product.sellingPriceNum),
+                    Text(formatRupiah(item.unitPrice),
                         style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
                   ],
                 ),

@@ -1,14 +1,55 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
+import 'package:pos_mobile/data/models/product_model.dart';
+import 'package:pos_mobile/data/models/product_variant_model.dart';
 import 'package:pos_mobile/presentation/providers/product_pagination_provider.dart';
+import 'package:pos_mobile/presentation/providers/product_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_transaction_provider.dart';
 import 'package:pos_mobile/presentation/pages/product_transactions/checkout_page.dart';
 import 'package:pos_mobile/presentation/widgets/topping_picker_sheet.dart';
+import 'package:pos_mobile/presentation/widgets/variant_picker_sheet.dart';
 import 'package:pos_mobile/utils/currency.dart';
 
 class ProductTransactionPage extends ConsumerWidget {
   const ProductTransactionPage({super.key});
+
+  /// Alur tap produk: cek variant → (pilih variant) → (pilih topping) → masuk cart.
+  Future<void> _onProductTap(BuildContext context, WidgetRef ref, Product product) async {
+    final notifier = ref.read(productTransactionProvider.notifier);
+
+    // 1. Ambil variant aktif. Bila gagal, jangan blokir kasir → lanjut tanpa variant.
+    List<ProductVariant> variants = const [];
+    try {
+      variants = await ref.read(productVariantsProvider(product.id).future);
+    } catch (_) {
+      variants = const [];
+    }
+    if (!context.mounted) return;
+
+    // 2. Bila produk punya variant aktif, kasir wajib memilih salah satu.
+    ProductVariant? variant;
+    if (variants.isNotEmpty) {
+      variant = await showVariantPicker(context, product: product, variants: variants);
+      if (variant == null) return; // dibatalkan
+      if (!context.mounted) return;
+    }
+
+    // 3. Topping (bila produk punya slot topping gratis), lalu masukkan ke cart.
+    if (product.hasFreeToppings) {
+      final result = await showToppingPicker(context, product: product);
+      if (result == null) return;
+      notifier.addLineWithToppings(
+        product,
+        variant: variant,
+        quantity: result.quantity,
+        freeToppings: result.freeToppings,
+        extraToppings: result.extraToppings,
+      );
+    } else {
+      notifier.addToCart(product, variant: variant);
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -73,22 +114,7 @@ class ProductTransactionPage extends ConsumerWidget {
                         ),
                         child: InkWell(
                           borderRadius: BorderRadius.circular(20),
-                          onTap: () async {
-                            final notifier = ref.read(productTransactionProvider.notifier);
-                            if (product.hasFreeToppings) {
-                              final result = await showToppingPicker(context, product: product);
-                              if (result != null) {
-                                notifier.addLineWithToppings(
-                                  product,
-                                  quantity: result.quantity,
-                                  freeToppings: result.freeToppings,
-                                  extraToppings: result.extraToppings,
-                                );
-                              }
-                            } else {
-                              notifier.addToCart(product);
-                            }
-                          },
+                          onTap: () => _onProductTap(context, ref, product),
                           child: Padding(
                             padding: const EdgeInsets.all(12),
                             child: Column(

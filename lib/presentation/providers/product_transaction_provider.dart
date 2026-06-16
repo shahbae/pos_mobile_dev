@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/data/models/product_model.dart';
+import 'package:pos_mobile/data/models/product_variant_model.dart';
 import 'package:pos_mobile/data/models/promo_model.dart';
 import 'package:pos_mobile/data/models/topping_model.dart';
 import 'package:pos_mobile/data/models/product_transaction_model.dart';
@@ -23,6 +24,7 @@ class CartItem {
   /// Id unik baris — satu produk bisa muncul beberapa baris dengan topping berbeda.
   final int lineId;
   final Product product;
+  final ProductVariant? variant; // null = produk tanpa variant (behavior lama)
   final int quantity;
   final List<CartTopping> freeToppings; // gratis, tidak menambah subtotal
   final List<CartTopping> extraToppings; // berbayar
@@ -30,6 +32,7 @@ class CartItem {
   CartItem({
     required this.lineId,
     required this.product,
+    this.variant,
     required this.quantity,
     this.freeToppings = const [],
     this.extraToppings = const [],
@@ -43,6 +46,7 @@ class CartItem {
     return CartItem(
       lineId: lineId,
       product: product,
+      variant: variant,
       quantity: quantity ?? this.quantity,
       freeToppings: freeToppings ?? this.freeToppings,
       extraToppings: extraToppings ?? this.extraToppings,
@@ -51,13 +55,21 @@ class CartItem {
 
   bool get hasToppings => freeToppings.isNotEmpty || extraToppings.isNotEmpty;
 
+  /// Harga satuan yang dipakai: harga variant bila ada, kalau tidak harga produk.
+  num get unitPrice => variant?.sellingPriceNum ?? product.sellingPriceNum;
+
+  /// Nama tampilan: "Produk - Variant" bila ada variant.
+  String get displayName =>
+      variant != null ? '${product.name} - ${variant!.name}' : product.name;
+
   int get extraToppingTotal => extraToppings.fold(0, (s, t) => s + t.lineTotal);
 
-  /// (harga produk + extra topping) × qty
-  num get subtotal => (product.sellingPriceNum + extraToppingTotal) * quantity;
+  /// (harga variant/produk + extra topping) × qty
+  num get subtotal => (unitPrice + extraToppingTotal) * quantity;
 
   TransactionItem toTransactionItem() => TransactionItem(
         productId: product.id,
+        variantId: variant?.id,
         quantity: quantity,
         freeToppings: freeToppings.map((t) => t.toSelection()).toList(),
         extraToppings: extraToppings.map((t) => t.toSelection()).toList(),
@@ -166,10 +178,11 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
 
   int _nextLineId() => ++_lineCounter;
 
-  /// Tambah produk tanpa topping — digabung ke baris polos yang sudah ada.
-  void addToCart(Product product) {
+  /// Tambah produk tanpa topping — digabung ke baris polos yang sudah ada
+  /// (produk + variant sama). Variant berbeda = baris terpisah.
+  void addToCart(Product product, {ProductVariant? variant}) {
     final idx = state.items.indexWhere(
-      (i) => i.product.id == product.id && !i.hasToppings,
+      (i) => i.product.id == product.id && i.variant?.id == variant?.id && !i.hasToppings,
     );
     if (idx != -1) {
       final updated = List<CartItem>.from(state.items);
@@ -178,7 +191,7 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
     } else {
       state = state.copyWith(items: [
         ...state.items,
-        CartItem(lineId: _nextLineId(), product: product, quantity: 1),
+        CartItem(lineId: _nextLineId(), product: product, variant: variant, quantity: 1),
       ]);
     }
   }
@@ -186,6 +199,7 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
   /// Tambah baris baru dengan topping (selalu baris terpisah).
   void addLineWithToppings(
     Product product, {
+    ProductVariant? variant,
     int quantity = 1,
     List<CartTopping> freeToppings = const [],
     List<CartTopping> extraToppings = const [],
@@ -195,6 +209,7 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
       CartItem(
         lineId: _nextLineId(),
         product: product,
+        variant: variant,
         quantity: quantity,
         freeToppings: freeToppings,
         extraToppings: extraToppings,
