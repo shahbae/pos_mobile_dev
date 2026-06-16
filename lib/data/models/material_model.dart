@@ -4,6 +4,7 @@ class MaterialItem {
   final int id;
   final String name;
   final String unit;
+  final String? purchaseQty;
   final String? purchasePrice;
   final String? description;
   final String? createdAt;
@@ -12,6 +13,7 @@ class MaterialItem {
     required this.id,
     required this.name,
     required this.unit,
+    this.purchaseQty,
     this.purchasePrice,
     this.description,
     this.createdAt,
@@ -22,6 +24,7 @@ class MaterialItem {
       id: j['id'],
       name: j['name'] ?? '',
       unit: j['unit'] ?? '',
+      purchaseQty: j['purchase_qty']?.toString(),
       purchasePrice: j['purchase_price']?.toString(),
       description: j['description']?.toString(),
       createdAt: j['created_at'],

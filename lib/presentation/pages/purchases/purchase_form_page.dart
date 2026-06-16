@@ -18,6 +18,7 @@ class _PurchaseItem {
   /// "m:<id>" untuk material, "t:<id>" untuk topping.
   String? refKey;
   int quantity = 1;
+  String unit = ''; // satuan item terpilih (pcs, gram, dll)
   TextEditingController qtyController = TextEditingController(text: '1');
   TextEditingController costController = TextEditingController();
 
@@ -98,13 +99,15 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
     final repo = ref.read(purchaseRepositoryProvider);
 
     final List<Map<String, dynamic>> itemsPayload = _items.map((it) {
-      final reqDigits = it.costController.text.replaceAll(RegExp(r'[^0-9]'), '');
-      final cost = reqDigits.isEmpty ? '0' : reqDigits;
+      final totalCost = int.tryParse(
+            it.costController.text.replaceAll(RegExp(r'[^0-9]'), ''),
+          ) ??
+          0;
       return {
         if (it.materialId != null) 'material_id': it.materialId,
         if (it.toppingId != null) 'topping_id': it.toppingId,
         'quantity': it.quantity.toString(), // BE expects string
-        'unit_cost': '$cost.00',
+        'total_cost': '$totalCost.00',
       };
     }).toList();
 
@@ -177,11 +180,10 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
     final materialsAsync = ref.watch(materialListProvider);
     final toppingsAsync = ref.watch(toppingListProvider);
 
-    // Calculate Grand Total for UI
+    // Calculate Grand Total for UI (total_cost sudah total per baris)
     int totalEstimated = 0;
     for (var it in _items) {
-      final cst = int.tryParse(it.costController.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
-      totalEstimated += (it.quantity * cst);
+      totalEstimated += int.tryParse(it.costController.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
     }
 
     return Scaffold(
@@ -427,16 +429,24 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
                               onChanged: (v) {
                                 setState(() {
                                   item.refKey = v;
-                                  // Bawa harga beli sebagai default (jika ada).
-                                  int price = 0;
+                                  // Bawa default unit, qty, & total biaya dari item terpilih.
+                                  int totalCost = 0;
                                   if (v != null && v.startsWith('m:')) {
                                     final m = materials.firstWhere((e) => 'm:${e.id}' == v);
-                                    price = int.tryParse((m.purchasePrice ?? '').replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+                                    item.unit = m.unit;
+                                    totalCost = int.tryParse((m.purchasePrice ?? '').replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+                                    final qty = int.tryParse((m.purchaseQty ?? '').replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+                                    if (qty > 0) {
+                                      item.quantity = qty;
+                                      item.qtyController.text = qty.toString();
+                                    }
                                   } else if (v != null && v.startsWith('t:')) {
-                                    price = toppings.firstWhere((e) => 't:${e.id}' == v).price;
+                                    final t = toppings.firstWhere((e) => 't:${e.id}' == v);
+                                    item.unit = t.unit;
+                                    totalCost = t.price;
                                   }
-                                  if (price > 0) {
-                                    item.costController.text = _formatter.format(price);
+                                  if (totalCost > 0) {
+                                    item.costController.text = _formatter.format(totalCost);
                                   }
                                 });
                               },
@@ -452,7 +462,10 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Text('Kuantitas', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                                    Text(
+                                      item.unit.isNotEmpty ? 'Kuantitas (${item.unit})' : 'Kuantitas',
+                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                                    ),
                                     const SizedBox(height: 6),
                                     TextFormField(
                                       controller: item.qtyController,
@@ -461,6 +474,7 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
                                       decoration: InputDecoration(
                                         filled: true,
                                         fillColor: const Color(0xFFF9FAFB),
+                                        suffixText: item.unit.isNotEmpty ? item.unit : null,
                                         contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                                         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
@@ -476,7 +490,7 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Text('Harga Beli Satuan', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                                    const Text('Total Biaya', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                                     const SizedBox(height: 6),
                                     TextFormField(
                                       controller: item.costController,
