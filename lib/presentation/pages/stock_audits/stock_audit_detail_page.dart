@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:pos_mobile/data/models/stock_audit_model.dart';
 import 'package:pos_mobile/presentation/providers/stock_audit_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
+import 'package:pos_mobile/utils/currency.dart';
 import 'stock_audit_list_page.dart' show StatusChip;
 
 class StockAuditDetailPage extends ConsumerStatefulWidget {
@@ -125,6 +126,7 @@ class _StockAuditDetailPageState extends ConsumerState<StockAuditDetailPage> {
                   ],
                 ),
               ),
+              _lossSummary(audit),
             ],
           ),
         ),
@@ -172,6 +174,9 @@ class _StockAuditDetailPageState extends ConsumerState<StockAuditDetailPage> {
                 Text(it.displayName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                 if (it.typeLabel != null)
                   Text(it.typeLabel!, style: const TextStyle(fontSize: 10, color: AppTheme.textSecondary)),
+                if (it.lossValue > 0)
+                  Text('Rugi ${formatRupiah(it.lossValue)}',
+                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppTheme.danger)),
               ],
             ),
           ),
@@ -184,6 +189,32 @@ class _StockAuditDetailPageState extends ConsumerState<StockAuditDetailPage> {
                 style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: diffColor)),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Total estimasi kerugian dari semua item yang stoknya kurang.
+  Widget _lossSummary(StockAudit audit) {
+    final totalLoss = audit.items.fold<double>(0, (s, it) => s + it.lossValue);
+    if (totalLoss <= 0) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.danger.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppTheme.danger.withOpacity(0.25)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Estimasi Kerugian',
+                style: TextStyle(fontWeight: FontWeight.w800, color: AppTheme.danger)),
+            Text(formatRupiah(totalLoss),
+                style: const TextStyle(fontWeight: FontWeight.w900, color: AppTheme.danger, fontSize: 16)),
+          ],
+        ),
       ),
     );
   }

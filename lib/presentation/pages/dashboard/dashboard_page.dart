@@ -11,6 +11,7 @@ import 'package:pos_mobile/presentation/pages/dashboard/tabs/sales_tab.dart';
 import 'package:pos_mobile/presentation/pages/dashboard/tabs/report_tab.dart';
 import 'package:pos_mobile/presentation/pages/dashboard/tabs/setting_tab.dart';
 import 'package:pos_mobile/presentation/pages/product_transactions/product_transaction_page.dart';
+import 'package:pos_mobile/presentation/pages/shifts/shift_guard.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
 class DashboardPage extends ConsumerWidget {
@@ -46,7 +47,10 @@ class DashboardPage extends ConsumerWidget {
       'Pengaturan',
     ];
 
-    void startTransaction() {
+    Future<void> startTransaction() async {
+      // BE mewajibkan shift aktif untuk membuat transaksi POS.
+      final ok = await ensureActiveShift(context, ref);
+      if (!ok || !context.mounted) return;
       Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => const ProductTransactionPage()),

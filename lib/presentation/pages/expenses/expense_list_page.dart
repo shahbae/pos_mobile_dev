@@ -219,7 +219,7 @@ class _ExpenseListPageState extends ConsumerState<ExpenseListPage> {
   String _formatDate(String? dt) {
     if (dt == null) return '-';
     try {
-      final parsed = DateTime.parse(dt);
+      final parsed = DateTime.parse(dt).toLocal();
       return "${parsed.day.toString().padLeft(2, '0')}/${parsed.month.toString().padLeft(2, '0')}/${parsed.year}";
     } catch (_) {
       return dt;

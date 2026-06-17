@@ -49,7 +49,9 @@ class ReportRepository {
   }) async {
     final fmt = DateFormat('yyyy-MM-dd');
     final fromDay = DateTime(from.year, from.month, from.day);
-    final toDay = DateTime(to.year, to.month, to.day).add(const Duration(days: 1));
+    // BE memfilter tanggal dalam WIB dengan `to` INKLUSIF, jadi kirim apa adanya
+    // (tanpa +1 hari) supaya tidak ikut menarik transaksi besok.
+    final toDay = DateTime(to.year, to.month, to.day);
 
     final res = await api.dio.get(
       '/reports/payments',

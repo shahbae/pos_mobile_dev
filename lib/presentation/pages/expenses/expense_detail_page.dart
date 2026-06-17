@@ -223,14 +223,14 @@ class ExpenseDetailPage extends ConsumerWidget {
   String _fmtDate(String? dt) {
     if (dt == null) return '-';
     try {
-      final p = DateTime.parse(dt);
+      final p = DateTime.parse(dt).toLocal();
       return DateFormat('dd MMMM yyyy').format(p);
     } catch (_) { return dt; }
   }
 
   String _fmtDateTime(String dt) {
     try {
-      final p = DateTime.parse(dt);
+      final p = DateTime.parse(dt).toLocal();
       return DateFormat('dd MMM yyyy HH:mm').format(p);
     } catch (_) { return dt; }
   }

@@ -157,9 +157,9 @@ class _RevenueChartCard extends StatelessWidget {
     ].join(" • ");
 
     final timeFmt = DateFormat('HH:mm', 'id_ID');
-    final startLabel = timeFmt.format(points.first.time);
-    final midLabel = timeFmt.format(points[points.length ~/ 2].time);
-    final endLabel = timeFmt.format(points.last.time);
+    final startLabel = timeFmt.format(points.first.time.toLocal());
+    final midLabel = timeFmt.format(points[points.length ~/ 2].time.toLocal());
+    final endLabel = timeFmt.format(points.last.time.toLocal());
 
     return Container(
       width: double.infinity,

@@ -26,6 +26,7 @@ Future<ToppingPickerResult?> showToppingPicker(
   int initialQty = 1,
   List<CartTopping> initialFree = const [],
   List<CartTopping> initialExtra = const [],
+  bool allowExtra = true, // false → sembunyikan topping berbayar (mis. item gratis promo)
 }) {
   return showModalBottomSheet<ToppingPickerResult>(
     context: context,
@@ -39,6 +40,7 @@ Future<ToppingPickerResult?> showToppingPicker(
       initialQty: initialQty,
       initialFree: initialFree,
       initialExtra: initialExtra,
+      allowExtra: allowExtra,
     ),
   );
 }
@@ -48,12 +50,14 @@ class _ToppingPickerSheet extends ConsumerStatefulWidget {
   final int initialQty;
   final List<CartTopping> initialFree;
   final List<CartTopping> initialExtra;
+  final bool allowExtra;
 
   const _ToppingPickerSheet({
     required this.product,
     required this.initialQty,
     required this.initialFree,
     required this.initialExtra,
+    required this.allowExtra,
   });
 
   @override
@@ -86,10 +90,12 @@ class _ToppingPickerSheetState extends ConsumerState<_ToppingPickerSheet> {
         .where((e) => e.value > 0)
         .map((e) => CartTopping(topping: byId(e.key), qty: e.value))
         .toList();
-    final extra = _extra.entries
-        .where((e) => e.value > 0)
-        .map((e) => CartTopping(topping: byId(e.key), qty: e.value))
-        .toList();
+    final extra = widget.allowExtra
+        ? _extra.entries
+            .where((e) => e.value > 0)
+            .map((e) => CartTopping(topping: byId(e.key), qty: e.value))
+            .toList()
+        : <CartTopping>[];
     Navigator.pop(
       context,
       ToppingPickerResult(quantity: _qty, freeToppings: free, extraToppings: extra),
@@ -181,20 +187,22 @@ class _ToppingPickerSheetState extends ConsumerState<_ToppingPickerSheet> {
                             )),
                         const SizedBox(height: 20),
                       ],
-                      _sectionHeader('Topping Tambahan', 'Berbayar'),
-                      ...toppings.map((t) => _ToppingRow(
-                            topping: t,
-                            qty: _extra[t.id] ?? 0,
-                            isFree: false,
-                            canIncrement: true,
-                            onChanged: (v) => setState(() {
-                              if (v <= 0) {
-                                _extra.remove(t.id);
-                              } else {
-                                _extra[t.id] = v;
-                              }
-                            }),
-                          )),
+                      if (widget.allowExtra) ...[
+                        _sectionHeader('Topping Tambahan', 'Berbayar'),
+                        ...toppings.map((t) => _ToppingRow(
+                              topping: t,
+                              qty: _extra[t.id] ?? 0,
+                              isFree: false,
+                              canIncrement: true,
+                              onChanged: (v) => setState(() {
+                                if (v <= 0) {
+                                  _extra.remove(t.id);
+                                } else {
+                                  _extra[t.id] = v;
+                                }
+                              }),
+                            )),
+                      ],
                     ],
                   );
                 },

@@ -98,8 +98,8 @@ class ReportTab extends ConsumerWidget {
         ),
         const SizedBox(height: 16),
         _ReportMenuCard(
-          title: "Riwayat Transaksi",
-          subtitle: "Lihat penjualan & pembelian",
+          title: "Riwayat Penjualan",
+          subtitle: "Lihat transaksi penjualan hari ini",
           icon: Icons.receipt_long_outlined,
           color: accent,
           onTap: () {

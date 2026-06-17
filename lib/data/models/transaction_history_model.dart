@@ -1,40 +1,62 @@
+/// Item jurnal transaksi terpadu (GET /transactions).
+/// Mencakup tipe: pos | purchase | expense.
 class TransactionHistoryModel {
+  final String transactionType; // pos | purchase | expense
   final int id;
-  final String transactionType; // pos | purchase
-  final String totalAmount;
-  final String createdAt;
-  final String invoiceNumber;
-  final String paymentMethod;
-  final String status;
-  final int? supplierId;
+  final int? branchId;
+  final String? branchName;
+  final String amount; // string desimal "0.00"
+  final String txnDate; // ISO 8601 (mis. 2026-06-17T10:30:00+07:00)
+  final String? ref; // invoice/PO number (POS & purchase)
+  final String? paymentMethod; // hanya pos
+  final int? supplierId; // hanya purchase
+  final String? supplierName; // hanya purchase
+  final String? category; // hanya expense
   final String? note;
+  final String? actorName; // user pelaku transaksi
 
   TransactionHistoryModel({
-    required this.id,
     required this.transactionType,
-    required this.totalAmount,
-    required this.createdAt,
-    required this.invoiceNumber,
-    required this.paymentMethod,
-    required this.status,
+    required this.id,
+    this.branchId,
+    this.branchName,
+    required this.amount,
+    required this.txnDate,
+    this.ref,
+    this.paymentMethod,
     this.supplierId,
+    this.supplierName,
+    this.category,
     this.note,
+    this.actorName,
   });
 
-  double get totalAmountNum => double.tryParse(totalAmount) ?? 0;
+  double get amountNum => double.tryParse(amount) ?? 0;
   bool get isPurchase => transactionType == 'purchase';
+  bool get isExpense => transactionType == 'expense';
+  bool get isPos => transactionType == 'pos';
+
+  /// Nomor referensi siap tampil (kosong bila null).
+  String get refOrEmpty => ref ?? '';
 
   factory TransactionHistoryModel.fromJson(Map<String, dynamic> json) {
+    // Catatan: response server saat ini memakai `invoice_number` & `created_at`
+    // (nama lama), sedangkan dokumen BE menyebut `ref` & `txn_date`. Baca
+    // keduanya (fallback) agar tetap jalan apa pun yang dikirim server.
     return TransactionHistoryModel(
-      id: json['id'] ?? 0,
-      transactionType: json['transaction_type'] ?? '',
-      totalAmount: json['total_amount']?.toString() ?? '0',
-      createdAt: json['created_at'] ?? '',
-      invoiceNumber: json['invoice_number'] ?? '',
-      paymentMethod: json['payment_method'] ?? '',
-      status: json['status'] ?? '',
-      supplierId: json['supplier_id'],
-      note: json['note'],
+      transactionType: json['transaction_type']?.toString() ?? '',
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      branchId: (json['branch_id'] as num?)?.toInt(),
+      branchName: json['branch_name']?.toString(),
+      amount: (json['amount'] ?? json['total_amount'])?.toString() ?? '0',
+      txnDate: (json['txn_date'] ?? json['created_at'])?.toString() ?? '',
+      ref: (json['ref'] ?? json['invoice_number'])?.toString(),
+      paymentMethod: json['payment_method']?.toString(),
+      supplierId: (json['supplier_id'] as num?)?.toInt(),
+      supplierName: json['supplier_name']?.toString(),
+      category: json['category']?.toString(),
+      note: json['note']?.toString(),
+      actorName: json['actor_name']?.toString(),
     );
   }
 }
@@ -91,14 +113,15 @@ class PaymentModel {
 
   factory PaymentModel.fromJson(Map<String, dynamic> json) {
     return PaymentModel(
-      id: json['id'] ?? 0,
-      transactionId: json['transaction_id'] ?? 0,
-      paymentMethod: json['payment_method'] ?? '',
-      amountPaid: json['amount_paid'] ?? '0',
-      changeAmount: json['change_amount'] ?? '0',
-      paymentStatus: json['payment_status'] ?? '',
-      paidAt: json['paid_at'] ?? '',
-      createdAt: json['created_at'] ?? '',
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      transactionId: (json['transaction_id'] as num?)?.toInt() ?? 0,
+      paymentMethod: json['payment_method']?.toString() ?? '',
+      // amount bisa dikirim sbg angka ATAU string → selalu toString() agar aman.
+      amountPaid: json['amount_paid']?.toString() ?? '0',
+      changeAmount: json['change_amount']?.toString() ?? '0',
+      paymentStatus: json['payment_status']?.toString() ?? '',
+      paidAt: json['paid_at']?.toString() ?? '',
+      createdAt: json['created_at']?.toString() ?? '',
     );
   }
 }

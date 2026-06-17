@@ -257,7 +257,7 @@ class PurchaseDetailPage extends ConsumerWidget {
   String _formatDate(String? dateStr) {
     if (dateStr == null) return '-';
     try {
-      final dt = DateTime.parse(dateStr);
+      final dt = DateTime.parse(dateStr).toLocal();
       return '${dt.day.toString().padLeft(2, '0')}/'
           '${dt.month.toString().padLeft(2, '0')}/'
           '${dt.year} '

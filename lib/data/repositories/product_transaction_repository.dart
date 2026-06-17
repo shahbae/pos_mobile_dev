@@ -50,6 +50,8 @@ class ProductTransactionRepository {
       'variant not found': 'Variasi produk tidak ditemukan',
       'variant is not active': 'Variasi produk sedang tidak aktif',
       'variant does not belong to product': 'Variasi tidak sesuai dengan produk',
+      'no active shift for this branch':
+          'Belum ada shift aktif. Buka shift kasir terlebih dahulu.',
     };
     if (map.containsKey(key)) return map[key]!;
     if (raw != null && raw.isNotEmpty) return raw;

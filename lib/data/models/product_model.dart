@@ -1,8 +1,11 @@
+import 'package:pos_mobile/data/models/product_variant_model.dart';
+
 class Product {
   final int id;
   final int? tenantId;
   final String? sku;
   final String name;
+  final String? imageUrl;
   final int? categoryId;
   final String? categoryName;
   final String purchasePrice;
@@ -10,6 +13,8 @@ class Product {
   final String? profitMargin;
   final int freeToppingSlots;
   final bool hasFreeToppings;
+  final bool hasVariants;
+  final List<ProductVariant> variants;
   final String? createdAt;
 
   Product({
@@ -17,6 +22,7 @@ class Product {
     this.tenantId,
     this.sku,
     required this.name,
+    this.imageUrl,
     this.categoryId,
     this.categoryName,
     required this.purchasePrice,
@@ -24,18 +30,26 @@ class Product {
     this.profitMargin,
     this.freeToppingSlots = 0,
     this.hasFreeToppings = false,
+    this.hasVariants = false,
+    this.variants = const [],
     this.createdAt,
   });
 
   factory Product.fromJson(Map<String, dynamic> j) {
     final cat = j['category'] as Map<String, dynamic>?;
     final slots = (j['free_topping_slots'] as num?)?.toInt() ?? 0;
+    final img = j['image_url']?.toString();
+    final rawVariants = j['variants'];
+    final variants = (rawVariants is List)
+        ? rawVariants.map((e) => ProductVariant.fromJson(e as Map<String, dynamic>)).toList()
+        : <ProductVariant>[];
 
     return Product(
       id: j['id'],
       tenantId: j['tenant_id'],
       sku: j['sku'],
       name: j['name'],
+      imageUrl: (img == null || img.trim().isEmpty) ? null : img,
       categoryId: cat != null ? cat['id'] : j['category_id'],
       categoryName: cat != null ? cat['name'] : j['category_name'],
       purchasePrice: j['purchase_price']?.toString() ?? '0',
@@ -43,6 +57,8 @@ class Product {
       profitMargin: j['profit_margin']?.toString(),
       freeToppingSlots: slots,
       hasFreeToppings: j['has_free_toppings'] as bool? ?? (slots > 0),
+      hasVariants: j['has_variants'] as bool? ?? variants.isNotEmpty,
+      variants: variants,
       createdAt: j['created_at'],
     );
   }
@@ -51,4 +67,13 @@ class Product {
   num get purchasePriceNum => num.tryParse(purchasePrice) ?? 0;
   num get sellingPriceNum => num.tryParse(sellingPrice) ?? 0;
   num get profitMarginNum => num.tryParse(profitMargin ?? '0') ?? 0;
+
+  /// Harga termurah dari variant; fallback ke harga produk bila tanpa variant.
+  /// Dipakai untuk tampilan kartu produk ("mulai dari …").
+  num get minVariantPriceNum {
+    if (variants.isEmpty) return sellingPriceNum;
+    return variants
+        .map((v) => v.sellingPriceNum)
+        .reduce((a, b) => a < b ? a : b);
+  }
 }

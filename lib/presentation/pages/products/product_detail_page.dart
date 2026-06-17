@@ -33,6 +33,28 @@ class ProductDetailPage extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
             // =====================
+            // IMAGE
+            // =====================
+            if (product.imageUrl != null) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: AspectRatio(
+                  aspectRatio: 16 / 10,
+                  child: Image.network(
+                    product.imageUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: Colors.grey.shade100,
+                      child: Icon(Icons.inventory_2_outlined,
+                          color: theme.colorScheme.primary, size: 48),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // =====================
             // HEADER NAME
             // =====================
             Text(
@@ -136,7 +158,7 @@ class ProductDetailPage extends ConsumerWidget {
   String _formatDate(String? dateStr) {
     if (dateStr == null) return '-';
     try {
-      final dt = DateTime.parse(dateStr);
+      final dt = DateTime.parse(dateStr).toLocal();
       return '${dt.day.toString().padLeft(2, '0')}/'
           '${dt.month.toString().padLeft(2, '0')}/'
           '${dt.year} '

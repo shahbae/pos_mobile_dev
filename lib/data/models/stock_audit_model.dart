@@ -47,6 +47,10 @@ class StockAuditItem {
   final double physicalQty;
   final double diff;
 
+  /// Nilai satuan item saat audit dibuat (purchase_price material / unit_cost
+  /// pembelian terakhir topping). 0 berarti harga belum pernah diinput.
+  final double unitValue;
+
   StockAuditItem({
     this.id,
     this.materialId,
@@ -56,7 +60,12 @@ class StockAuditItem {
     this.systemQty = 0,
     this.physicalQty = 0,
     this.diff = 0,
+    this.unitValue = 0,
   });
+
+  /// Estimasi nilai kerugian stok: |diff| × unitValue, hanya bila stok kurang
+  /// (diff < 0). 0 bila tidak ada kekurangan atau harga belum tersedia.
+  double get lossValue => diff < 0 ? diff.abs() * unitValue : 0;
 
   String get displayName {
     if (materialName != null) return materialName!;
@@ -82,6 +91,7 @@ class StockAuditItem {
       systemQty: _toDouble(j['system_qty']),
       physicalQty: _toDouble(j['physical_qty']),
       diff: _toDouble(j['diff']),
+      unitValue: _toDouble(j['unit_value']),
     );
   }
 }

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import 'package:pos_mobile/data/models/transaction_history_model.dart';
@@ -16,33 +17,47 @@ class TransactionRepository {
   Future<TransactionHistoryResponse> getTransactions({
     int page = 1,
     int limit = 20,
-    List<String>? transactionTypes,
-    String? status,
+    String? type, // pos | purchase | expense
     String? from,
     String? to,
+    int? shiftId,
   }) async {
     final query = <String, dynamic>{
       'page': page,
       'limit': limit,
-      if (transactionTypes != null && transactionTypes.isNotEmpty)
-        'transaction_type': transactionTypes,
-      if (status != null) 'status': status,
+      if (type != null) 'type': type,
       if (from != null) 'from': from,
       if (to != null) 'to': to,
+      if (shiftId != null) 'shift_id': shiftId,
     };
 
-    final res = await api.dio.get(
-      '/transactions',
-      queryParameters: query,
-      options: Options(listFormat: ListFormat.multi),
-    );
+    final res = await api.dio.get('/transactions', queryParameters: query);
 
     return TransactionHistoryResponse.fromJson(res.data);
   }
 
   Future<List<PaymentModel>> getPayments(int transactionId) async {
-    final res = await api.dio.get('/transactions/$transactionId/payments');
-    final List<dynamic> data = res.data['data'] ?? [];
-    return data.map((i) => PaymentModel.fromJson(i)).toList();
+    try {
+      final res = await api.dio.get('/transactions/$transactionId/payments');
+      final body = res.data;
+
+      // Toleran terhadap beberapa bentuk: { data: [...] }, { data: { items: [...] } },
+      // { data: {...} } (objek tunggal), atau langsung list di root.
+      dynamic data = (body is Map) ? (body['data'] ?? body['items']) : body;
+      if (data is Map) data = data['items'] ?? [data];
+      if (data is! List) return [];
+
+      return data
+          .whereType<Map>()
+          .map((i) => PaymentModel.fromJson(Map<String, dynamic>.from(i)))
+          .toList();
+    } on DioException catch (e) {
+      debugPrint('[TransactionRepo] getPayments($transactionId) '
+          '${e.response?.statusCode}: ${e.response?.data}');
+      final d = e.response?.data;
+      final msg = (d is Map) ? (d['message'] ?? d['error']) : null;
+      throw msg?.toString() ??
+          'Gagal mengambil data pembayaran (${e.response?.statusCode ?? e.message})';
+    }
   }
 }

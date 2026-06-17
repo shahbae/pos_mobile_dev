@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:pos_mobile/data/models/product_model.dart';
+import 'package:pos_mobile/data/models/product_variant_model.dart';
 import 'package:pos_mobile/data/models/promo_model.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
+import 'package:pos_mobile/presentation/providers/product_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_transaction_provider.dart';
 import 'package:pos_mobile/presentation/providers/promo_provider.dart';
 import 'package:pos_mobile/presentation/pages/product_transactions/transaction_success_page.dart';
 import 'package:pos_mobile/presentation/widgets/topping_picker_sheet.dart';
+import 'package:pos_mobile/presentation/widgets/variant_picker_sheet.dart';
 import 'package:pos_mobile/utils/currency.dart';
 import 'package:pos_mobile/core/utils/currency_input_formatter.dart';
 
@@ -578,7 +581,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
             children: [
               Expanded(
                 child: Text(
-                  sel == null ? p.name : '${p.name} ×${sel.qty}',
+                  sel == null ? p.name : '${sel.displayName} ×${sel.qty}',
                   style: const TextStyle(
                       fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
                 ),
@@ -615,19 +618,46 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   }
 
   Future<void> _addOrEditPromoFree(Product p, PromoFreeSelection? existing) async {
+    // Pilih variant dulu bila produk punya variant aktif (item bonus pun perlu).
+    ProductVariant? variant = existing?.variant;
+    List<ProductVariant> variants = const [];
+    try {
+      variants = await ref.read(productVariantsProvider(p.id).future);
+    } catch (_) {
+      variants = const [];
+    }
+    if (!mounted) return;
+    if (variants.isNotEmpty) {
+      variant = await showVariantPicker(context, product: p, variants: variants);
+      if (variant == null) return; // dibatalkan
+      if (!mounted) return;
+    }
+
+    // Item gratis (bonus) TIDAK boleh menambah topping berbayar — hanya topping
+    // gratis (dalam slot). Kalau produk tak punya slot topping gratis, langsung
+    // tambahkan tanpa membuka picker.
+    if (!p.hasFreeToppings) {
+      ref.read(productTransactionProvider.notifier).setPromoFreeItem(
+            p,
+            variant: variant,
+            qty: existing?.qty ?? 1,
+          );
+      return;
+    }
+
     final result = await showToppingPicker(
       context,
       product: p,
       initialQty: existing?.qty ?? 1,
       initialFree: existing?.freeToppings ?? const [],
-      initialExtra: existing?.extraToppings ?? const [],
+      allowExtra: false, // topping berbayar tidak tersedia untuk item gratis
     );
     if (result == null) return;
     ref.read(productTransactionProvider.notifier).setPromoFreeItem(
           p,
+          variant: variant,
           qty: result.quantity,
           freeToppings: result.freeToppings,
-          extraToppings: result.extraToppings,
         );
   }
 

@@ -18,14 +18,17 @@ class ProductTransactionPage extends ConsumerWidget {
   Future<void> _onProductTap(BuildContext context, WidgetRef ref, Product product) async {
     final notifier = ref.read(productTransactionProvider.notifier);
 
-    // 1. Ambil variant aktif. Bila gagal, jangan blokir kasir → lanjut tanpa variant.
-    List<ProductVariant> variants = const [];
-    try {
-      variants = await ref.read(productVariantsProvider(product.id).future);
-    } catch (_) {
-      variants = const [];
+    // 1. Variant: pakai yang sudah embedded dari list produk; fallback fetch
+    //    hanya bila ditandai punya variant tapi datanya belum ada.
+    List<ProductVariant> variants = product.variants;
+    if (product.hasVariants && variants.isEmpty) {
+      try {
+        variants = await ref.read(productVariantsProvider(product.id).future);
+      } catch (_) {
+        variants = const [];
+      }
+      if (!context.mounted) return;
     }
-    if (!context.mounted) return;
 
     // 2. Bila produk punya variant aktif, kasir wajib memilih salah satu.
     ProductVariant? variant;
@@ -121,14 +124,9 @@ class ProductTransactionPage extends ConsumerWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Expanded(
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: AppTheme.bgLight,
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
-                                    child: const Center(
-                                      child: Icon(Icons.inventory_2_outlined, color: AppTheme.brandBlue, size: 40),
-                                    ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(16),
+                                    child: _ProductThumb(imageUrl: product.imageUrl),
                                   ),
                                 ),
                                 const SizedBox(height: 12),
@@ -144,7 +142,9 @@ class ProductTransactionPage extends ConsumerWidget {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  formatRupiah(product.sellingPriceNum),
+                                  product.hasVariants
+                                      ? "mulai ${formatRupiah(product.minVariantPriceNum)}"
+                                      : formatRupiah(product.sellingPriceNum),
                                   style: const TextStyle(
                                     color: AppTheme.brandBlue,
                                     fontWeight: FontWeight.w800,
@@ -241,6 +241,45 @@ class ProductTransactionPage extends ConsumerWidget {
                 ),
               ),
             ),
+    );
+  }
+}
+
+/// Gambar produk dengan fallback ikon (saat tidak ada URL / gagal dimuat).
+class _ProductThumb extends StatelessWidget {
+  final String? imageUrl;
+  const _ProductThumb({required this.imageUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    final placeholder = Container(
+      color: AppTheme.bgLight,
+      child: const Center(
+        child: Icon(Icons.inventory_2_outlined, color: AppTheme.brandBlue, size: 40),
+      ),
+    );
+
+    if (imageUrl == null) return placeholder;
+
+    return Image.network(
+      imageUrl!,
+      fit: BoxFit.cover,
+      width: double.infinity,
+      height: double.infinity,
+      errorBuilder: (_, __, ___) => placeholder,
+      loadingBuilder: (context, child, progress) {
+        if (progress == null) return child;
+        return Container(
+          color: AppTheme.bgLight,
+          child: const Center(
+            child: SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        );
+      },
     );
   }
 }

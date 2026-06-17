@@ -81,12 +81,14 @@ class TransactionItem {
 class PromoFreeItem {
   final int promoId;
   final int productId;
+  final int? variantId; // null = produk tanpa variant
   final int qty;
-  final List<ToppingSelection> extraToppings; // extra topping pada item gratis (tetap ditagih)
+  final List<ToppingSelection> extraToppings; // extra topping pada item gratis
 
   PromoFreeItem({
     required this.promoId,
     required this.productId,
+    this.variantId,
     required this.qty,
     this.extraToppings = const [],
   });
@@ -95,9 +97,9 @@ class PromoFreeItem {
     return {
       'promo_id': promoId,
       'product_id': productId,
+      if (variantId != null) 'variant_id': variantId,
       'qty': qty,
-      if (extraToppings.isNotEmpty)
-        'extra_toppings': extraToppings.map((t) => t.toJson()).toList(),
+      'extra_toppings': extraToppings.map((t) => t.toJson()).toList(),
     };
   }
 }

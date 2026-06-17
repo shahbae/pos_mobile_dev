@@ -81,25 +81,35 @@ class CartItem {
 /// free topping (dalam slot) gratis, extra topping tetap ditagih.
 class PromoFreeSelection {
   final Product product;
+  final ProductVariant? variant; // null = produk tanpa variant
   final int qty;
   final List<CartTopping> freeToppings;
   final List<CartTopping> extraToppings;
 
   PromoFreeSelection({
     required this.product,
+    this.variant,
     required this.qty,
     this.freeToppings = const [],
     this.extraToppings = const [],
   });
 
+  /// Harga satuan item bonus (harga variant bila ada, kalau tidak harga produk).
+  num get unitPrice => variant?.sellingPriceNum ?? product.sellingPriceNum;
+
+  /// Nama tampilan: "Produk - Variant" bila ada variant.
+  String get displayName =>
+      variant != null ? '${product.name} - ${variant!.name}' : product.name;
+
   /// Nilai produk yang digratiskan (dipotong promo).
-  num get productValue => product.sellingPriceNum * qty;
+  num get productValue => unitPrice * qty;
 
   /// Nilai extra topping yang TETAP ditagih.
   num get extraValue => extraToppings.fold(0, (s, t) => s + t.lineTotal);
 
   PromoFreeSelection copyWith({int? qty}) => PromoFreeSelection(
         product: product,
+        variant: variant,
         qty: qty ?? this.qty,
         freeToppings: freeToppings,
         extraToppings: extraToppings,
@@ -266,6 +276,7 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
   /// Set item gratis (bonus) untuk sebuah produk, beserta toppingnya (0 = hapus).
   void setPromoFreeItem(
     Product product, {
+    ProductVariant? variant,
     required int qty,
     List<CartTopping> freeToppings = const [],
     List<CartTopping> extraToppings = const [],
@@ -274,6 +285,7 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
     if (qty > 0) {
       list.add(PromoFreeSelection(
         product: product,
+        variant: variant,
         qty: qty,
         freeToppings: freeToppings,
         extraToppings: extraToppings,
@@ -322,26 +334,20 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
     final promo = state.selectedPromo;
     final freeSelections = (promo == null) ? const <PromoFreeSelection>[] : state.promoFreeItems;
 
+    // Item bonus dikirim HANYA lewat promo_free_items (dengan variant_id +
+    // extra_toppings), TIDAK diduplikasi ke items[]. items[] hanya berisi qty
+    // yang dibayar. BE menggratiskan produk bonus & menagih extra toppingnya.
     final promoFreeItems = freeSelections
         .map((p) => PromoFreeItem(
               promoId: promo!.id,
               productId: p.product.id,
+              variantId: p.variant?.id,
               qty: p.qty,
+              extraToppings: p.extraToppings.map((t) => t.toSelection()).toList(),
             ))
         .toList();
 
-    // items[] memuat item dibayar + item gratis (bonus, beserta toppingnya).
-    // Extra topping pada item bonus tetap ditagih → dikirim di items[], TIDAK
-    // di promo_free_items, sehingga BE hanya menggratiskan harga produknya.
-    final items = [
-      ...state.items.map((i) => i.toTransactionItem()),
-      ...freeSelections.map((p) => TransactionItem(
-            productId: p.product.id,
-            quantity: p.qty,
-            freeToppings: p.freeToppings.map((t) => t.toSelection()).toList(),
-            extraToppings: p.extraToppings.map((t) => t.toSelection()).toList(),
-          )),
-    ];
+    final items = state.items.map((i) => i.toTransactionItem()).toList();
 
     final request = ProductTransactionRequest(
       items: items,

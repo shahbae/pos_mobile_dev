@@ -174,9 +174,22 @@ class _ProductListPageState extends ConsumerState<ProductListPage> {
     final theme = Theme.of(context);
 
     return ListTile(
-      leading: Icon(
-        Icons.inventory_2_outlined,
-        color: theme.colorScheme.primary,
+      leading: SizedBox(
+        width: 48,
+        height: 48,
+        child: p.imageUrl == null
+            ? Icon(Icons.inventory_2_outlined, color: theme.colorScheme.primary)
+            : ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(
+                  p.imageUrl!,
+                  width: 48,
+                  height: 48,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) =>
+                      Icon(Icons.inventory_2_outlined, color: theme.colorScheme.primary),
+                ),
+              ),
       ),
       title: Text(
         p.name,

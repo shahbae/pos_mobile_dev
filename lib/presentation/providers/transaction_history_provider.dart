@@ -7,20 +7,12 @@ class TransactionHistoryState {
   final bool loading;
   final bool hasMore;
   final int page;
-  final List<String>? transactionTypes;
-  final String? status;
-  final DateTime? from;
-  final DateTime? to;
 
   TransactionHistoryState({
     this.items = const [],
     this.loading = false,
     this.hasMore = true,
     this.page = 1,
-    this.transactionTypes,
-    this.status,
-    this.from,
-    this.to,
   });
 
   TransactionHistoryState copyWith({
@@ -28,20 +20,12 @@ class TransactionHistoryState {
     bool? loading,
     bool? hasMore,
     int? page,
-    List<String>? transactionTypes,
-    String? status,
-    DateTime? from,
-    DateTime? to,
   }) {
     return TransactionHistoryState(
       items: items ?? this.items,
       loading: loading ?? this.loading,
       hasMore: hasMore ?? this.hasMore,
       page: page ?? this.page,
-      transactionTypes: transactionTypes ?? this.transactionTypes,
-      status: status ?? this.status,
-      from: from ?? this.from,
-      to: to ?? this.to,
     );
   }
 }
@@ -67,21 +51,24 @@ class TransactionHistoryNotifier extends StateNotifier<TransactionHistoryState> 
     final page = reset ? 1 : state.page;
     state = state.copyWith(loading: true);
 
-    // Riwayat transaksi dibatasi hanya hari ini.
+    // Riwayat dibatasi: hanya transaksi POS, hanya hari ini.
     final today = _formatDate(DateTime.now());
 
     try {
       final result = await repo.getTransactions(
         page: page,
         limit: 20,
-        transactionTypes: state.transactionTypes,
-        status: state.status,
+        type: 'pos',
         from: today,
         to: today,
       );
 
+      // Pengaman: pastikan hanya POS yang tampil walau server mengabaikan
+      // filter `type`. hasMore tetap dihitung dari jumlah baris mentah/halaman.
+      final posItems = result.items.where((t) => t.isPos).toList();
+
       state = state.copyWith(
-        items: reset ? result.items : [...state.items, ...result.items],
+        items: reset ? posItems : [...state.items, ...posItems],
         loading: false,
         hasMore: result.items.length == 20,
         page: page + 1,
@@ -90,30 +77,6 @@ class TransactionHistoryNotifier extends StateNotifier<TransactionHistoryState> 
       state = state.copyWith(loading: false);
       // Handle error if needed
     }
-  }
-
-  void setFilter({
-    String? transactionType,
-    List<String>? transactionTypes,
-    String? status,
-    DateTime? from,
-    DateTime? to,
-  }) {
-    final resolvedTypes = transactionTypes ??
-        (transactionType == null ? null : <String>[transactionType]);
-
-    state = TransactionHistoryState(
-      transactionTypes: resolvedTypes,
-      status: status,
-      from: from,
-      to: to,
-    );
-    load(reset: true);
-  }
-
-  void resetFilters() {
-    state = TransactionHistoryState();
-    load(reset: true);
   }
 }
 
