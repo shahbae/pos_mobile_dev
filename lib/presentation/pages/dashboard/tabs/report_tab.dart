@@ -17,6 +17,7 @@ class ReportTab extends ConsumerWidget {
     const accent = Color(0xFF22C55E);
     final role = ref.watch(authProvider).role;
     final canReports = hasFeature(role, AppFeature.reports);
+    final canStockAlerts = hasFeature(role, AppFeature.stockAlerts);
     final canTransactions = hasFeature(role, AppFeature.transactions);
 
     return ListView(
@@ -78,19 +79,6 @@ class ReportTab extends ConsumerWidget {
           ),
           const SizedBox(height: 16),
           _ReportMenuCard(
-            title: "Stok Menipis",
-            subtitle: "Daftar produk di bawah threshold",
-            icon: Icons.warning_amber_rounded,
-            color: accent,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const StockAlertsReportPage()),
-              );
-            },
-          ),
-          const SizedBox(height: 16),
-          _ReportMenuCard(
             title: "Laporan Pembayaran",
             subtitle: "Ringkasan pembayaran per metode",
             icon: Icons.payments_outlined,
@@ -99,6 +87,21 @@ class ReportTab extends ConsumerWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const PaymentsReportPage()),
+              );
+            },
+          ),
+        ],
+        if (canStockAlerts) ...[
+          const SizedBox(height: 16),
+          _ReportMenuCard(
+            title: "Stok Menipis",
+            subtitle: "Daftar produk di bawah threshold",
+            icon: Icons.warning_amber_rounded,
+            color: accent,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const StockAlertsReportPage()),
               );
             },
           ),

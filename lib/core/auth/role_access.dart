@@ -12,7 +12,8 @@ enum AppFeature {
   pos, // POST /product-transactions (transaksi baru)
   dashboard, // GET /dashboard/operational (tab Beranda)
   transactions, // GET /transactions (Riwayat Penjualan)
-  reports, // GET /reports/* (harian, pembayaran, stok menipis)
+  reports, // GET /reports/daily, /reports/payments (Laporan Harian & Pembayaran)
+  stockAlerts, // GET /reports/stock-alerts (Stok Menipis) — gate terpisah
   products, // GET /products (katalog baca di tab Stok)
   purchases, // /purchases (Pembelian)
   stockMaterial, // /stock-levels (+ adjust)
@@ -35,6 +36,7 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.dashboard,
         AppFeature.transactions,
         AppFeature.reports,
+        AppFeature.stockAlerts,
         AppFeature.products,
         AppFeature.purchases,
         AppFeature.stockMaterial,
@@ -52,6 +54,7 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.dashboard,
         AppFeature.transactions,
         AppFeature.reports,
+        AppFeature.stockAlerts,
         AppFeature.products,
         AppFeature.purchases,
         AppFeature.stockMaterial,
@@ -64,18 +67,18 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.attendance,
       };
     case 'leader':
-      // Operasional cabang. TANPA reports.
+      // Operasional cabang. TANPA POS, reports, & audit stok
+      // (per arahan user 2026-06-20; matriks menandai leader ✅ untuk semua itu).
       return {
-        AppFeature.pos,
         AppFeature.dashboard,
         AppFeature.transactions,
+        AppFeature.stockAlerts, // peringatan stok (per arahan user 2026-06-20)
         AppFeature.products,
         AppFeature.purchases,
         AppFeature.stockMaterial,
         AppFeature.stockTopping,
         AppFeature.stockMovements,
         AppFeature.toppingMovements,
-        AppFeature.stockAudit,
         AppFeature.expenses,
         AppFeature.shift,
         AppFeature.attendance,
@@ -86,6 +89,7 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.dashboard,
         AppFeature.transactions,
         AppFeature.reports,
+        AppFeature.stockAlerts,
         AppFeature.products,
         AppFeature.purchases,
         AppFeature.stockMaterial,
@@ -106,9 +110,12 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.attendance,
       };
     case 'karyawan':
-      // POS + shift + absensi.
+      // POS + shift + absensi + riwayat transaksi.
+      // CATATAN: matriks (baris 243) menandai GET /transactions ❌ untuk
+      // karyawan, tapi per arahan user karyawan boleh akses transaksi.
       return {
         AppFeature.pos,
+        AppFeature.transactions,
         AppFeature.shift,
         AppFeature.attendance,
       };
@@ -132,8 +139,22 @@ bool hasFeature(String? role, AppFeature f) => featuresForRole(role).contains(f)
 // Gating aksi tulis di dalam halaman (mencegah 403 untuk role read-only).
 // ---------------------------------------------------------------------------
 
-/// Boleh menyesuaikan (adjust) stok material/topping. Finance = lihat saja.
+/// Boleh menyesuaikan (adjust) stok material/topping.
+/// Hanya Owner & Supervisor — Leader & Finance lihat saja.
+/// (Per arahan user 2026-06-20: leader read-only stok. Matriks menandai
+/// leader ✅ untuk adjust, jadi ini penyimpangan yang disengaja.)
 bool canAdjustStock(String? role) {
+  switch (role?.toLowerCase()) {
+    case 'owner':
+    case 'supervisor':
+      return true;
+    default:
+      return false;
+  }
+}
+
+/// Boleh membuat pembelian. Owner/Supervisor/Leader. Finance hanya lihat.
+bool canCreatePurchase(String? role) {
   switch (role?.toLowerCase()) {
     case 'owner':
     case 'supervisor':
@@ -144,10 +165,7 @@ bool canAdjustStock(String? role) {
   }
 }
 
-/// Boleh membuat pembelian. Finance hanya lihat.
-bool canCreatePurchase(String? role) => canAdjustStock(role);
-
-/// Boleh membuat audit stok. Finance hanya lihat.
+/// Boleh membuat audit stok. Hanya Owner & Supervisor (leader tak akses audit).
 bool canCreateAudit(String? role) => canAdjustStock(role);
 
 /// Boleh menyetujui (approve) audit stok. Hanya Owner & Supervisor.

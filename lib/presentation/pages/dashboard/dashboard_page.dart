@@ -43,6 +43,7 @@ class DashboardPage extends ConsumerWidget {
 
   static bool _showReportTab(String? role) =>
       hasFeature(role, AppFeature.reports) ||
+      hasFeature(role, AppFeature.stockAlerts) ||
       hasFeature(role, AppFeature.transactions);
 
   /// Daftar tab yang terlihat untuk role ini (urut: Beranda, Stok, Laporan, Pengaturan).
