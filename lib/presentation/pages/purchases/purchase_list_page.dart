@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/purchase_provider.dart';
+import '../../providers/auth_provider.dart';
+import '../../../core/auth/role_access.dart';
 import '../../../data/models/purchase_model.dart';
 import '../../../utils/currency.dart';
 import 'purchase_form_page.dart';
@@ -137,17 +139,19 @@ class _PurchaseListPageState extends ConsumerState<PurchaseListPage> {
         ),
       ),
 
-      floatingActionButton: FloatingActionButton(
-        child: const Icon(Icons.add),
-        onPressed: () async {
-          final created = await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const PurchaseFormPage()),
-          );
+      floatingActionButton: !canCreatePurchase(ref.watch(authProvider).role)
+          ? null
+          : FloatingActionButton(
+              child: const Icon(Icons.add),
+              onPressed: () async {
+                final created = await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PurchaseFormPage()),
+                );
 
-          if (created == true) _load(reset: true);
-        },
-      ),
+                if (created == true) _load(reset: true);
+              },
+            ),
 
       body: isInitialLoading
           ? const Center(child: CircularProgressIndicator())

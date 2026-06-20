@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/data/models/stock_audit_model.dart';
+import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/stock_audit_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'stock_audit_detail_page.dart';
@@ -14,22 +16,25 @@ class StockAuditListPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final auditsAsync = ref.watch(stockAuditListProvider);
+    final canCreate = canCreateAudit(ref.watch(authProvider).role);
 
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
       appBar: AppBar(title: const Text('Audit Stok'), centerTitle: true),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AppTheme.brandBlue,
-        icon: const Icon(Icons.add),
-        label: const Text('Audit Baru'),
-        onPressed: () async {
-          final created = await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const StockAuditFormPage()),
-          );
-          if (created == true) ref.invalidate(stockAuditListProvider);
-        },
-      ),
+      floatingActionButton: !canCreate
+          ? null
+          : FloatingActionButton.extended(
+              backgroundColor: AppTheme.brandBlue,
+              icon: const Icon(Icons.add),
+              label: const Text('Audit Baru'),
+              onPressed: () async {
+                final created = await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const StockAuditFormPage()),
+                );
+                if (created == true) ref.invalidate(stockAuditListProvider);
+              },
+            ),
       body: RefreshIndicator(
         onRefresh: () async => ref.invalidate(stockAuditListProvider),
         child: auditsAsync.when(

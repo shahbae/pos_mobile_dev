@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/data/models/shift_model.dart';
 import 'package:pos_mobile/data/repositories/shift_repository.dart';
 import 'package:pos_mobile/presentation/pages/shifts/shift_page.dart';
+import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/shift_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
@@ -13,6 +15,9 @@ import 'package:pos_mobile/theme/app_theme.dart';
 /// cek `GET /shifts/current` lebih dulu; bila belum ada shift aktif, kasir
 /// diarahkan ke halaman buka shift. Mengembalikan `true` bila boleh lanjut.
 Future<bool> ensureActiveShift(BuildContext context, WidgetRef ref) async {
+  // Role tanpa fitur shift (mis. Produksi) tidak perlu—dan tidak boleh—cek shift.
+  if (!hasFeature(ref.read(authProvider).role, AppFeature.shift)) return true;
+
   final shift = await _fetchCurrentShift(context, ref);
   if (shift != null && shift.isOpen) return true;
   if (!context.mounted) return false;

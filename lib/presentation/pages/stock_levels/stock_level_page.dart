@@ -3,8 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/data/models/material_model.dart';
 import 'package:pos_mobile/data/models/stock_level_model.dart';
+import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/material_provider.dart';
 import 'package:pos_mobile/presentation/providers/stock_level_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
@@ -57,7 +59,9 @@ class StockLevelPage extends ConsumerWidget {
                 return _StockRow(
                   level: lv,
                   material: mat,
-                  onAdjust: () => _showAdjustDialog(context, ref, lv, mat),
+                  onAdjust: canAdjustStock(ref.watch(authProvider).role)
+                      ? () => _showAdjustDialog(context, ref, lv, mat)
+                      : null,
                 );
               },
             );
@@ -140,7 +144,7 @@ class StockLevelPage extends ConsumerWidget {
 class _StockRow extends StatelessWidget {
   final StockLevelModel level;
   final MaterialItem? material;
-  final VoidCallback onAdjust;
+  final VoidCallback? onAdjust;
 
   const _StockRow({required this.level, required this.material, required this.onAdjust});
 
@@ -174,16 +178,17 @@ class _StockRow extends StatelessWidget {
               ],
             ),
           ),
-          OutlinedButton.icon(
-            onPressed: onAdjust,
-            icon: const Icon(Icons.tune, size: 16),
-            label: const Text('Sesuaikan'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppTheme.brandBlue,
-              side: const BorderSide(color: AppTheme.brandBlue),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          if (onAdjust != null)
+            OutlinedButton.icon(
+              onPressed: onAdjust,
+              icon: const Icon(Icons.tune, size: 16),
+              label: const Text('Sesuaikan'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.brandBlue,
+                side: const BorderSide(color: AppTheme.brandBlue),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
             ),
-          ),
         ],
       ),
     );

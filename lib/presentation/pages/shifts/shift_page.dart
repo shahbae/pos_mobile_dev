@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/core/utils/currency_input_formatter.dart';
 import 'package:pos_mobile/data/models/shift_model.dart';
 import 'package:pos_mobile/data/repositories/shift_repository.dart';
 import 'package:pos_mobile/presentation/pages/shifts/shift_list_page.dart';
+import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/shift_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/utils/currency.dart';
@@ -15,7 +17,8 @@ class ShiftPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final shiftAsync = ref.watch(currentShiftProvider);
+    // Finance hanya boleh lihat riwayat (tidak buka/tutup, tidak akses shift aktif).
+    final canOperate = canOperateShift(ref.watch(authProvider).role);
 
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
@@ -32,34 +35,36 @@ class ShiftPage extends ConsumerWidget {
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () async => ref.invalidate(currentShiftProvider),
-        child: shiftAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => ListView(
-            children: [
-              const SizedBox(height: 80),
-              Center(child: Text('Gagal memuat shift:\n$e', textAlign: TextAlign.center)),
-              const SizedBox(height: 16),
-              Center(
-                child: OutlinedButton(
-                  onPressed: () => ref.invalidate(currentShiftProvider),
-                  child: const Text('Coba Lagi'),
-                ),
-              ),
-            ],
-          ),
-          data: (shift) => ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
-              if (shift == null)
-                _NoShiftCard(onOpen: () => _openShift(context, ref))
-              else
-                _ActiveShiftCard(shift: shift, onClose: () => _closeShift(context, ref, shift)),
-            ],
-          ),
-        ),
-      ),
+      body: !canOperate
+          ? const _ReadOnlyShiftBody()
+          : RefreshIndicator(
+              onRefresh: () async => ref.invalidate(currentShiftProvider),
+              child: ref.watch(currentShiftProvider).when(
+                    loading: () => const Center(child: CircularProgressIndicator()),
+                    error: (e, _) => ListView(
+                      children: [
+                        const SizedBox(height: 80),
+                        Center(child: Text('Gagal memuat shift:\n$e', textAlign: TextAlign.center)),
+                        const SizedBox(height: 16),
+                        Center(
+                          child: OutlinedButton(
+                            onPressed: () => ref.invalidate(currentShiftProvider),
+                            child: const Text('Coba Lagi'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    data: (shift) => ListView(
+                      padding: const EdgeInsets.all(20),
+                      children: [
+                        if (shift == null)
+                          _NoShiftCard(onOpen: () => _openShift(context, ref))
+                        else
+                          _ActiveShiftCard(shift: shift, onClose: () => _closeShift(context, ref, shift)),
+                      ],
+                    ),
+                  ),
+            ),
     );
   }
 
@@ -194,6 +199,57 @@ String paymentLabel(String method) {
       return 'Internal';
     default:
       return method;
+  }
+}
+
+/// Tampilan shift untuk role read-only (Finance): hanya riwayat.
+class _ReadOnlyShiftBody extends StatelessWidget {
+  const _ReadOnlyShiftBody();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppTheme.borderLight),
+          ),
+          child: const Row(
+            children: [
+              Icon(Icons.visibility_outlined, color: AppTheme.textSecondary),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Anda hanya dapat melihat riwayat shift. '
+                  'Buka/tutup shift dilakukan oleh kasir.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ShiftListPage()),
+            ),
+            icon: const Icon(Icons.history),
+            label: const Text('Lihat Riwayat Shift'),
+          ),
+        ),
+      ],
+    );
   }
 }
 

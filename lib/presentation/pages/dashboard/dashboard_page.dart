@@ -14,20 +14,64 @@ import 'package:pos_mobile/presentation/pages/product_transactions/product_trans
 import 'package:pos_mobile/presentation/pages/shifts/shift_guard.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
+/// Spesifikasi satu tab pada navigasi bawah / rail.
+class _TabSpec {
+  final int pageIndex; // index ke daftar `pages`
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+  const _TabSpec(this.pageIndex, this.icon, this.activeIcon, this.label);
+}
+
 class DashboardPage extends ConsumerWidget {
   const DashboardPage({super.key});
 
+  // Apakah role punya menu apa pun di tab Stok?
+  static bool _showStockTab(String? role) {
+    const stockish = {
+      AppFeature.products,
+      AppFeature.purchases,
+      AppFeature.stockMaterial,
+      AppFeature.stockTopping,
+      AppFeature.stockMovements,
+      AppFeature.toppingMovements,
+      AppFeature.stockAudit,
+      AppFeature.expenses,
+    };
+    return featuresForRole(role).any(stockish.contains);
+  }
+
+  static bool _showReportTab(String? role) =>
+      hasFeature(role, AppFeature.reports) ||
+      hasFeature(role, AppFeature.transactions);
+
+  /// Daftar tab yang terlihat untuk role ini (urut: Beranda, Stok, Laporan, Pengaturan).
+  List<_TabSpec> _visibleTabs(String? role) {
+    return [
+      if (hasFeature(role, AppFeature.dashboard))
+        const _TabSpec(0, Icons.dashboard_outlined, Icons.dashboard, 'Beranda'),
+      if (_showStockTab(role))
+        const _TabSpec(2, Icons.inventory_2_outlined, Icons.inventory_2, 'Stok'),
+      if (_showReportTab(role))
+        const _TabSpec(3, Icons.bar_chart_outlined, Icons.bar_chart, 'Laporan'),
+      const _TabSpec(4, Icons.settings_outlined, Icons.settings, 'Pengaturan'),
+    ];
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final access = accessForRole(ref.watch(authProvider).role);
-    final isStockOnly = access == AppAccess.stockOnly;
+    final role = ref.watch(authProvider).role;
+    final tabs = _visibleTabs(role);
+    final showFab = hasFeature(role, AppFeature.pos);
 
     final rawIndex = ref.watch(dashboardIndexProvider);
-    // Role stok-saja hanya boleh halaman Stok(2) & Pengaturan(4).
-    final index = isStockOnly ? (rawIndex == 4 ? 4 : 2) : rawIndex;
+    // Pastikan index aktif termasuk tab yang terlihat; kalau tidak → tab pertama.
+    final visibleIndices = tabs.map((t) => t.pageIndex).toSet();
+    final index = visibleIndices.contains(rawIndex) ? rawIndex : tabs.first.pageIndex;
 
     final shortest = MediaQuery.of(context).size.shortestSide;
-    final isTablet = shortest >= 600;
+    // NavigationRail butuh minimal 2 destinasi; kalau cuma 1 tab, pakai bottom bar.
+    final showSidebar = shortest >= 600 && tabs.length >= 2;
     final theme = Theme.of(context);
     final titleColor = index == 1 ? AppTheme.textPrimary : theme.colorScheme.primary;
 
@@ -77,15 +121,19 @@ class DashboardPage extends ConsumerWidget {
       body: SafeArea(
         child: Row(
           children: [
-            if (isTablet)
-              _Sidebar(index: index, isStockOnly: isStockOnly, onNewTransaction: startTransaction),
-
+            if (showSidebar)
+              _Sidebar(
+                tabs: tabs,
+                currentPageIndex: index,
+                showNewTransaction: showFab,
+                onNewTransaction: startTransaction,
+              ),
             Expanded(child: pages[index]),
           ],
         ),
       ),
 
-      floatingActionButton: (isTablet || isStockOnly)
+      floatingActionButton: (showSidebar || !showFab)
           ? null
           : Container(
               decoration: BoxDecoration(
@@ -94,7 +142,7 @@ class DashboardPage extends ConsumerWidget {
                     color: AppTheme.brandBlue.withOpacity(0.33),
                     blurRadius: 22,
                     spreadRadius: 4,
-                    offset: Offset(0, 4),
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
@@ -108,56 +156,28 @@ class DashboardPage extends ConsumerWidget {
 
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
 
-      bottomNavigationBar: isTablet
+      bottomNavigationBar: showSidebar
           ? null
-          : (isStockOnly ? const _StockOnlyBottomBar() : const _BottomBar()),
+          : _BottomBar(tabs: tabs, currentPageIndex: index, withFabNotch: showFab),
     );
   }
 }
 
 class _Sidebar extends ConsumerWidget {
-  final int index;
-  final bool isStockOnly;
+  final List<_TabSpec> tabs;
+  final int currentPageIndex;
+  final bool showNewTransaction;
   final VoidCallback onNewTransaction;
-  const _Sidebar({required this.index, required this.isStockOnly, required this.onNewTransaction});
-
-  // Posisi menu rail -> index halaman sebenarnya.
-  // (index 1 = SalesTab placeholder, diakses lewat tombol transaksi baru)
-  List<int> get _pageIndices => isStockOnly ? const [2, 4] : const [0, 2, 3, 4];
+  const _Sidebar({
+    required this.tabs,
+    required this.currentPageIndex,
+    required this.showNewTransaction,
+    required this.onNewTransaction,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selected = _pageIndices.indexOf(index);
-
-    final destinations = isStockOnly
-        ? const [
-            NavigationRailDestination(
-              icon: Icon(Icons.inventory_2_outlined),
-              label: Text("Stok"),
-            ),
-            NavigationRailDestination(
-              icon: Icon(Icons.settings_outlined),
-              label: Text("Pengaturan"),
-            ),
-          ]
-        : const [
-            NavigationRailDestination(
-              icon: Icon(Icons.home_outlined),
-              label: Text("Beranda"),
-            ),
-            NavigationRailDestination(
-              icon: Icon(Icons.inventory_2_outlined),
-              label: Text("Stok"),
-            ),
-            NavigationRailDestination(
-              icon: Icon(Icons.bar_chart_outlined),
-              label: Text("Laporan"),
-            ),
-            NavigationRailDestination(
-              icon: Icon(Icons.settings_outlined),
-              label: Text("Pengaturan"),
-            ),
-          ];
+    final selected = tabs.indexWhere((t) => t.pageIndex == currentPageIndex);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -174,9 +194,8 @@ class _Sidebar extends ConsumerWidget {
                 unselectedLabelTextStyle: const TextStyle(color: Colors.white70),
                 selectedIndex: selected < 0 ? null : selected,
                 labelType: NavigationRailLabelType.all,
-                leading: isStockOnly
-                    ? null
-                    : Padding(
+                leading: showNewTransaction
+                    ? Padding(
                         padding: const EdgeInsets.only(bottom: 8),
                         child: FloatingActionButton(
                           heroTag: 'tabletNewTransaction',
@@ -187,10 +206,18 @@ class _Sidebar extends ConsumerWidget {
                           onPressed: onNewTransaction,
                           child: const Icon(Icons.add, size: 28),
                         ),
-                      ),
-                onDestinationSelected: (value) =>
-                    ref.read(dashboardIndexProvider.notifier).state = _pageIndices[value],
-                destinations: destinations,
+                      )
+                    : null,
+                onDestinationSelected: (value) => ref
+                    .read(dashboardIndexProvider.notifier)
+                    .state = tabs[value].pageIndex,
+                destinations: tabs
+                    .map((t) => NavigationRailDestination(
+                          icon: Icon(t.icon),
+                          selectedIcon: Icon(t.activeIcon),
+                          label: Text(t.label),
+                        ))
+                    .toList(),
               ),
             ),
           ),
@@ -200,94 +227,46 @@ class _Sidebar extends ConsumerWidget {
   }
 }
 
-class _StockOnlyBottomBar extends ConsumerWidget {
-  const _StockOnlyBottomBar();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final index = ref.watch(dashboardIndexProvider);
-    final onSettings = index == 4;
-
-    return BottomAppBar(
-      color: AppTheme.brandGreenDark,
-      height: 70,
-      child: Row(
-        children: [
-          Expanded(
-            child: _NavItem(
-              icon: Icons.inventory_2,
-              label: "Stok",
-              active: !onSettings,
-              onTap: () => ref.read(dashboardIndexProvider.notifier).state = 2,
-            ),
-          ),
-          Expanded(
-            child: _NavItem(
-              icon: Icons.settings,
-              label: "Pengaturan",
-              active: onSettings,
-              onTap: () => ref.read(dashboardIndexProvider.notifier).state = 4,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _BottomBar extends ConsumerWidget {
-  const _BottomBar();
+  final List<_TabSpec> tabs;
+  final int currentPageIndex;
+  final bool withFabNotch;
+  const _BottomBar({
+    required this.tabs,
+    required this.currentPageIndex,
+    required this.withFabNotch,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final index = ref.watch(dashboardIndexProvider);
+    Widget itemFor(_TabSpec t) => Expanded(
+          child: _NavItem(
+            icon: t.activeIcon,
+            label: t.label,
+            active: currentPageIndex == t.pageIndex,
+            onTap: () =>
+                ref.read(dashboardIndexProvider.notifier).state = t.pageIndex,
+          ),
+        );
+
+    final List<Widget> children;
+    if (withFabNotch) {
+      // Sisakan ruang di tengah untuk FAB POS.
+      final half = (tabs.length / 2).ceil();
+      children = [
+        ...tabs.take(half).map(itemFor),
+        const SizedBox(width: 44),
+        ...tabs.skip(half).map(itemFor),
+      ];
+    } else {
+      children = tabs.map(itemFor).toList();
+    }
 
     return BottomAppBar(
       color: AppTheme.brandGreenDark,
       height: 70,
-      shape: const CircularNotchedRectangle(),
-
-      child: Row(
-        children: [
-          Expanded(
-            child: _NavItem(
-              icon: Icons.dashboard,
-              label: "Beranda",
-              active: index == 0,
-              onTap: () => ref.read(dashboardIndexProvider.notifier).state = 0,
-            ),
-          ),
-
-          Expanded(
-            child: _NavItem(
-              icon: Icons.inventory_2,
-              label: "Stok",
-              active: index == 2,
-              onTap: () => ref.read(dashboardIndexProvider.notifier).state = 2,
-            ),
-          ),
-
-          const SizedBox(width: 44), // ruang FAB tetap ada
-
-          Expanded(
-            child: _NavItem(
-              icon: Icons.bar_chart,
-              label: "Laporan",
-              active: index == 3,
-              onTap: () => ref.read(dashboardIndexProvider.notifier).state = 3,
-            ),
-          ),
-
-          Expanded(
-            child: _NavItem(
-              icon: Icons.settings,
-              label: "Pengaturan",
-              active: index == 4,
-              onTap: () => ref.read(dashboardIndexProvider.notifier).state = 4,
-            ),
-          ),
-        ],
-      ),
+      shape: withFabNotch ? const CircularNotchedRectangle() : null,
+      child: Row(children: children),
     );
   }
 }
@@ -309,6 +288,7 @@ class _NavItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
+      behavior: HitTestBehavior.opaque,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [

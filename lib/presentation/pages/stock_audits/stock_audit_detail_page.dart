@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/data/models/stock_audit_model.dart';
+import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/stock_audit_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/utils/currency.dart';
@@ -130,7 +132,7 @@ class _StockAuditDetailPageState extends ConsumerState<StockAuditDetailPage> {
             ],
           ),
         ),
-        if (audit.isDraft)
+        if (audit.isDraft && canApproveAudit(ref.watch(authProvider).role))
           SafeArea(
             top: false,
             child: Padding(

@@ -4,6 +4,8 @@ import 'package:pos_mobile/presentation/pages/reports/daily_report_page.dart';
 import 'package:pos_mobile/presentation/pages/reports/payments_report_page.dart';
 import 'package:pos_mobile/presentation/pages/reports/stock_alerts_report_page.dart';
 import 'package:pos_mobile/presentation/pages/transactions/transaction_history_page.dart';
+import 'package:pos_mobile/core/auth/role_access.dart';
+import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
 class ReportTab extends ConsumerWidget {
@@ -13,6 +15,9 @@ class ReportTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final bottomInset = MediaQuery.of(context).padding.bottom;
     const accent = Color(0xFF22C55E);
+    final role = ref.watch(authProvider).role;
+    final canReports = hasFeature(role, AppFeature.reports);
+    final canTransactions = hasFeature(role, AppFeature.transactions);
 
     return ListView(
       padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + bottomInset + 96),
@@ -57,60 +62,64 @@ class ReportTab extends ConsumerWidget {
             ],
           ),
         ),
-        const SizedBox(height: 16),
-        _ReportMenuCard(
-          title: "Laporan Harian",
-          subtitle: "Ringkasan transaksi per hari",
-          icon: Icons.calendar_today_outlined,
-          color: accent,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const DailyReportPage()),
-            );
-          },
-        ),
-        const SizedBox(height: 16),
-        _ReportMenuCard(
-          title: "Stok Menipis",
-          subtitle: "Daftar produk di bawah threshold",
-          icon: Icons.warning_amber_rounded,
-          color: accent,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const StockAlertsReportPage()),
-            );
-          },
-        ),
-        const SizedBox(height: 16),
-        _ReportMenuCard(
-          title: "Laporan Pembayaran",
-          subtitle: "Ringkasan pembayaran per metode",
-          icon: Icons.payments_outlined,
-          color: accent,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const PaymentsReportPage()),
-            );
-          },
-        ),
-        const SizedBox(height: 16),
-        _ReportMenuCard(
-          title: "Riwayat Penjualan",
-          subtitle: "Lihat transaksi penjualan hari ini",
-          icon: Icons.receipt_long_outlined,
-          color: accent,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const TransactionHistoryListPage(),
-              ),
-            );
-          },
-        ),
+        if (canReports) ...[
+          const SizedBox(height: 16),
+          _ReportMenuCard(
+            title: "Laporan Harian",
+            subtitle: "Ringkasan transaksi per hari",
+            icon: Icons.calendar_today_outlined,
+            color: accent,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const DailyReportPage()),
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          _ReportMenuCard(
+            title: "Stok Menipis",
+            subtitle: "Daftar produk di bawah threshold",
+            icon: Icons.warning_amber_rounded,
+            color: accent,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const StockAlertsReportPage()),
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          _ReportMenuCard(
+            title: "Laporan Pembayaran",
+            subtitle: "Ringkasan pembayaran per metode",
+            icon: Icons.payments_outlined,
+            color: accent,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PaymentsReportPage()),
+              );
+            },
+          ),
+        ],
+        if (canTransactions) ...[
+          const SizedBox(height: 16),
+          _ReportMenuCard(
+            title: "Riwayat Penjualan",
+            subtitle: "Lihat transaksi penjualan hari ini",
+            icon: Icons.receipt_long_outlined,
+            color: accent,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const TransactionHistoryListPage(),
+                ),
+              );
+            },
+          ),
+        ],
       ],
     );
   }

@@ -41,6 +41,10 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Aplikasi memerlukan kamera untuk foto selfie absensi.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Aplikasi memerlukan lokasi untuk verifikasi absensi (geofence cabang).</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

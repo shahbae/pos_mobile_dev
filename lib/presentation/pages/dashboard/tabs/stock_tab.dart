@@ -20,7 +20,7 @@ class StockTab extends ConsumerWidget {
     final theme = Theme.of(context);
     final accent = theme.colorScheme.primary;
     final bottomInset = MediaQuery.of(context).padding.bottom;
-    final allowed = allowedStockMenus(ref.watch(authProvider).role);
+    final features = featuresForRole(ref.watch(authProvider).role);
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
@@ -66,7 +66,7 @@ class StockTab extends ConsumerWidget {
               ],
             ),
           ),
-          if (allowed.contains(StockMenu.produk)) ...[
+          if (features.contains(AppFeature.products)) ...[
             const SizedBox(height: 16),
             _menuItem(
               context,
@@ -79,7 +79,7 @@ class StockTab extends ConsumerWidget {
               ),
             ),
           ],
-          if (allowed.contains(StockMenu.pembelian)) ...[
+          if (features.contains(AppFeature.purchases)) ...[
             const SizedBox(height: 16),
             _menuItem(
               context,
@@ -92,7 +92,7 @@ class StockTab extends ConsumerWidget {
               ),
             ),
           ],
-          if (allowed.contains(StockMenu.stokMaterial)) ...[
+          if (features.contains(AppFeature.stockMaterial)) ...[
             const SizedBox(height: 16),
             _menuItem(
               context,
@@ -105,7 +105,7 @@ class StockTab extends ConsumerWidget {
               ),
             ),
           ],
-          if (allowed.contains(StockMenu.stokTopping)) ...[
+          if (features.contains(AppFeature.stockTopping)) ...[
             const SizedBox(height: 16),
             _menuItem(
               context,
@@ -118,7 +118,7 @@ class StockTab extends ConsumerWidget {
               ),
             ),
           ],
-          if (allowed.contains(StockMenu.riwayatMutasi)) ...[
+          if (features.contains(AppFeature.stockMovements)) ...[
             const SizedBox(height: 16),
             _menuItem(
               context,
@@ -131,7 +131,7 @@ class StockTab extends ConsumerWidget {
               ),
             ),
           ],
-          if (allowed.contains(StockMenu.riwayatTopping)) ...[
+          if (features.contains(AppFeature.toppingMovements)) ...[
             const SizedBox(height: 16),
             _menuItem(
               context,
@@ -144,7 +144,7 @@ class StockTab extends ConsumerWidget {
               ),
             ),
           ],
-          if (allowed.contains(StockMenu.auditStok)) ...[
+          if (features.contains(AppFeature.stockAudit)) ...[
             const SizedBox(height: 16),
             _menuItem(
               context,
@@ -157,7 +157,7 @@ class StockTab extends ConsumerWidget {
               ),
             ),
           ],
-          if (allowed.contains(StockMenu.pengeluaran)) ...[
+          if (features.contains(AppFeature.expenses)) ...[
             const SizedBox(height: 16),
             _menuItem(
               context,

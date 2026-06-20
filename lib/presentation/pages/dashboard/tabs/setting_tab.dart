@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
+import 'package:pos_mobile/presentation/providers/branch_provider.dart';
+import 'package:pos_mobile/presentation/widgets/branch_switch_sheet.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import '../../../pages/shifts/shift_page.dart';
 import '../../../pages/settings/printer_settings_page.dart';
+import '../../../pages/attendance/attendance_page.dart';
 
 class SettingTab extends ConsumerWidget {
   const SettingTab({super.key});
@@ -14,8 +17,9 @@ class SettingTab extends ConsumerWidget {
     final theme = Theme.of(context);
     final auth = ref.watch(authProvider);
     final role = auth.role;
-    // Role stok-saja: hanya boleh Logout di Pengaturan.
-    final isStockOnly = accessForRole(role) == AppAccess.stockOnly;
+    final canAttend = hasFeature(role, AppFeature.attendance);
+    final canShift = hasFeature(role, AppFeature.shift);
+    final currentBranch = ref.watch(currentBranchProvider);
     final accent = theme.colorScheme.primary;
     final bottomInset = MediaQuery.of(context).padding.bottom;
 
@@ -60,20 +64,44 @@ class SettingTab extends ConsumerWidget {
             ],
           ),
         ),
-        if (!isStockOnly) ...[
         const SizedBox(height: 16),
         _SettingMenuCard(
-          title: "Shift Kasir",
-          subtitle: "Buka / tutup shift & rekap kas",
-          icon: Icons.point_of_sale_outlined,
+          title: "Ganti Cabang",
+          subtitle: currentBranch?.name ?? "Pilih cabang aktif",
+          icon: Icons.store_outlined,
           color: accent,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ShiftPage()),
-            );
-          },
+          onTap: () => showBranchSwitchSheet(context),
         ),
+        if (canAttend) ...[
+          const SizedBox(height: 16),
+          _SettingMenuCard(
+            title: "Absensi",
+            subtitle: "Absen masuk & pulang pakai foto dan lokasi",
+            icon: Icons.fingerprint,
+            color: accent,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AttendancePage()),
+              );
+            },
+          ),
+        ],
+        if (canShift) ...[
+          const SizedBox(height: 16),
+          _SettingMenuCard(
+            title: "Shift Kasir",
+            subtitle: "Buka / tutup shift & rekap kas",
+            icon: Icons.point_of_sale_outlined,
+            color: accent,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ShiftPage()),
+              );
+            },
+          ),
+        ],
         const SizedBox(height: 16),
         _SettingMenuCard(
           title: "Perangkat Cetak",
@@ -87,7 +115,6 @@ class SettingTab extends ConsumerWidget {
             );
           },
         ),
-        ],
         const SizedBox(height: 16),
         _SettingMenuCard(
           title: "Logout",

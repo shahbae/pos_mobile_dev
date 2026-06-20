@@ -170,7 +170,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final branchId = _extractBranchIdFromToken(latestToken);
 
       // Role tidak diizinkan → tolak masuk.
-      if (accessForRole(role) == AppAccess.denied) {
+      if (!canAccessApp(role)) {
         await repo.logout();
         state = state.copyWith(
           status: AuthStatus.unauthenticated,
@@ -206,7 +206,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final branchId = accessToken == null ? null : _extractBranchIdFromToken(accessToken);
 
       // Role tidak diizinkan → batalkan login, bersihkan token.
-      if (accessForRole(role) == AppAccess.denied) {
+      if (!canAccessApp(role)) {
         await repo.logout();
         state = state.copyWith(
           status: AuthStatus.unauthenticated,
