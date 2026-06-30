@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:pos_mobile/data/models/product_model.dart';
 import 'package:pos_mobile/data/models/product_variant_model.dart';
 import 'package:pos_mobile/data/models/promo_model.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
@@ -9,6 +8,7 @@ import 'package:pos_mobile/presentation/providers/product_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_transaction_provider.dart';
 import 'package:pos_mobile/presentation/providers/promo_provider.dart';
 import 'package:pos_mobile/presentation/pages/product_transactions/transaction_success_page.dart';
+import 'package:pos_mobile/presentation/widgets/free_item_picker_sheet.dart';
 import 'package:pos_mobile/presentation/widgets/topping_picker_sheet.dart';
 import 'package:pos_mobile/presentation/widgets/variant_picker_sheet.dart';
 import 'package:pos_mobile/utils/currency.dart';
@@ -24,11 +24,12 @@ class _PayMethod {
 
 const _payMethods = <_PayMethod>[
   _PayMethod('CASH', 'Tunai', Icons.payments_outlined),
-  _PayMethod('TRANSFER', 'Transfer', Icons.account_balance_outlined),
   _PayMethod('QRIS', 'QRIS', Icons.qr_code_2_outlined),
-  _PayMethod('DEBIT', 'Debit', Icons.credit_card_outlined),
-  _PayMethod('CREDIT', 'Kredit', Icons.credit_score_outlined),
-  _PayMethod('EWALLET', 'E-Wallet', Icons.account_balance_wallet_outlined),
+  // Metode lain dinonaktifkan sementara — aktifkan kembali bila BE & alur siap.
+  // _PayMethod('TRANSFER', 'Transfer', Icons.account_balance_outlined),
+  // _PayMethod('DEBIT', 'Debit', Icons.credit_card_outlined),
+  // _PayMethod('CREDIT', 'Kredit', Icons.credit_score_outlined),
+  // _PayMethod('EWALLET', 'E-Wallet', Icons.account_balance_wallet_outlined),
 ];
 
 class CheckoutPage extends ConsumerStatefulWidget {
@@ -296,10 +297,10 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
             GridView.count(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 3,
+              crossAxisCount: 2,
               mainAxisSpacing: 12,
               crossAxisSpacing: 12,
-              childAspectRatio: 1.0,
+              childAspectRatio: 1.4,
               children: _payMethods
                   .map((m) => _PaymentMethodCard(
                         label: m.label,
@@ -506,12 +507,6 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     final maxFree = selected?.maxFreeQty(cart.paidQty) ?? 0;
     final remaining = maxFree - cart.selectedFreeQty;
 
-    // Produk unik di cart (untuk dipilih sebagai item gratis bonus).
-    final products = <int, Product>{};
-    for (final i in cart.items) {
-      products[i.product.id] = i.product;
-    }
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -541,18 +536,32 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
           else ...[
             _infoBox("Pilih item gratis (bonus) — sisa kuota: $remaining dari $maxFree"),
             const SizedBox(height: 8),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppTheme.borderLight),
+            if (cart.promoFreeItems.isNotEmpty)
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppTheme.borderLight),
+                ),
+                child: Column(
+                  children: cart.promoFreeItems
+                      .map((sel) => _promoFreeRow(sel, canAdd: remaining > 0))
+                      .toList(),
+                ),
               ),
-              child: Column(
-                children: products.values.map((p) {
-                  final matches = cart.promoFreeItems.where((f) => f.product.id == p.id);
-                  final sel = matches.isEmpty ? null : matches.first;
-                  return _promoFreeRow(p, sel, canAdd: remaining > 0);
-                }).toList(),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: remaining > 0 ? _pickFreeItem : null,
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text("Tambah item gratis"),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppTheme.brandBlue,
+                  side: const BorderSide(color: AppTheme.brandBlue),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
               ),
             ),
           ],
@@ -562,103 +571,80 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     );
   }
 
-  /// Satu baris produk pada selektor item gratis (bonus).
-  Widget _promoFreeRow(Product p, PromoFreeSelection? sel, {required bool canAdd}) {
-    final chips = <Widget>[
-      if (sel != null) ...[
-        ...sel.freeToppings.map((t) => _toppingChip('${t.topping.name} ×${t.qty}', true)),
-        ...sel.extraToppings
-            .map((t) => _toppingChip('${t.topping.name} ×${t.qty} (+${formatRupiah(t.lineTotal)})', false)),
-      ],
-    ];
+  /// Satu baris item gratis (bonus) yang sudah dipilih.
+  Widget _promoFreeRow(PromoFreeSelection sel, {required bool canAdd}) {
+    final notifier = ref.read(productTransactionProvider.notifier);
+    final qty = sel.qty;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  sel == null ? p.name : '${sel.displayName} ×${sel.qty}',
-                  style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
-                ),
+          Expanded(
+            child: Text(
+              '${sel.displayName} — gratis',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.green.shade700,
               ),
-              if (sel == null)
-                TextButton.icon(
-                  onPressed: canAdd ? () => _addOrEditPromoFree(p, null) : null,
-                  icon: const Icon(Icons.card_giftcard, size: 16),
-                  label: const Text("Gratiskan"),
-                  style: TextButton.styleFrom(foregroundColor: AppTheme.brandBlue),
-                )
-              else ...[
-                IconButton(
-                  onPressed: () => _addOrEditPromoFree(p, sel),
-                  icon: const Icon(Icons.tune, size: 18, color: AppTheme.brandBlue),
-                  visualDensity: VisualDensity.compact,
-                ),
-                IconButton(
-                  onPressed: () =>
-                      ref.read(productTransactionProvider.notifier).removePromoFreeItem(p.id),
-                  icon: const Icon(Icons.close, size: 18, color: AppTheme.danger),
-                  visualDensity: VisualDensity.compact,
-                ),
-              ],
-            ],
+            ),
           ),
-          if (chips.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Wrap(spacing: 6, runSpacing: 6, children: chips),
-          ],
+          _QtyButton(
+            icon: Icons.remove,
+            onTap: () =>
+                notifier.setPromoFreeItem(sel.product, variant: sel.variant, qty: qty - 1),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text("$qty",
+                style: const TextStyle(
+                    color: AppTheme.brandBlue, fontWeight: FontWeight.w800, fontSize: 15)),
+          ),
+          _QtyButton(
+            icon: Icons.add,
+            onTap: canAdd
+                ? () => notifier.setPromoFreeItem(sel.product, variant: sel.variant, qty: qty + 1)
+                : null,
+          ),
+          IconButton(
+            onPressed: () => notifier.removePromoFreeItem(sel.key),
+            icon: const Icon(Icons.close, size: 18, color: AppTheme.danger),
+            visualDensity: VisualDensity.compact,
+          ),
         ],
       ),
     );
   }
 
-  Future<void> _addOrEditPromoFree(Product p, PromoFreeSelection? existing) async {
-    // Pilih variant dulu bila produk punya variant aktif (item bonus pun perlu).
-    ProductVariant? variant = existing?.variant;
-    List<ProductVariant> variants = const [];
-    try {
-      variants = await ref.read(productVariantsProvider(p.id).future);
-    } catch (_) {
-      variants = const [];
-    }
-    if (!mounted) return;
-    if (variants.isNotEmpty) {
-      variant = await showVariantPicker(context, product: p, variants: variants);
-      if (variant == null) return; // dibatalkan
+  /// Pilih produk freeable (boleh menu lain di luar keranjang) sebagai bonus
+  /// gratis. Bila produk punya varian, kasir memilih variannya juga.
+  Future<void> _pickFreeItem() async {
+    final product = await showFreeItemPicker(context);
+    if (product == null || !mounted) return;
+
+    ProductVariant? variant;
+    if (product.hasVariants) {
+      List<ProductVariant> variants = const [];
+      try {
+        variants = await ref.read(productVariantsProvider(product.id).future);
+      } catch (_) {
+        variants = const [];
+      }
       if (!mounted) return;
+      if (variants.isNotEmpty) {
+        variant = await showVariantPicker(context, product: product, variants: variants);
+        if (variant == null || !mounted) return; // dibatalkan
+      }
     }
 
-    // Item gratis (bonus) TIDAK boleh menambah topping berbayar — hanya topping
-    // gratis (dalam slot). Kalau produk tak punya slot topping gratis, langsung
-    // tambahkan tanpa membuka picker.
-    if (!p.hasFreeToppings) {
-      ref.read(productTransactionProvider.notifier).setPromoFreeItem(
-            p,
-            variant: variant,
-            qty: existing?.qty ?? 1,
-          );
-      return;
-    }
-
-    final result = await showToppingPicker(
-      context,
-      product: p,
-      initialQty: existing?.qty ?? 1,
-      initialFree: existing?.freeToppings ?? const [],
-      allowExtra: false, // topping berbayar tidak tersedia untuk item gratis
-    );
-    if (result == null) return;
-    ref.read(productTransactionProvider.notifier).setPromoFreeItem(
-          p,
-          variant: variant,
-          qty: result.quantity,
-          freeToppings: result.freeToppings,
-        );
+    // Tambah 1 bonus untuk produk+varian ini (akumulasi bila sudah ada).
+    final key = '${product.id}_${variant?.id ?? 0}';
+    final existing = ref.read(productTransactionProvider).promoFreeItems.where((p) => p.key == key);
+    final currentQty = existing.isEmpty ? 0 : existing.first.qty;
+    ref
+        .read(productTransactionProvider.notifier)
+        .setPromoFreeItem(product, variant: variant, qty: currentQty + 1);
   }
 
   Widget _promoChip(String label, bool selected, VoidCallback onTap) {

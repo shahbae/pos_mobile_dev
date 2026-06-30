@@ -20,6 +20,15 @@ final productListProvider = FutureProvider.family<List<Product>, String?>((
   return repo.getProducts(page: 1, limit: 10, search: search ?? "");
 });
 
+/// Daftar produk `freeable` (untuk picker item gratis promo), bisa dicari.
+/// Hanya produk dari kategori freeable yang dikembalikan.
+final freeableProductsProvider =
+    FutureProvider.autoDispose.family<List<Product>, String?>((ref, search) async {
+  final repo = ref.watch(productRepositoryProvider);
+  final list = await repo.getProducts(page: 1, limit: 50, search: search ?? "");
+  return list.where((p) => p.categoryFreeable).toList();
+});
+
 /// Daftar variant aktif sebuah produk (dipakai POS saat produk ditekan).
 /// Hasil di-cache per productId selama masih dipakai (mis. dipanggil ulang).
 final productVariantsProvider =

@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pos_mobile/data/models/dashboard_model.dart';
 import 'package:pos_mobile/data/models/dashboard_operational_model.dart';
 import 'package:pos_mobile/data/repositories/dashboard_repository.dart';
 import 'package:pos_mobile/data/services/api_provider.dart';
@@ -19,4 +20,12 @@ final dashboardOperationalProvider = FutureProvider<DashboardOperationalData>((
   final date = ref.watch(dashboardDateProvider);
   final repo = ref.watch(dashboardRepositoryProvider);
   return repo.getOperational(date: date);
+});
+
+/// Dashboard adaptif per-role (GET /dashboard, revisi BE 2026-06-29).
+/// Rentang = dashboardDateProvider (default hari ini, from=to).
+final dashboardProvider = FutureProvider<DashboardData>((ref) async {
+  final date = ref.watch(dashboardDateProvider);
+  final repo = ref.watch(dashboardRepositoryProvider);
+  return repo.getDashboard(from: date, to: date);
 });

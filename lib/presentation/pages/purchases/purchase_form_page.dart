@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../data/models/purchase_template_model.dart';
 import '../../providers/purchase_provider.dart';
 import '../../providers/supplier_provider.dart';
 import '../../providers/material_provider.dart';
@@ -14,29 +16,53 @@ class PurchaseFormPage extends ConsumerStatefulWidget {
   ConsumerState<PurchaseFormPage> createState() => _PurchaseFormPageState();
 }
 
-class _PurchaseItem {
-  /// "m:<id>" untuk material, "t:<id>" untuk topping.
-  String? refKey;
-  int quantity = 1;
-  String unit = ''; // satuan item terpilih (pcs, gram, dll)
-  TextEditingController qtyController = TextEditingController(text: '1');
-  TextEditingController costController = TextEditingController();
+/// Opsi template pada dropdown — gabungan template milik material & topping.
+/// `template_id` diasumsikan unik global (1 tabel purchase_templates di BE).
+class _TemplateOption {
+  final int templateId;
+  final String ownerName; // nama material/topping
+  final String ownerType; // 'Material' | 'Topping'
+  final String unit; // base unit (gram/ml/pcs)
+  final PurchaseTemplate template;
+  final num? pricePerUnit; // estimasi harga per base unit (dari master)
 
-  int? get materialId =>
-      (refKey != null && refKey!.startsWith('m:')) ? int.tryParse(refKey!.substring(2)) : null;
-  int? get toppingId =>
-      (refKey != null && refKey!.startsWith('t:')) ? int.tryParse(refKey!.substring(2)) : null;
+  _TemplateOption({
+    required this.templateId,
+    required this.ownerName,
+    required this.ownerType,
+    required this.unit,
+    required this.template,
+    this.pricePerUnit,
+  });
+
+  /// Label dropdown: "Teh · Lusin (1200 gram)".
+  String get label {
+    final bq = template.baseQtyNum;
+    final bqStr = bq == bq.truncate() ? bq.truncate().toString() : bq.toString();
+    return '$ownerName · ${template.name} ($bqStr${unit.isNotEmpty ? ' $unit' : ''})';
+  }
+
+  /// Estimasi total untuk `qty` template (bila harga master diketahui).
+  num? estimate(int qty) {
+    if (pricePerUnit == null) return null;
+    return template.baseQtyNum * qty * pricePerUnit!;
+  }
+}
+
+class _PurchaseItem {
+  int? templateId;
+  int qty = 1;
+  final TextEditingController qtyController = TextEditingController(text: '1');
 
   _PurchaseItem() {
     qtyController.addListener(() {
       final parsed = int.tryParse(qtyController.text);
-      if (parsed != null && parsed >= 1) quantity = parsed;
+      if (parsed != null && parsed >= 1) qty = parsed;
     });
   }
 
   void dispose() {
     qtyController.dispose();
-    costController.dispose();
   }
 }
 
@@ -74,19 +100,54 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
     super.dispose();
   }
 
+  /// Bangun daftar opsi template dari semua material & topping.
+  Map<int, _TemplateOption> _buildTemplateOptions() {
+    final materials = ref.read(materialListProvider).valueOrNull ?? [];
+    final toppings = ref.read(toppingListProvider).valueOrNull ?? [];
+    final map = <int, _TemplateOption>{};
+
+    num? perUnit(String? price, String? qty) {
+      final p = num.tryParse((price ?? '').replaceAll(RegExp(r'[^0-9.]'), ''));
+      final q = num.tryParse((qty ?? '').replaceAll(RegExp(r'[^0-9.]'), ''));
+      if (p == null || q == null || q == 0) return null;
+      return p / q;
+    }
+
+    for (final m in materials) {
+      final pu = perUnit(m.purchasePrice, m.purchaseQty);
+      for (final t in m.purchaseTemplates) {
+        map[t.id] = _TemplateOption(
+          templateId: t.id,
+          ownerName: m.name,
+          ownerType: 'Material',
+          unit: m.unit,
+          template: t,
+          pricePerUnit: pu,
+        );
+      }
+    }
+    for (final tp in toppings) {
+      final pu = perUnit(tp.purchasePrice, tp.purchaseQty);
+      for (final t in tp.purchaseTemplates) {
+        map[t.id] = _TemplateOption(
+          templateId: t.id,
+          ownerName: tp.name,
+          ownerType: 'Topping',
+          unit: tp.unit,
+          template: t,
+          pricePerUnit: pu,
+        );
+      }
+    }
+    return map;
+  }
+
   // ─── SUBMIT ───────────────────────────────────────────
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_items.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Minimal harus ada 1 material')),
-      );
-      return;
-    }
 
-    // Validate that all items have a selected material/topping
     for (int i = 0; i < _items.length; i++) {
-      if (_items[i].refKey == null) {
+      if (_items[i].templateId == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Item baris ke-${i + 1} belum dipilih')),
         );
@@ -98,18 +159,10 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
 
     final repo = ref.read(purchaseRepositoryProvider);
 
-    final List<Map<String, dynamic>> itemsPayload = _items.map((it) {
-      final totalCost = int.tryParse(
-            it.costController.text.replaceAll(RegExp(r'[^0-9]'), ''),
-          ) ??
-          0;
-      return {
-        if (it.materialId != null) 'material_id': it.materialId,
-        if (it.toppingId != null) 'topping_id': it.toppingId,
-        'quantity': it.quantity.toString(), // BE expects string
-        'total_cost': '$totalCost.00',
-      };
-    }).toList();
+    // Revisi BE 2026-06-29: items berisi {template_id, qty} saja.
+    final itemsPayload = _items
+        .map((it) => {'template_id': it.templateId, 'qty': it.qty})
+        .toList();
 
     final note = _noteController.text.trim();
     final payload = {
@@ -118,13 +171,9 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
       if (note.isNotEmpty) 'note': note,
     };
 
-    debugPrint('[PurchaseForm] payload=$payload');
-
     try {
       await repo.createPurchase(payload);
-
       ref.invalidate(purchaseListProvider);
-
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -138,8 +187,7 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
           ),
           backgroundColor: const Color(0xFF10B981),
           behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           margin: const EdgeInsets.all(16),
         ),
       );
@@ -147,7 +195,6 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
-      debugPrint('Error submit: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
@@ -159,8 +206,7 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
           ),
           backgroundColor: const Color(0xFFEF4444),
           behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           margin: const EdgeInsets.all(16),
         ),
       );
@@ -174,16 +220,18 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    
-    // Watch providers for dropdowns
+
     final suppliersAsync = ref.watch(supplierListProvider(null));
     final materialsAsync = ref.watch(materialListProvider);
     final toppingsAsync = ref.watch(toppingListProvider);
 
-    // Calculate Grand Total for UI (total_cost sudah total per baris)
-    int totalEstimated = 0;
-    for (var it in _items) {
-      totalEstimated += int.tryParse(it.costController.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+    final options = _buildTemplateOptions();
+
+    // Estimasi grand total (hanya bila harga master diketahui).
+    num totalEstimated = 0;
+    for (final it in _items) {
+      final opt = it.templateId != null ? options[it.templateId] : null;
+      totalEstimated += opt?.estimate(it.qty) ?? 0;
     }
 
     return Scaffold(
@@ -239,7 +287,6 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
                         ],
                       ),
                       const SizedBox(height: 22),
-                      
                       const Text(
                         'Pilih Pemasok *',
                         style: TextStyle(
@@ -249,50 +296,27 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
                         ),
                       ),
                       const SizedBox(height: 8),
-
                       suppliersAsync.when(
                         data: (suppliers) {
-                          // Pastikan valid
                           if (_selectedSupplierId != null &&
                               !suppliers.any((s) => s.id == _selectedSupplierId)) {
                             _selectedSupplierId = null;
                           }
-
                           return DropdownButtonFormField<int>(
                             value: _selectedSupplierId,
                             validator: (v) => v == null ? 'Pemasok wajib dipilih' : null,
-                            decoration: InputDecoration(
-                              hintText: 'Pilih pemasok',
-                              filled: true,
-                              fillColor: const Color(0xFFF9FAFB),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: cs.primary, width: 1.6),
-                              ),
-                              errorBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Color(0xFFEF4444)),
-                              ),
-                              focusedErrorBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Color(0xFFEF4444), width: 1.6),
-                              ),
-                            ),
-                            items: suppliers.map((s) => DropdownMenuItem(value: s.id, child: Text(s.name))).toList(),
+                            decoration: _fieldDeco(cs, hint: 'Pilih pemasok'),
+                            items: suppliers
+                                .map((s) => DropdownMenuItem(value: s.id, child: Text(s.name)))
+                                .toList(),
                             onChanged: (v) => setState(() => _selectedSupplierId = v),
                           );
                         },
                         loading: () => const CircularProgressIndicator(),
-                        error: (_, __) => const Text('Gagal memuat pemasok', style: TextStyle(color: Colors.red)),
+                        error: (_, __) => const Text('Gagal memuat pemasok',
+                            style: TextStyle(color: Colors.red)),
                       ),
-                      
                       const SizedBox(height: 18),
-                      
                       const Text(
                         'Catatan (Opsional)',
                         style: TextStyle(
@@ -305,20 +329,7 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
                       TextFormField(
                         controller: _noteController,
                         maxLines: 2,
-                        decoration: InputDecoration(
-                          hintText: 'Contoh: pembelian stok awal',
-                          filled: true,
-                          fillColor: const Color(0xFFF9FAFB),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: cs.primary, width: 1.6),
-                          ),
-                        ),
+                        decoration: _fieldDeco(cs, hint: 'Contoh: restok mingguan'),
                       ),
                     ],
                   ),
@@ -326,7 +337,7 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
 
                 const SizedBox(height: 24),
 
-                // ── Produk Selection (Items) ──
+                // ── Items ──
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -339,196 +350,46 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
                       ),
                     ),
                     TextButton.icon(
-                      onPressed: () {
-                        setState(() {
-                          _items.add(_PurchaseItem());
-                        });
-                      },
+                      onPressed: () => setState(() => _items.add(_PurchaseItem())),
                       icon: Icon(Icons.add_shopping_cart, color: cs.primary, size: 18),
-                      label: Text('Tambah Baris', style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600)),
+                      label: Text('Tambah Baris',
+                          style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600)),
                     )
                   ],
                 ),
                 const SizedBox(height: 12),
 
-                ListView.separated(
-                  physics: const NeverScrollableScrollPhysics(),
-                  shrinkWrap: true,
-                  itemCount: _items.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 16),
-                  itemBuilder: (context, i) {
-                    final item = _items[i];
-                    return Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFE5E7EB)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text('Item #${i + 1}', style: const TextStyle(fontWeight: FontWeight.w600)),
-                              if (_items.length > 1)
-                                IconButton(
-                                  icon: const Icon(Icons.close, color: Colors.grey, size: 20),
-                                  onPressed: () {
-                                    setState(() {
-                                      _items[i].dispose();
-                                      _items.removeAt(i);
-                                    });
-                                  },
-                                  tooltip: 'Hapus baris',
-                                )
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          
-                          // Dropdown Material / Topping
-                          Builder(builder: (_) {
-                            if (materialsAsync.isLoading || toppingsAsync.isLoading) {
-                              return const Center(child: CircularProgressIndicator());
-                            }
-                            if (materialsAsync.hasError && toppingsAsync.hasError) {
-                              return const Text('Gagal memuat material & topping');
-                            }
-                            final materials = materialsAsync.valueOrNull ?? [];
-                            final toppings = toppingsAsync.valueOrNull ?? [];
-                            final validKeys = {
-                              ...materials.map((m) => 'm:${m.id}'),
-                              ...toppings.map((t) => 't:${t.id}'),
-                            };
-                            if (item.refKey != null && !validKeys.contains(item.refKey)) {
-                              item.refKey = null;
-                            }
-                            return DropdownButtonFormField<String>(
-                              value: item.refKey,
-                              isExpanded: true,
-                              validator: (v) => v == null ? 'Item wajib dipilih' : null,
-                              decoration: InputDecoration(
-                                hintText: 'Pilih material / topping...',
-                                filled: true,
-                                fillColor: const Color(0xFFF9FAFB),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-                              ),
-                              items: [
-                                ...materials.map((m) => DropdownMenuItem(
-                                      value: 'm:${m.id}',
-                                      child: Text('${m.name} — Material', overflow: TextOverflow.ellipsis),
-                                    )),
-                                ...toppings.map((t) => DropdownMenuItem(
-                                      value: 't:${t.id}',
-                                      child: Text('${t.name} — Topping', overflow: TextOverflow.ellipsis),
-                                    )),
-                              ],
-                              onChanged: (v) {
-                                setState(() {
-                                  item.refKey = v;
-                                  // Bawa default unit, qty, & total biaya dari item terpilih.
-                                  int totalCost = 0;
-                                  if (v != null && v.startsWith('m:')) {
-                                    final m = materials.firstWhere((e) => 'm:${e.id}' == v);
-                                    item.unit = m.unit;
-                                    totalCost = int.tryParse((m.purchasePrice ?? '').replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
-                                    final qty = int.tryParse((m.purchaseQty ?? '').replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
-                                    if (qty > 0) {
-                                      item.quantity = qty;
-                                      item.qtyController.text = qty.toString();
-                                    }
-                                  } else if (v != null && v.startsWith('t:')) {
-                                    final t = toppings.firstWhere((e) => 't:${e.id}' == v);
-                                    item.unit = t.unit;
-                                    totalCost = t.price;
-                                  }
-                                  if (totalCost > 0) {
-                                    item.costController.text = _formatter.format(totalCost);
-                                  }
-                                });
-                              },
-                            );
-                          }),
-
-                          const SizedBox(height: 16),
-
-                          Row(
-                            children: [
-                              Expanded(
-                                flex: 2,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      item.unit.isNotEmpty ? 'Kuantitas (${item.unit})' : 'Kuantitas',
-                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    TextFormField(
-                                      controller: item.qtyController,
-                                      keyboardType: TextInputType.number,
-                                      textAlign: TextAlign.center,
-                                      decoration: InputDecoration(
-                                        filled: true,
-                                        fillColor: const Color(0xFFF9FAFB),
-                                        suffixText: item.unit.isNotEmpty ? item.unit : null,
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-                                      ),
-                                      onChanged: (v) => setState((){}),
-                                    )
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                flex: 3,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text('Total Biaya', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                                    const SizedBox(height: 6),
-                                    TextFormField(
-                                      controller: item.costController,
-                                      keyboardType: TextInputType.number,
-                                      decoration: InputDecoration(
-                                        prefixText: 'Rp ',
-                                        filled: true,
-                                        fillColor: const Color(0xFFF9FAFB),
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-                                      ),
-                                      onChanged: (value) {
-                                        final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
-                                        final num = int.tryParse(digits) ?? 0;
-                                        if (num == 0) return;
-                                        item.costController.value = TextEditingValue(
-                                          text: _formatter.format(num),
-                                          selection: TextSelection.collapsed(offset: _formatter.format(num).length),
-                                        );
-                                        setState((){});
-                                      },
-                                    )
-                                  ],
-                                ),
-                              ),
-                            ],
-                          )
-
-                        ],
-                      ),
-                    );
-                  },
-                ),
+                if (materialsAsync.isLoading || toppingsAsync.isLoading)
+                  const Center(child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: CircularProgressIndicator(),
+                  ))
+                else if (options.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF3C7),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFFCD34D)),
+                    ),
+                    child: const Text(
+                      'Belum ada template pembelian. Atur template pada master '
+                      'material/topping terlebih dahulu (lewat admin web).',
+                      style: TextStyle(fontSize: 13, color: Color(0xFF92400E)),
+                    ),
+                  )
+                else
+                  ListView.separated(
+                    physics: const NeverScrollableScrollPhysics(),
+                    shrinkWrap: true,
+                    itemCount: _items.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 16),
+                    itemBuilder: (context, i) => _itemCard(cs, i, options),
+                  ),
 
                 const SizedBox(height: 24),
 
-                // ── Summary Totals ──
+                // ── Summary ──
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
@@ -536,16 +397,30 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: cs.primary.withOpacity(0.15)),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Total Estimasi:',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF374151)),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Estimasi Total:',
+                            style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF374151)),
+                          ),
+                          Text(
+                            'Rp ${_formatter.format(totalEstimated)}',
+                            style: TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.w800, color: cs.primary),
+                          ),
+                        ],
                       ),
+                      const SizedBox(height: 6),
                       Text(
-                        'Rp ${_formatter.format(totalEstimated)}',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: cs.primary),
+                        'Total final dihitung server berdasarkan harga master.',
+                        style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
                       ),
                     ],
                   ),
@@ -553,44 +428,35 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
 
                 const SizedBox(height: 32),
 
-                // ── Submit button ──
                 SizedBox(
                   width: double.infinity,
                   height: 52,
                   child: ElevatedButton(
-                    onPressed: _loading ? null : _submit,
+                    onPressed: (_loading || options.isEmpty) ? null : _submit,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: cs.primary,
                       foregroundColor: Colors.white,
                       disabledBackgroundColor: cs.primary.withOpacity(0.5),
                       elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
                     child: _loading
                         ? const SizedBox(
                             height: 22,
                             width: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.4,
-                              color: Colors.white,
-                            ),
+                            child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white),
                           )
                         : const Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(Icons.check_circle_outline, size: 20),
                               SizedBox(width: 8),
-                              Text(
-                                'Simpan Pembelian',
-                                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-                              ),
+                              Text('Simpan Pembelian',
+                                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
                             ],
                           ),
                   ),
                 ),
-
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
@@ -611,6 +477,180 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _itemCard(ColorScheme cs, int i, Map<int, _TemplateOption> options) {
+    final item = _items[i];
+    final opt = item.templateId != null ? options[item.templateId] : null;
+    final estimate = opt?.estimate(item.qty);
+
+    if (item.templateId != null && !options.containsKey(item.templateId)) {
+      item.templateId = null;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Item #${i + 1}', style: const TextStyle(fontWeight: FontWeight.w600)),
+              if (_items.length > 1)
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.grey, size: 20),
+                  tooltip: 'Hapus baris',
+                  onPressed: () => setState(() {
+                    _items[i].dispose();
+                    _items.removeAt(i);
+                  }),
+                )
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          // Dropdown template
+          DropdownButtonFormField<int>(
+            value: item.templateId,
+            isExpanded: true,
+            validator: (v) => v == null ? 'Template wajib dipilih' : null,
+            decoration: _fieldDeco(cs, hint: 'Pilih template pembelian...'),
+            items: options.values
+                .map((o) => DropdownMenuItem(
+                      value: o.templateId,
+                      child: Text(o.label, overflow: TextOverflow.ellipsis),
+                    ))
+                .toList(),
+            onChanged: (v) => setState(() => item.templateId = v),
+          ),
+
+          if (opt != null) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(opt.ownerType,
+                  style: TextStyle(
+                      fontSize: 10, fontWeight: FontWeight.w700, color: Colors.grey.shade600)),
+            ),
+          ],
+
+          const SizedBox(height: 16),
+
+          // Qty stepper
+          Row(
+            children: [
+              const Text('Jumlah Template',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+              const Spacer(),
+              _stepBtn(Icons.remove, () {
+                if (item.qty > 1) {
+                  setState(() {
+                    item.qty--;
+                    item.qtyController.text = item.qty.toString();
+                  });
+                }
+              }),
+              SizedBox(
+                width: 64,
+                child: TextFormField(
+                  controller: item.qtyController,
+                  textAlign: TextAlign.center,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(vertical: 10),
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+              _stepBtn(Icons.add, () {
+                setState(() {
+                  item.qty++;
+                  item.qtyController.text = item.qty.toString();
+                });
+              }),
+            ],
+          ),
+
+          if (opt != null) ...[
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '= ${_baseQtyTotal(opt, item.qty)}'
+                  '${opt.unit.isNotEmpty ? ' ${opt.unit}' : ''}',
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+                ),
+                if (estimate != null)
+                  Text(
+                    '≈ Rp ${_formatter.format(estimate)}',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _baseQtyTotal(_TemplateOption opt, int qty) {
+    final total = opt.template.baseQtyNum * qty;
+    return total == total.truncate() ? total.truncate().toString() : total.toString();
+  }
+
+  Widget _stepBtn(IconData icon, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF3F4F6),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, size: 18, color: const Color(0xFF374151)),
+      ),
+    );
+  }
+
+  InputDecoration _fieldDeco(ColorScheme cs, {required String hint}) {
+    return InputDecoration(
+      hintText: hint,
+      filled: true,
+      fillColor: const Color(0xFFF9FAFB),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: cs.primary, width: 1.6),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFEF4444)),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFEF4444), width: 1.6),
       ),
     );
   }

@@ -76,43 +76,38 @@ class CartItem {
       );
 }
 
-/// Item gratis (bonus) yang dipilih lewat promo — ditambahkan di atas item
-/// yang dibayar, tidak mengurangi item yang dibeli. Bisa diberi topping:
-/// free topping (dalam slot) gratis, extra topping tetap ditagih.
+/// Item gratis = item TAMBAHAN (bonus) di atas item yang dibayar. Bisa produk
+/// apa pun yang `freeable` (tidak harus ada di keranjang). Dikirim sebagai baris
+/// tambahan di items[] + didaftarkan di promo_free_items agar dipotong jadi 0.
+/// qty_dibayar (dasar kuota) = jumlah item yang dibayar, TIDAK termasuk bonus.
 class PromoFreeSelection {
   final Product product;
   final ProductVariant? variant; // null = produk tanpa variant
-  final int qty;
-  final List<CartTopping> freeToppings;
-  final List<CartTopping> extraToppings;
+  final int qty; // jumlah yang digratiskan
 
   PromoFreeSelection({
     required this.product,
     this.variant,
     required this.qty,
-    this.freeToppings = const [],
-    this.extraToppings = const [],
   });
 
-  /// Harga satuan item bonus (harga variant bila ada, kalau tidak harga produk).
+  /// Kunci unik per produk+varian (satu baris bonus per kombinasi).
+  String get key => '${product.id}_${variant?.id ?? 0}';
+
+  /// Harga satuan yang dipotong (harga variant bila ada, kalau tidak harga produk).
   num get unitPrice => variant?.sellingPriceNum ?? product.sellingPriceNum;
 
   /// Nama tampilan: "Produk - Variant" bila ada variant.
   String get displayName =>
       variant != null ? '${product.name} - ${variant!.name}' : product.name;
 
-  /// Nilai produk yang digratiskan (dipotong promo).
-  num get productValue => unitPrice * qty;
-
-  /// Nilai extra topping yang TETAP ditagih.
-  num get extraValue => extraToppings.fold(0, (s, t) => s + t.lineTotal);
+  /// Nilai yang dipotong promo (harga × qty gratis).
+  num get discountValue => unitPrice * qty;
 
   PromoFreeSelection copyWith({int? qty}) => PromoFreeSelection(
         product: product,
         variant: variant,
         qty: qty ?? this.qty,
-        freeToppings: freeToppings,
-        extraToppings: extraToppings,
       );
 }
 
@@ -133,26 +128,24 @@ class ProductTransactionState {
     this.lastResponse,
   });
 
-  /// Subtotal item yang dibayar (produk + extra topping). Dasar pemicu promo.
+  /// Subtotal item yang DIBAYAR (cart items). Bonus gratis tidak termasuk.
   num get paidSubtotal => items.fold(0, (sum, item) => sum + item.subtotal);
 
-  /// Jumlah item yang dibayar (qty keranjang) — dasar hitung bonus gratis.
+  /// Subtotal kotor untuk struk: item dibayar + nilai item gratis (bonus).
+  num get subtotal => paidSubtotal + promoDiscount;
+
+  /// Jumlah item yang dibayar — dasar kuota promo (qty_dibayar di BE).
+  /// Bonus gratis dikirim terpisah, jadi tidak mengurangi angka ini.
   int get paidQty => items.fold(0, (sum, item) => sum + item.quantity);
 
-  /// Nilai produk gratis (bonus) yang dipotong promo.
-  num get promoDiscount => promoFreeItems.fold(0, (sum, p) => sum + p.productValue);
-
-  /// Nilai extra topping pada item bonus yang tetap ditagih.
-  num get bonusExtraValue => promoFreeItems.fold(0, (sum, p) => sum + p.extraValue);
+  /// Total nilai item gratis (bonus) yang dipotong promo.
+  num get promoDiscount => promoFreeItems.fold(0, (sum, p) => sum + p.discountValue);
 
   /// Jumlah item gratis (bonus) yang sudah dipilih.
   int get selectedFreeQty => promoFreeItems.fold(0, (s, p) => s + p.qty);
 
-  /// Subtotal kotor termasuk produk gratis + extra toppingnya (selaras nota BE).
-  num get subtotal => paidSubtotal + promoDiscount + bonusExtraValue;
-
-  /// Total akhir = item dibayar + extra topping item bonus (produk bonus gratis).
-  num get total => (paidSubtotal + bonusExtraValue).clamp(0, double.infinity);
+  /// Total akhir = item dibayar saja (bonus gratis dipotong jadi 0).
+  num get total => paidSubtotal.clamp(0, double.infinity);
 
   ProductTransactionState copyWith({
     List<CartItem>? items,
@@ -273,35 +266,26 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
     }
   }
 
-  /// Set item gratis (bonus) untuk sebuah produk, beserta toppingnya (0 = hapus).
-  void setPromoFreeItem(
-    Product product, {
-    ProductVariant? variant,
-    required int qty,
-    List<CartTopping> freeToppings = const [],
-    List<CartTopping> extraToppings = const [],
-  }) {
-    final list = state.promoFreeItems.where((p) => p.product.id != product.id).toList();
+  /// Set jumlah bonus gratis untuk sebuah produk+varian (0 = hapus).
+  /// Produk boleh apa pun yang freeable, tidak harus ada di keranjang.
+  void setPromoFreeItem(Product product, {ProductVariant? variant, required int qty}) {
+    final selKey = '${product.id}_${variant?.id ?? 0}';
+    final list = state.promoFreeItems.where((p) => p.key != selKey).toList();
     if (qty > 0) {
-      list.add(PromoFreeSelection(
-        product: product,
-        variant: variant,
-        qty: qty,
-        freeToppings: freeToppings,
-        extraToppings: extraToppings,
-      ));
+      list.add(PromoFreeSelection(product: product, variant: variant, qty: qty));
     }
     state = state.copyWith(promoFreeItems: list);
     _reconcilePromo();
   }
 
-  void removePromoFreeItem(int productId) {
+  void removePromoFreeItem(String key) {
     state = state.copyWith(
-      promoFreeItems: state.promoFreeItems.where((p) => p.product.id != productId).toList(),
+      promoFreeItems: state.promoFreeItems.where((p) => p.key != key).toList(),
     );
   }
 
-  /// Pastikan total item gratis tidak melebihi kuota dari item yang dibayar.
+  /// Pastikan total item gratis (bonus) tidak melebihi kuota promo dari
+  /// jumlah item yang dibayar. Dipanggil ulang saat keranjang/promo berubah.
   void _reconcilePromo() {
     final promo = state.selectedPromo;
     if (promo == null || state.promoFreeItems.isEmpty) return;
@@ -313,7 +297,7 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
     for (final p in state.promoFreeItems) {
       final allowed = min(p.qty, remaining);
       if (allowed > 0) {
-        reconciled.add(p.copyWith(qty: allowed)); // pertahankan topping
+        reconciled.add(p.copyWith(qty: allowed));
         remaining -= allowed;
       }
     }
@@ -334,20 +318,26 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
     final promo = state.selectedPromo;
     final freeSelections = (promo == null) ? const <PromoFreeSelection>[] : state.promoFreeItems;
 
-    // Item bonus dikirim HANYA lewat promo_free_items (dengan variant_id +
-    // extra_toppings), TIDAK diduplikasi ke items[]. items[] hanya berisi qty
-    // yang dibayar. BE menggratiskan produk bonus & menagih extra toppingnya.
+    // Bonus gratis dikirim sebagai baris TAMBAHAN di items[] (agar product_id
+    // ada di order, syarat BE) lalu didaftarkan di promo_free_items supaya
+    // harganya dipotong jadi 0. Bonus tidak membawa extra topping.
     final promoFreeItems = freeSelections
         .map((p) => PromoFreeItem(
               promoId: promo!.id,
               productId: p.product.id,
               variantId: p.variant?.id,
               qty: p.qty,
-              extraToppings: p.extraToppings.map((t) => t.toSelection()).toList(),
             ))
         .toList();
 
-    final items = state.items.map((i) => i.toTransactionItem()).toList();
+    final items = [
+      ...state.items.map((i) => i.toTransactionItem()),
+      ...freeSelections.map((p) => TransactionItem(
+            productId: p.product.id,
+            variantId: p.variant?.id,
+            quantity: p.qty,
+          )),
+    ];
 
     final request = ProductTransactionRequest(
       items: items,

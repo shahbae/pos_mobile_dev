@@ -8,6 +8,7 @@ class Product {
   final String? imageUrl;
   final int? categoryId;
   final String? categoryName;
+  final bool categoryFreeable; // dari category.freeable (default true)
   final String purchasePrice;
   final String sellingPrice;
   final String? profitMargin;
@@ -25,6 +26,7 @@ class Product {
     this.imageUrl,
     this.categoryId,
     this.categoryName,
+    this.categoryFreeable = true,
     required this.purchasePrice,
     required this.sellingPrice,
     this.profitMargin,
@@ -52,6 +54,16 @@ class Product {
       imageUrl: (img == null || img.trim().isEmpty) ? null : img,
       categoryId: cat != null ? cat['id'] : j['category_id'],
       categoryName: cat != null ? cat['name'] : j['category_name'],
+      // Hanya kategori freeable yang boleh jadi item gratis promo.
+      // Default true bila objek category / field tidak dikirim.
+      categoryFreeable: cat == null
+          ? true
+          : (cat['freeable'] is bool
+              ? cat['freeable'] as bool
+              : (cat['freeable'] == null
+                  ? true
+                  : cat['freeable'].toString().toLowerCase() != 'false' &&
+                      cat['freeable'].toString() != '0')),
       purchasePrice: j['purchase_price']?.toString() ?? '0',
       sellingPrice: j['selling_price']?.toString() ?? '0',
       profitMargin: j['profit_margin']?.toString(),

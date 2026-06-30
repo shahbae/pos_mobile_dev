@@ -250,24 +250,31 @@ class _BottomBar extends ConsumerWidget {
           ),
         );
 
-    final List<Widget> children;
+    final Widget content;
     if (withFabNotch) {
-      // Sisakan ruang di tengah untuk FAB POS.
+      // FAB POS di tengah. Bagi tab jadi dua sisi dengan lebar SAMA (masing-masing
+      // Expanded) supaya celah notch benar-benar di tengah, berapapun jumlah tab.
       final half = (tabs.length / 2).ceil();
-      children = [
-        ...tabs.take(half).map(itemFor),
-        const SizedBox(width: 44),
-        ...tabs.skip(half).map(itemFor),
-      ];
+      final left = tabs.take(half).toList();
+      final right = tabs.skip(half).toList();
+      content = Row(
+        children: [
+          Expanded(child: Row(children: left.map(itemFor).toList())),
+          const SizedBox(width: 56), // ruang FAB
+          Expanded(child: Row(children: right.map(itemFor).toList())),
+        ],
+      );
     } else {
-      children = tabs.map(itemFor).toList();
+      content = Row(children: tabs.map(itemFor).toList());
     }
 
     return BottomAppBar(
       color: AppTheme.brandGreenDark,
       height: 70,
+      padding: EdgeInsets.zero,
+      notchMargin: 8,
       shape: withFabNotch ? const CircularNotchedRectangle() : null,
-      child: Row(children: children),
+      child: content,
     );
   }
 }

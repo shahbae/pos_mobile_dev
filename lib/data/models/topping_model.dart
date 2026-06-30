@@ -1,10 +1,15 @@
+import 'package:pos_mobile/data/models/purchase_template_model.dart';
+
 class Topping {
   final int id;
   final String name;
-  final int price; // rupiah integer
+  final int price; // rupiah integer — harga JUAL ke pelanggan
   final bool isActive;
   final int usageQty; // konfigurasi: stok yang dipakai per pemakaian topping
   final String unit;
+  final String? purchaseQty; // BARU (2026-06-29): isi 1 paket beli acuan
+  final String? purchasePrice; // BARU (2026-06-29): harga 1 paket beli acuan
+  final List<PurchaseTemplate> purchaseTemplates;
   final String? createdAt;
 
   Topping({
@@ -14,6 +19,9 @@ class Topping {
     this.isActive = true,
     this.usageQty = 0,
     this.unit = '',
+    this.purchaseQty,
+    this.purchasePrice,
+    this.purchaseTemplates = const [],
     this.createdAt,
   });
 
@@ -25,6 +33,9 @@ class Topping {
       isActive: _toBool(j['is_active']),
       usageQty: _toInt(j['usage_qty']),
       unit: j['unit']?.toString() ?? '',
+      purchaseQty: j['purchase_qty']?.toString(),
+      purchasePrice: j['purchase_price']?.toString(),
+      purchaseTemplates: PurchaseTemplate.listFromJson(j['purchase_templates']),
       createdAt: j['created_at'],
     );
   }

@@ -46,9 +46,16 @@ class PurchaseItemModel {
   final int? id;
   final int? materialId;
   final String? materialName;
+  final String? materialUnit;
   final int? toppingId;
   final String? toppingName;
-  final int quantity;
+  final String? toppingUnit;
+  final int? templateId;
+  final String? templateName; // mis. "Lusin"
+  final String? templateBaseQty; // base unit per template
+  final int? packQty; // berapa template dibeli
+  final String? quantityStr; // hasil konversi ke base unit (mis. "2400.0000")
+  final int quantity; // versi int dari quantityStr (kompat lama)
   final String? unitCost;
   final String? subtotal;
 
@@ -56,12 +63,40 @@ class PurchaseItemModel {
     this.id,
     this.materialId,
     this.materialName,
+    this.materialUnit,
     this.toppingId,
     this.toppingName,
+    this.toppingUnit,
+    this.templateId,
+    this.templateName,
+    this.templateBaseQty,
+    this.packQty,
+    this.quantityStr,
     this.quantity = 0,
     this.unitCost,
     this.subtotal,
   });
+
+  /// Satuan base unit item (gram/ml/pcs).
+  String? get unit => materialUnit ?? toppingUnit;
+
+  /// Kuantitas base unit terbaca (string asli bila ada, fallback int).
+  String get quantityDisplay {
+    final q = quantityStr;
+    if (q == null) return quantity.toString();
+    final n = num.tryParse(q);
+    if (n == null) return q;
+    // Buang desimal .0 yang tidak perlu.
+    return n == n.truncate() ? n.truncate().toString() : n.toString();
+  }
+
+  /// Ringkasan untuk tampilan: "2 Lusin (= 2400 gram)".
+  String? get packSummary {
+    if (templateName == null || packQty == null) return null;
+    final u = unit;
+    final qty = quantityDisplay;
+    return '$packQty $templateName (= $qty${u != null && u.isNotEmpty ? ' $u' : ''})';
+  }
 
   /// Nama item (material atau topping) untuk ditampilkan.
   String get displayName {
@@ -82,12 +117,20 @@ class PurchaseItemModel {
   factory PurchaseItemModel.fromJson(Map<String, dynamic> j) {
     final mat = j['material'] as Map<String, dynamic>?;
     final top = j['topping'] as Map<String, dynamic>?;
+    final tpl = j['template'] as Map<String, dynamic>?;
     return PurchaseItemModel(
       id: _toIntOrNull(j['id']),
       materialId: _toIntOrNull(j['material_id']),
       materialName: mat?['name'] ?? j['material_name'],
+      materialUnit: mat?['unit']?.toString(),
       toppingId: _toIntOrNull(j['topping_id']),
       toppingName: top?['name'] ?? j['topping_name'],
+      toppingUnit: top?['unit']?.toString(),
+      templateId: _toIntOrNull(j['template_id'] ?? tpl?['id']),
+      templateName: tpl?['name']?.toString(),
+      templateBaseQty: tpl?['base_qty']?.toString(),
+      packQty: _toIntOrNull(j['pack_qty']),
+      quantityStr: j['quantity']?.toString(),
       quantity: _toIntOrNull(j['quantity']) ?? 0,
       unitCost: j['unit_cost']?.toString(),
       subtotal: j['subtotal']?.toString(),

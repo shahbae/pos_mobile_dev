@@ -102,27 +102,32 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.attendance,
       };
     case 'kasir':
-      // Fokus POS, shift, transaksi, absensi.
+      // Fokus POS, shift, transaksi, absensi. + dashboard (GET /dashboard
+      // adaptif: section current_shift + recent_transactions).
       return {
+        AppFeature.dashboard,
         AppFeature.pos,
         AppFeature.transactions,
         AppFeature.shift,
         AppFeature.attendance,
       };
     case 'karyawan':
-      // POS + shift + absensi + riwayat transaksi.
+      // POS + shift + absensi + riwayat transaksi + dashboard adaptif.
       // CATATAN: matriks (baris 243) menandai GET /transactions ❌ untuk
       // karyawan, tapi per arahan user karyawan boleh akses transaksi.
       return {
+        AppFeature.dashboard,
         AppFeature.pos,
         AppFeature.transactions,
         AppFeature.shift,
         AppFeature.attendance,
       };
     case 'produksi':
-      // POS + absensi (tanpa shift).
+      // Absensi + dashboard (revisi BE 2026-06-29: produksi dibatasi ke
+      // endpoint absensi + /me, TAPI §6 mengizinkan GET /dashboard yang
+      // mengembalikan section absensi). Tanpa POS / shift / lainnya.
       return {
-        AppFeature.pos,
+        AppFeature.dashboard,
         AppFeature.attendance,
       };
     default:

@@ -55,9 +55,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 const SizedBox(height: 20),
 
                 Text(
-                  'Selamat Datang Kembali',
+                  'Esteh Candi App',
                   style: Theme.of(context).textTheme.titleLarge!.copyWith(
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                     color: Colors.black87,
                   ),
                 ),
@@ -65,7 +65,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 const SizedBox(height: 4),
 
                 Text(
-                  'Masuk ke akun POS anda',
+                  'Masuk ke akun Esteh Candi anda',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
 

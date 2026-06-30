@@ -169,7 +169,11 @@ class PurchaseDetailPage extends ConsumerWidget {
                                 ],
                                 Flexible(
                                   child: Text(
-                                    "${item.quantity} x ${formatRupiah(unitCost)}",
+                                    // Pakai ringkasan template bila ada
+                                    // (mis. "2 Lusin (= 2400 gram)"), jika tidak
+                                    // fallback ke "qty x unit cost".
+                                    item.packSummary ??
+                                        "${item.quantityDisplay} x ${formatRupiah(unitCost)}",
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
                                   ),

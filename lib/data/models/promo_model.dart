@@ -44,11 +44,10 @@ class Promo {
     return days.contains(beDow);
   }
 
-  /// Jumlah item gratis (bonus) maksimum berdasarkan jumlah item yang DIBAYAR.
-  /// Formula: floor(paidQty / buyQty) * freeQty
-  /// Item gratis adalah bonus tambahan di atas item yang dibayar — bukan
-  /// menggratiskan item yang dibeli. Dengan begitu pelanggan tetap membayar
-  /// buyQty item untuk setiap freeQty bonus (cegah "bayar 1 dapat 2").
+  /// Kuota item gratis maksimum berdasarkan jumlah item yang DIBAYAR.
+  /// Formula BE: (qty_dibayar ÷ buy_qty) × free_qty, di mana item gratis adalah
+  /// TAMBAHAN (bonus) di atas item yang dibayar — bukan mengurangi item dibayar.
+  /// Mis. Beli 2 Gratis 1: 2 dibayar → 1 gratis, 4 dibayar → 2 gratis.
   int maxFreeQty(int paidQty) {
     if (buyQty <= 0 || freeQty <= 0) return 0;
     return (paidQty ~/ buyQty) * freeQty;
