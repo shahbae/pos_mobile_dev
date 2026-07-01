@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/models/purchase_model.dart';
 import '../../providers/purchase_provider.dart';
-import '../../../utils/currency.dart';
 
 class PurchaseDetailPage extends ConsumerWidget {
   final int purchaseId;
@@ -41,7 +40,6 @@ class PurchaseDetailPage extends ConsumerWidget {
 
   Widget _buildContent(BuildContext context, PurchaseModel purchase) {
     final theme = Theme.of(context);
-    final amt = num.tryParse(purchase.totalAmount ?? '0') ?? 0;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -116,8 +114,6 @@ class PurchaseDetailPage extends ConsumerWidget {
               separatorBuilder: (_, __) => const SizedBox(height: 12),
               itemBuilder: (context, i) {
                 final item = purchase.items![i];
-                final unitCost = num.tryParse(item.unitCost ?? '0') ?? 0;
-                final subtotal = num.tryParse(item.subtotal ?? '0') ?? 0;
 
                 return Container(
                   padding: const EdgeInsets.all(16),
@@ -169,11 +165,11 @@ class PurchaseDetailPage extends ConsumerWidget {
                                 ],
                                 Flexible(
                                   child: Text(
-                                    // Pakai ringkasan template bila ada
-                                    // (mis. "2 Lusin (= 2400 gram)"), jika tidak
-                                    // fallback ke "qty x unit cost".
+                                    // Ringkasan template ("2 Lusin (= 2400 gram)")
+                                    // bila ada, jika tidak tampilkan kuantitas + unit.
                                     item.packSummary ??
-                                        "${item.quantityDisplay} x ${formatRupiah(unitCost)}",
+                                        "${item.quantityDisplay}"
+                                            "${item.unit != null && item.unit!.isNotEmpty ? ' ${item.unit}' : ''}",
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
                                   ),
@@ -183,44 +179,12 @@ class PurchaseDetailPage extends ConsumerWidget {
                           ],
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        formatRupiah(subtotal),
-                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-                      ),
                     ],
                   ),
                 );
               },
             ),
 
-          const SizedBox(height: 28),
-
-          // =====================
-          // TOTAL
-          // =====================
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: theme.colorScheme.primary.withOpacity(0.2)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Total Tagihan',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF374151)),
-                ),
-                Text(
-                  formatRupiah(amt),
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: theme.colorScheme.primary),
-                ),
-              ],
-            ),
-          ),
-          
           const SizedBox(height: 40),
         ],
       ),

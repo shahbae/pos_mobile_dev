@@ -6,7 +6,6 @@ import '../../providers/purchase_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../../core/auth/role_access.dart';
 import '../../../data/models/purchase_model.dart';
-import '../../../utils/currency.dart';
 import 'purchase_form_page.dart';
 import 'purchase_detail_page.dart';
 
@@ -189,7 +188,6 @@ class _PurchaseListPageState extends ConsumerState<PurchaseListPage> {
 
   Widget _item(BuildContext context, PurchaseModel p) {
     final theme = Theme.of(context);
-    final amt = num.tryParse(p.totalAmount ?? '0') ?? 0;
 
     return ListTile(
       leading: Icon(
@@ -219,13 +217,7 @@ class _PurchaseListPageState extends ConsumerState<PurchaseListPage> {
           ),
         ],
       ),
-      trailing: Text(
-        formatRupiah(amt),
-        style: TextStyle(
-          fontWeight: FontWeight.w700,
-          color: theme.colorScheme.primary,
-        ),
-      ),
+      trailing: Icon(Icons.chevron_right, color: Colors.grey.shade400),
       onTap: () {
         if (p.id != null) {
           Navigator.push(

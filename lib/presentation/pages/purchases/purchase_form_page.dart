@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../../data/models/purchase_template_model.dart';
 import '../../providers/purchase_provider.dart';
@@ -24,7 +23,6 @@ class _TemplateOption {
   final String ownerType; // 'Material' | 'Topping'
   final String unit; // base unit (gram/ml/pcs)
   final PurchaseTemplate template;
-  final num? pricePerUnit; // estimasi harga per base unit (dari master)
 
   _TemplateOption({
     required this.templateId,
@@ -32,7 +30,6 @@ class _TemplateOption {
     required this.ownerType,
     required this.unit,
     required this.template,
-    this.pricePerUnit,
   });
 
   /// Label dropdown: "Teh · Lusin (1200 gram)".
@@ -40,12 +37,6 @@ class _TemplateOption {
     final bq = template.baseQtyNum;
     final bqStr = bq == bq.truncate() ? bq.truncate().toString() : bq.toString();
     return '$ownerName · ${template.name} ($bqStr${unit.isNotEmpty ? ' $unit' : ''})';
-  }
-
-  /// Estimasi total untuk `qty` template (bila harga master diketahui).
-  num? estimate(int qty) {
-    if (pricePerUnit == null) return null;
-    return template.baseQtyNum * qty * pricePerUnit!;
   }
 }
 
@@ -74,7 +65,6 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
   int? _selectedSupplierId;
   final TextEditingController _noteController = TextEditingController();
   final List<_PurchaseItem> _items = [_PurchaseItem()];
-  final _formatter = NumberFormat('#,###', 'id_ID');
 
   late final AnimationController _animCtrl;
   late final Animation<double> _fadeIn;
@@ -106,15 +96,7 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
     final toppings = ref.read(toppingListProvider).valueOrNull ?? [];
     final map = <int, _TemplateOption>{};
 
-    num? perUnit(String? price, String? qty) {
-      final p = num.tryParse((price ?? '').replaceAll(RegExp(r'[^0-9.]'), ''));
-      final q = num.tryParse((qty ?? '').replaceAll(RegExp(r'[^0-9.]'), ''));
-      if (p == null || q == null || q == 0) return null;
-      return p / q;
-    }
-
     for (final m in materials) {
-      final pu = perUnit(m.purchasePrice, m.purchaseQty);
       for (final t in m.purchaseTemplates) {
         map[t.id] = _TemplateOption(
           templateId: t.id,
@@ -122,12 +104,10 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
           ownerType: 'Material',
           unit: m.unit,
           template: t,
-          pricePerUnit: pu,
         );
       }
     }
     for (final tp in toppings) {
-      final pu = perUnit(tp.purchasePrice, tp.purchaseQty);
       for (final t in tp.purchaseTemplates) {
         map[t.id] = _TemplateOption(
           templateId: t.id,
@@ -135,7 +115,6 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
           ownerType: 'Topping',
           unit: tp.unit,
           template: t,
-          pricePerUnit: pu,
         );
       }
     }
@@ -226,13 +205,6 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
     final toppingsAsync = ref.watch(toppingListProvider);
 
     final options = _buildTemplateOptions();
-
-    // Estimasi grand total (hanya bila harga master diketahui).
-    num totalEstimated = 0;
-    for (final it in _items) {
-      final opt = it.templateId != null ? options[it.templateId] : null;
-      totalEstimated += opt?.estimate(it.qty) ?? 0;
-    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
@@ -387,45 +359,6 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
                     itemBuilder: (context, i) => _itemCard(cs, i, options),
                   ),
 
-                const SizedBox(height: 24),
-
-                // ── Summary ──
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: cs.primary.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: cs.primary.withOpacity(0.15)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Estimasi Total:',
-                            style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF374151)),
-                          ),
-                          Text(
-                            'Rp ${_formatter.format(totalEstimated)}',
-                            style: TextStyle(
-                                fontSize: 18, fontWeight: FontWeight.w800, color: cs.primary),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Total final dihitung server berdasarkan harga master.',
-                        style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-                      ),
-                    ],
-                  ),
-                ),
-
                 const SizedBox(height: 32),
 
                 SizedBox(
@@ -484,7 +417,6 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
   Widget _itemCard(ColorScheme cs, int i, Map<int, _TemplateOption> options) {
     final item = _items[i];
     final opt = item.templateId != null ? options[item.templateId] : null;
-    final estimate = opt?.estimate(item.qty);
 
     if (item.templateId != null && !options.containsKey(item.templateId)) {
       item.templateId = null;
@@ -588,20 +520,10 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
 
           if (opt != null) ...[
             const SizedBox(height: 10),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '= ${_baseQtyTotal(opt, item.qty)}'
-                  '${opt.unit.isNotEmpty ? ' ${opt.unit}' : ''}',
-                  style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
-                ),
-                if (estimate != null)
-                  Text(
-                    '≈ Rp ${_formatter.format(estimate)}',
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                  ),
-              ],
+            Text(
+              '= ${_baseQtyTotal(opt, item.qty)}'
+              '${opt.unit.isNotEmpty ? ' ${opt.unit}' : ''}',
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
             ),
           ],
         ],
