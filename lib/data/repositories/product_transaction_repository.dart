@@ -41,12 +41,20 @@ class ProductTransactionRepository {
       'free toppings not allowed': 'Produk ini tidak punya topping gratis',
       'free topping slots exceeded': 'Topping gratis melebihi slot yang tersedia',
       'insufficient paid amount': 'Jumlah bayar kurang dari total',
+      'free topping not allowed': 'Produk ini tidak punya topping gratis',
       'free qty exceeded': 'Jumlah item gratis melebihi yang diizinkan promo',
+      'free qty exceeds allowed amount':
+          'Jumlah item gratis melebihi yang diizinkan promo',
       'promo not applicable today': 'Promo tidak berlaku hari ini',
       'product not found': 'Produk tidak ditemukan',
       'topping not found': 'Topping tidak ditemukan',
       'topping inactive': 'Topping sedang tidak aktif',
       'free item not in order': 'Item gratis tidak ada di pesanan',
+      'free item product must be in the order': 'Item gratis harus ada di pesanan',
+      'free item category is not eligible for free items':
+          'Kategori produk ini tidak bisa dijadikan item gratis',
+      'free item price exceeds the cheapest item in order':
+          'Item gratis tidak boleh lebih mahal dari item termurah di keranjang',
       'variant not found': 'Variasi produk tidak ditemukan',
       'variant is not active': 'Variasi produk sedang tidak aktif',
       'variant does not belong to product': 'Variasi tidak sesuai dengan produk',

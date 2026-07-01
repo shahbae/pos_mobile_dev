@@ -33,8 +33,11 @@ Syarat sebuah item boleh dijadikan gratis:
 1. **Item ada di keranjang** (qty gratis ≤ qty item itu di keranjang).
 2. **Kategori produk `freeable = true`**.
 3. **Ada promo yang aktif hari ini**, dan jumlah gratis **tidak melebihi quota**: tiap `buy_qty` item **dibayar** memberi `free_qty` gratis (berulang) → `(qty_dibayar ÷ buy_qty) × free_qty`, di mana `qty_dibayar = total item di keranjang − item gratis`.
+4. **Harga item gratis ≤ item termurah di keranjang.** Item yang digratiskan tidak boleh lebih mahal dari item termurah yang ada di keranjang — praktisnya, hanya item termurah (atau yang seharga dengannya) yang boleh dijadikan gratis.
 
-> ⚠️ **Catatan:** Tidak ada lagi pembatasan "harga item gratis harus ≤ item termahal". Item gratis boleh berupa item apa pun di keranjang selama kategorinya `freeable` dan masih dalam quota.
+> ⚠️ **Batasan harga (baru):** Item gratis dibatasi ke **item termurah**. FE sebaiknya hanya menampilkan opsi "Gratiskan" untuk produk/variant yang harganya ≤ harga item termurah di keranjang. Server tetap validasi ulang (`free item price exceeds the cheapest item in order`).
+>
+> Perbandingan harga memakai **harga dasar produk/variant** (harga variant kalau pakai variant), **tanpa** topping.
 
 ---
 
@@ -163,7 +166,7 @@ Authorization: Bearer <token>
 | `product_id` | uint | ✅ | Produk yang digratiskan — **harus ada di `items`** |
 | `variant_id` | uint/null | ➖ | Isi kalau produk pakai variant; harus salah satu variant yang ada di order |
 | `qty` | int (min 1) | ✅ | Jumlah yang digratiskan — **≤ qty yang dibeli** & **≤ quota promo** |
-| `extra_toppings` | array | ➖ | Topping tambahan dari item gratis yang ikut digratiskan (opsional) |
+| `extra_toppings` | array | ➖ | **Diabaikan.** Topping item gratis **tidak** ikut digratiskan (lihat catatan di bawah). Field boleh tetap dikirim untuk kompatibilitas, tapi tak berpengaruh. |
 
 **Rumus quota (validasi di server):**
 ```
@@ -171,6 +174,8 @@ qty_dibayar = total item di keranjang − item gratis
 maks_gratis = (qty_dibayar ÷ buy_qty) × free_qty
 ```
 Item gratis adalah **tambahan** di atas item yang dibayar. Tiap `buy_qty` item dibayar memberi `free_qty` gratis, berlaku **berulang**.
+
+> **Topping tidak digratiskan.** Hanya harga dasar produk/variant item gratis yang dipotong. Kalau item gratis punya topping, topping tetap ditagih normal. `extra_toppings` di `promo_free_items` diabaikan server.
 
 Contoh promo **Beli 2 Gratis 1** (`buy_qty=2`, `free_qty=1`):
 
@@ -218,16 +223,18 @@ Contoh promo **Beli 2 Gratis 1** (`buy_qty=2`, `free_qty=1`):
 | `promo not applicable today` | Promo tidak ada / tidak aktif / tidak berlaku hari ini |
 | `free item product must be in the order` | `product_id` item gratis tidak ada di `items` |
 | `free item category is not eligible for free items` | Kategori produk `freeable = false` atau produk tanpa kategori |
+| `free item price exceeds the cheapest item in order` | Harga item gratis lebih mahal dari item termurah di keranjang |
 | `free qty exceeds allowed amount` | `qty` gratis melebihi quota promo atau melebihi qty yang dibeli |
 
-> Validasi **"harga ≤ item termahal" sudah dihapus** — error terkait harga item gratis tidak ada lagi.
+> ⚠️ Item gratis dibatasi ke **item termurah** di keranjang (harga dasar, tanpa topping). FE sebaiknya filter opsi "Gratiskan" agar hanya menampilkan item yang ≤ harga termurah, supaya tidak kena error di server.
 
 ---
 
 ## Checklist Implementasi FE
 
 - [ ] Panggil `GET /promos/active` saat masuk halaman kasir → simpan `buy_qty`/`free_qty`.
-- [ ] Tampilkan tombol/opsi "Gratiskan" hanya untuk item di keranjang yang `category.freeable == true`.
+- [ ] Tampilkan tombol/opsi "Gratiskan" hanya untuk item di keranjang yang `category.freeable == true` **dan** harganya ≤ harga item termurah di keranjang.
 - [ ] Batasi jumlah item gratis sesuai rumus quota di sisi FE (UX), server tetap validasi ulang.
+- [ ] Jangan tampilkan/hitung topping item gratis sebagai gratis — topping tetap ditagih.
 - [ ] Kirim pilihan via `promo_free_items` saat `POST /product-transactions`.
 - [ ] Tampilkan `promo_discount` & `promos[]` di ringkasan + struk.

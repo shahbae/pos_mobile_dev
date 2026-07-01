@@ -38,9 +38,12 @@ class ProductTransactionPage extends ConsumerWidget {
       if (!context.mounted) return;
     }
 
-    // 3. Topping (bila produk punya slot topping gratis), lalu masukkan ke cart.
-    if (product.hasFreeToppings) {
-      final result = await showToppingPicker(context, product: product);
+    // 3. Topping. Slot gratis diambil dari variant bila dipilih, kalau tidak
+    //    dari produk. Buka picker bila salah satunya mengizinkan topping gratis.
+    final hasFreeToppings =
+        variant != null ? variant.hasFreeToppings : product.hasFreeToppings;
+    if (hasFreeToppings) {
+      final result = await showToppingPicker(context, product: product, variant: variant);
       if (result == null) return;
       notifier.addLineWithToppings(
         product,

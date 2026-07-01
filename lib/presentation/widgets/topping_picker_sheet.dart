@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/data/models/product_model.dart';
+import 'package:pos_mobile/data/models/product_variant_model.dart';
 import 'package:pos_mobile/data/models/topping_model.dart';
 import 'package:pos_mobile/presentation/providers/topping_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_transaction_provider.dart';
@@ -23,6 +24,7 @@ class ToppingPickerResult {
 Future<ToppingPickerResult?> showToppingPicker(
   BuildContext context, {
   required Product product,
+  ProductVariant? variant, // slot topping gratis diambil dari variant bila ada
   int initialQty = 1,
   List<CartTopping> initialFree = const [],
   List<CartTopping> initialExtra = const [],
@@ -37,6 +39,7 @@ Future<ToppingPickerResult?> showToppingPicker(
     ),
     builder: (_) => _ToppingPickerSheet(
       product: product,
+      variant: variant,
       initialQty: initialQty,
       initialFree: initialFree,
       initialExtra: initialExtra,
@@ -47,6 +50,7 @@ Future<ToppingPickerResult?> showToppingPicker(
 
 class _ToppingPickerSheet extends ConsumerStatefulWidget {
   final Product product;
+  final ProductVariant? variant;
   final int initialQty;
   final List<CartTopping> initialFree;
   final List<CartTopping> initialExtra;
@@ -54,6 +58,7 @@ class _ToppingPickerSheet extends ConsumerStatefulWidget {
 
   const _ToppingPickerSheet({
     required this.product,
+    required this.variant,
     required this.initialQty,
     required this.initialFree,
     required this.initialExtra,
@@ -70,7 +75,12 @@ class _ToppingPickerSheetState extends ConsumerState<_ToppingPickerSheet> {
   final Map<int, int> _extra = {}; // toppingId -> qty
 
   int get _freeUsed => _free.values.fold(0, (a, b) => a + b);
-  int get _slots => widget.product.freeToppingSlots;
+
+  /// Slot topping gratis: dari variant bila baris pakai variant, kalau tidak
+  /// dari produk (behavior lama).
+  int get _slots =>
+      widget.variant != null ? widget.variant!.freeToppingSlots : widget.product.freeToppingSlots;
+  bool get _hasFreeToppings => _slots > 0;
 
   @override
   void initState() {
@@ -128,7 +138,9 @@ class _ToppingPickerSheetState extends ConsumerState<_ToppingPickerSheet> {
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  widget.product.name,
+                  widget.variant != null
+                      ? '${widget.product.name} - ${widget.variant!.name}'
+                      : widget.product.name,
                   style: const TextStyle(
                       fontSize: 18, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
                 ),
@@ -170,7 +182,7 @@ class _ToppingPickerSheetState extends ConsumerState<_ToppingPickerSheet> {
                             ],
                           ),
                         ),
-                      if (widget.product.hasFreeToppings) ...[
+                      if (_hasFreeToppings) ...[
                         _sectionHeader('Topping Gratis', 'Maks $_slots • dipakai $_freeUsed'),
                         ...toppings.map((t) => _ToppingRow(
                               topping: t,

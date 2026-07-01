@@ -6,10 +6,14 @@ import 'package:pos_mobile/utils/currency.dart';
 
 /// Bottom sheet untuk memilih variant/ukuran sebuah produk.
 /// Mengembalikan [ProductVariant] yang dipilih, atau null bila dibatalkan.
+///
+/// [maxPrice] (opsional) membatasi varian yang boleh dipilih ke yang harganya
+/// ≤ nilai tsb — dipakai saat memilih item gratis promo (batas item termurah).
 Future<ProductVariant?> showVariantPicker(
   BuildContext context, {
   required Product product,
   required List<ProductVariant> variants,
+  num? maxPrice,
 }) {
   return showModalBottomSheet<ProductVariant>(
     context: context,
@@ -18,18 +22,27 @@ Future<ProductVariant?> showVariantPicker(
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
-    builder: (_) => _VariantPickerSheet(product: product, variants: variants),
+    builder: (_) =>
+        _VariantPickerSheet(product: product, variants: variants, maxPrice: maxPrice),
   );
 }
 
 class _VariantPickerSheet extends StatelessWidget {
   final Product product;
   final List<ProductVariant> variants;
+  final num? maxPrice;
 
-  const _VariantPickerSheet({required this.product, required this.variants});
+  const _VariantPickerSheet({
+    required this.product,
+    required this.variants,
+    this.maxPrice,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final shown = maxPrice == null
+        ? variants
+        : variants.where((v) => v.sellingPriceNum <= maxPrice!).toList();
     return SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -68,10 +81,10 @@ class _VariantPickerSheet extends StatelessWidget {
             child: ListView.separated(
               shrinkWrap: true,
               padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: variants.length,
+              itemCount: shown.length,
               separatorBuilder: (_, __) => const Divider(height: 1, color: AppTheme.borderLight),
               itemBuilder: (context, index) {
-                final v = variants[index];
+                final v = shown[index];
                 return ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
                   title: Text(v.name,

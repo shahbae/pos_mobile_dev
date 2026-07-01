@@ -183,6 +183,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     final result = await showToppingPicker(
       context,
       product: item.product,
+      variant: item.variant,
       initialQty: item.quantity,
       initialFree: item.freeToppings,
       initialExtra: item.extraToppings,
@@ -202,6 +203,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     final result = await showToppingPicker(
       context,
       product: item.product,
+      variant: item.variant,
       initialQty: 1,
       initialFree: item.freeToppings,
       initialExtra: item.extraToppings,
@@ -619,8 +621,19 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
 
   /// Pilih produk freeable (boleh menu lain di luar keranjang) sebagai bonus
   /// gratis. Bila produk punya varian, kasir memilih variannya juga.
+  ///
+  /// Item gratis dibatasi ke harga ≤ item termurah di keranjang (aturan BE).
   Future<void> _pickFreeItem() async {
-    final product = await showFreeItemPicker(context);
+    final items = ref.read(productTransactionProvider).items;
+    if (items.isEmpty) {
+      _toast("Tambahkan item ke keranjang dulu.", Colors.orange);
+      return;
+    }
+    // Harga dasar item termurah di keranjang (harga variant/produk, tanpa topping).
+    final cheapest =
+        items.map((i) => i.unitPrice).reduce((a, b) => a < b ? a : b);
+
+    final product = await showFreeItemPicker(context, maxPrice: cheapest);
     if (product == null || !mounted) return;
 
     ProductVariant? variant;
@@ -632,10 +645,19 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
         variants = const [];
       }
       if (!mounted) return;
-      if (variants.isNotEmpty) {
-        variant = await showVariantPicker(context, product: product, variants: variants);
-        if (variant == null || !mounted) return; // dibatalkan
+      // Hanya varian yang ≤ item termurah yang boleh dijadikan gratis.
+      variants = variants.where((v) => v.sellingPriceNum <= cheapest).toList();
+      if (variants.isEmpty) {
+        _toast("Tidak ada varian yang memenuhi batas harga item gratis.", Colors.orange);
+        return;
       }
+      variant = await showVariantPicker(
+        context,
+        product: product,
+        variants: variants,
+        maxPrice: cheapest,
+      );
+      if (variant == null || !mounted) return; // dibatalkan
     }
 
     // Tambah 1 bonus untuk produk+varian ini (akumulasi bila sudah ada).

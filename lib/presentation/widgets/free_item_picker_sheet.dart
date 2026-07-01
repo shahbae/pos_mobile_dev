@@ -8,7 +8,11 @@ import 'package:pos_mobile/utils/currency.dart';
 /// Bottom sheet untuk memilih produk `freeable` sebagai item gratis (bonus).
 /// Mengembalikan [Product] terpilih, atau null bila dibatalkan. Pemilihan
 /// varian dilakukan setelahnya oleh pemanggil (bila produk punya varian).
-Future<Product?> showFreeItemPicker(BuildContext context) {
+///
+/// [maxPrice] membatasi opsi ke produk yang harga dasarnya ≤ item termurah di
+/// keranjang (aturan BE: item gratis tidak boleh lebih mahal dari item termurah).
+/// Untuk produk bervarian, ditampilkan bila ada minimal satu varian yang memenuhi.
+Future<Product?> showFreeItemPicker(BuildContext context, {required num maxPrice}) {
   return showModalBottomSheet<Product>(
     context: context,
     isScrollControlled: true,
@@ -16,12 +20,14 @@ Future<Product?> showFreeItemPicker(BuildContext context) {
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
-    builder: (_) => const _FreeItemPickerSheet(),
+    builder: (_) => _FreeItemPickerSheet(maxPrice: maxPrice),
   );
 }
 
 class _FreeItemPickerSheet extends ConsumerStatefulWidget {
-  const _FreeItemPickerSheet();
+  final num maxPrice;
+
+  const _FreeItemPickerSheet({required this.maxPrice});
 
   @override
   ConsumerState<_FreeItemPickerSheet> createState() => _FreeItemPickerSheetState();
@@ -53,14 +59,25 @@ class _FreeItemPickerSheetState extends ConsumerState<_FreeItemPickerSheet> {
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              const Padding(
-                padding: EdgeInsets.fromLTRB(20, 16, 20, 8),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: Text("Pilih Item Gratis",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text("Pilih Item Gratis",
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 2),
+                      Text(
+                        "Maks seharga item termurah: ${formatRupiah(widget.maxPrice)}",
+                        style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                      ),
+                    ],
+                  ),
                 ),
               ),
+              const SizedBox(height: 8),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: TextField(
@@ -77,12 +94,19 @@ class _FreeItemPickerSheetState extends ConsumerState<_FreeItemPickerSheet> {
               const SizedBox(height: 8),
               Expanded(
                 child: productsAsync.when(
-                  data: (products) {
+                  data: (all) {
+                    // Hanya produk yang harga dasarnya (atau salah satu varian)
+                    // ≤ item termurah di keranjang yang boleh digratiskan.
+                    final products = all
+                        .where((p) => p.minVariantPriceNum <= widget.maxPrice)
+                        .toList();
                     if (products.isEmpty) {
                       return const Center(
                         child: Padding(
                           padding: EdgeInsets.all(24),
-                          child: Text("Tidak ada menu yang bisa digratiskan.",
+                          child: Text(
+                              "Tidak ada menu yang bisa digratiskan "
+                              "(harus ≤ item termurah di keranjang).",
                               textAlign: TextAlign.center,
                               style: TextStyle(color: AppTheme.textSecondary)),
                         ),
