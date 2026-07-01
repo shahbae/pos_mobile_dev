@@ -135,8 +135,11 @@ class DashboardOperationalData {
       date: parsedDate,
       primaryTransactionType: (json['primary_transaction_type'] as String?)
           ?.toLowerCase(),
+      // BE baru mengirim `pos_sales`; `primary_sales` tetap didukung sebagai
+      // fallback untuk kontrak lama.
       primarySales: DashboardOperationalSummary.fromJson(
-        (json['primary_sales'] as Map?)?.cast<String, dynamic>() ??
+        (json['pos_sales'] as Map?)?.cast<String, dynamic>() ??
+            (json['primary_sales'] as Map?)?.cast<String, dynamic>() ??
             const <String, dynamic>{},
       ),
       sales: (json['sales'] as List?) ?? const [],

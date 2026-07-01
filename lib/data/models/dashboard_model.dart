@@ -12,6 +12,11 @@ class DashboardData {
   final String? to;
   final int? branchId;
 
+  /// Penjualan bersih = penjualan − pengeluaran (string desimal dari BE).
+  /// Beda dari [DashboardOperationalData.net] yang juga mengurangi pembelian.
+  /// null bila BE tidak mengirim untuk role ini.
+  final num? netSales;
+
   /// Section operasional (= struktur GET /dashboard/operational).
   final DashboardOperationalData? operational;
 
@@ -32,6 +37,7 @@ class DashboardData {
     this.from,
     this.to,
     this.branchId,
+    this.netSales,
     this.operational,
     this.profit,
     this.payments = const [],
@@ -58,11 +64,22 @@ class DashboardData {
         ? rawPayments
         : (asMap(rawPayments)?['rows'] as List? ?? const []);
 
+    // top_products: objek {rows:[...]} (owner/supervisor/leader) atau list langsung.
+    final rawTop = j['top_products'];
+    final List topProductsList =
+        rawTop is List ? rawTop : (asMap(rawTop)?['rows'] as List? ?? const []);
+
+    // team_attendance: objek {items:[...]} atau list langsung.
+    final rawTeam = j['team_attendance'];
+    final List teamList =
+        rawTeam is List ? rawTeam : (asMap(rawTeam)?['items'] as List? ?? const []);
+
     return DashboardData(
       role: (j['role'] ?? '').toString(),
       from: j['from']?.toString(),
       to: j['to']?.toString(),
       branchId: j['branch_id'] == null ? null : _int(j['branch_id']),
+      netSales: j['net_sales'] == null ? null : _num(j['net_sales']),
       operational: op == null ? null : DashboardOperationalData.fromJson(op),
       profit: asMap(j['profit']) == null
           ? null
@@ -71,7 +88,7 @@ class DashboardData {
           .whereType<Map>()
           .map((e) => DashboardPaymentRow.fromJson(e.cast<String, dynamic>()))
           .toList(),
-      topProducts: asList(j['top_products'])
+      topProducts: topProductsList
           .whereType<Map>()
           .map((e) => DashboardTopProduct.fromJson(e.cast<String, dynamic>()))
           .toList(),
@@ -82,7 +99,7 @@ class DashboardData {
       currentShift: asMap(j['current_shift']) == null
           ? null
           : DashboardShift.fromJson(asMap(j['current_shift'])!),
-      teamAttendance: asList(j['team_attendance'])
+      teamAttendance: teamList
           .whereType<Map>()
           .map((e) => DashboardAttendanceRow.fromJson(e.cast<String, dynamic>()))
           .toList(),
@@ -150,16 +167,28 @@ class DashboardPaymentRow {
 
 class DashboardTopProduct {
   final String name;
+  final String? variantName;
   final int qty;
   final num total;
 
-  const DashboardTopProduct({required this.name, this.qty = 0, this.total = 0});
+  const DashboardTopProduct({
+    required this.name,
+    this.variantName,
+    this.qty = 0,
+    this.total = 0,
+  });
+
+  /// Nama tampilan: "Produk - Varian" bila ada varian.
+  String get displayName =>
+      (variantName != null && variantName!.isNotEmpty) ? '$name - $variantName' : name;
 
   factory DashboardTopProduct.fromJson(Map<String, dynamic> j) {
+    final vn = j['variant_name']?.toString();
     return DashboardTopProduct(
       name: (j['name'] ?? j['product_name'] ?? '-').toString(),
-      qty: _int(j['qty'] ?? j['quantity'] ?? j['total_qty']),
-      total: _num(j['total'] ?? j['revenue'] ?? j['total_amount']),
+      variantName: (vn == null || vn.isEmpty) ? null : vn,
+      qty: _int(j['qty_sold'] ?? j['qty'] ?? j['quantity'] ?? j['total_qty']),
+      total: _num(j['revenue'] ?? j['total'] ?? j['total_amount']),
     );
   }
 }
@@ -188,33 +217,60 @@ class DashboardBranchRow {
 }
 
 class DashboardShift {
+  final String shiftName;
   final String cashierName;
   final num openingCash;
+
+  /// Tunai masuk dari penjualan cash (field baru BE).
+  final num cashSales;
   final num totalSales;
   final num expectedCash;
+
+  /// null selama shift masih `open`; terisi setelah shift ditutup.
+  final num? closingCash;
+  final num? difference;
   final String status;
   final List<DashboardPaymentRow> payments;
 
+  /// Top product selama shift ini (dikirim BE untuk kasir).
+  final List<DashboardTopProduct> topProducts;
+
   const DashboardShift({
+    this.shiftName = '',
     required this.cashierName,
     required this.openingCash,
+    this.cashSales = 0,
     required this.totalSales,
     required this.expectedCash,
+    this.closingCash,
+    this.difference,
     required this.status,
     this.payments = const [],
+    this.topProducts = const [],
   });
+
+  bool get isOpen => status.toLowerCase() == 'open';
 
   factory DashboardShift.fromJson(Map<String, dynamic> j) {
     final pays = (j['payments'] as List?) ?? const [];
+    final tops = (j['top_products'] as List?) ?? const [];
     return DashboardShift(
+      shiftName: (j['shift_name'] ?? '').toString(),
       cashierName: (j['cashier_name'] ?? '-').toString(),
       openingCash: _num(j['opening_cash']),
+      cashSales: _num(j['cash_sales']),
       totalSales: _num(j['total_sales']),
       expectedCash: _num(j['expected_cash']),
+      closingCash: j['closing_cash'] == null ? null : _num(j['closing_cash']),
+      difference: j['difference'] == null ? null : _num(j['difference']),
       status: (j['status'] ?? '').toString(),
       payments: pays
           .whereType<Map>()
           .map((e) => DashboardPaymentRow.fromJson(e.cast<String, dynamic>()))
+          .toList(),
+      topProducts: tops
+          .whereType<Map>()
+          .map((e) => DashboardTopProduct.fromJson(e.cast<String, dynamic>()))
           .toList(),
     );
   }
@@ -222,14 +278,35 @@ class DashboardShift {
 
 class DashboardAttendanceRow {
   final String name;
-  final String status;
+  final String role;
+  final int totalDays;
+  final int shift1Days;
+  final int shift2Days;
+  final int middleDays;
+  final int noCheckoutDays;
+  final int outsideRadiusDays;
 
-  const DashboardAttendanceRow({required this.name, this.status = ''});
+  const DashboardAttendanceRow({
+    required this.name,
+    this.role = '',
+    this.totalDays = 0,
+    this.shift1Days = 0,
+    this.shift2Days = 0,
+    this.middleDays = 0,
+    this.noCheckoutDays = 0,
+    this.outsideRadiusDays = 0,
+  });
 
   factory DashboardAttendanceRow.fromJson(Map<String, dynamic> j) {
     return DashboardAttendanceRow(
-      name: (j['name'] ?? j['employee_name'] ?? j['user_name'] ?? '-').toString(),
-      status: (j['status'] ?? j['shift'] ?? '').toString(),
+      name: (j['user_name'] ?? j['name'] ?? j['employee_name'] ?? '-').toString(),
+      role: (j['user_role'] ?? j['role'] ?? '').toString(),
+      totalDays: _int(j['total_days']),
+      shift1Days: _int(j['shift_1_days']),
+      shift2Days: _int(j['shift_2_days']),
+      middleDays: _int(j['middle_days']),
+      noCheckoutDays: _int(j['no_checkout_days']),
+      outsideRadiusDays: _int(j['outside_radius_days']),
     );
   }
 }
@@ -239,6 +316,9 @@ class DashboardRecentTx {
   final num total;
   final String paymentMethod;
   final String? customerName;
+
+  /// Nama kasir/pembuat transaksi (field baru BE).
+  final String? actorName;
   final DateTime? createdAt;
 
   const DashboardRecentTx({
@@ -246,16 +326,21 @@ class DashboardRecentTx {
     this.total = 0,
     this.paymentMethod = '',
     this.customerName,
+    this.actorName,
     this.createdAt,
   });
 
   factory DashboardRecentTx.fromJson(Map<String, dynamic> j) {
     final ts = (j['created_at'] ?? j['time'])?.toString();
+    final actor = j['actor_name']?.toString();
     return DashboardRecentTx(
-      invoiceNo: (j['invoice_no'] ?? j['invoice'] ?? j['id'] ?? '-').toString(),
-      total: _num(j['total_amount'] ?? j['total'] ?? j['amount']),
+      invoiceNo:
+          (j['invoice_number'] ?? j['invoice_no'] ?? j['invoice'] ?? j['id'] ?? '-')
+              .toString(),
+      total: _num(j['amount'] ?? j['total_amount'] ?? j['total']),
       paymentMethod: (j['payment_method'] ?? '').toString(),
       customerName: j['customer_name']?.toString(),
+      actorName: (actor == null || actor.isEmpty) ? null : actor,
       createdAt: ts == null ? null : DateTime.tryParse(ts),
     );
   }

@@ -3,8 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:pos_mobile/data/models/dashboard_model.dart';
 import 'package:pos_mobile/data/models/dashboard_operational_model.dart';
-import 'package:pos_mobile/presentation/pages/expenses/expense_list_page.dart';
-import 'package:pos_mobile/presentation/pages/purchases/purchase_list_page.dart';
 import 'package:pos_mobile/presentation/providers/branch_provider.dart';
 import 'package:pos_mobile/presentation/providers/dashboard_operational_provider.dart';
 import 'package:pos_mobile/presentation/widgets/branch_switch_sheet.dart';
@@ -74,56 +72,23 @@ class _DashboardSections extends StatelessWidget {
         chart: op.chart,
         primaryTransactionType: op.primaryTransactionType,
       ));
+      // Ringkasan 3 metrik: Total Penjualan − Pengeluaran = Bersih.
+      // Total Penjualan diambil dari shift berjalan (current_shift.total_sales)
+      // agar konsisten dengan kartu Shift; fallback ke operasional bila tak ada
+      // shift aktif. Bersih dihitung penjualan − pengeluaran.
+      final penjualan =
+          data.currentShift?.totalSales ?? op.primarySales.totalAmountNum;
+      final pengeluaran = op.expenses.totalAmountNum;
+      final bersih = penjualan - pengeluaran;
       sections.add(const SizedBox(height: 12));
       sections.add(Row(
         children: [
-          Expanded(
-            child: _SummaryCard(
-              title: "Penjualan",
-              value: formatRupiah(op.primarySales.totalAmountNum),
-              subtitle: "${op.primarySales.count} transaksi",
-              icon: Icons.point_of_sale_outlined,
-              iconColor: AppTheme.brandBlue,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _SummaryCard(
-              title: "Bersih",
-              value: formatRupiah(op.netNum),
-              subtitle: "Penjualan - beli - keluar",
-              icon: Icons.account_balance_wallet_outlined,
-              iconColor: Colors.teal,
-            ),
-          ),
-        ],
-      ));
-      sections.add(const SizedBox(height: 12));
-      sections.add(Row(
-        children: [
-          Expanded(
-            child: _SummaryCard(
-              title: "Pembelian",
-              value: formatRupiah(op.purchases.totalAmountNum),
-              subtitle: "${op.purchases.count} transaksi",
-              icon: Icons.shopping_cart_checkout_outlined,
-              iconColor: Colors.orange,
-              onTap: () => Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const PurchaseListPage())),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _SummaryCard(
-              title: "Pengeluaran",
-              value: formatRupiah(op.expenses.totalAmountNum),
-              subtitle: "${op.expenses.count} transaksi",
-              icon: Icons.money_off_csred_outlined,
-              iconColor: Colors.red,
-              onTap: () => Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const ExpenseListPage())),
-            ),
-          ),
+          _statTile('Total Penjualan', formatRupiah(penjualan), AppTheme.brandBlue),
+          const SizedBox(width: 10),
+          _statTile('Pengeluaran', formatRupiah(pengeluaran), Colors.red),
+          const SizedBox(width: 10),
+          _statTile('Bersih', formatRupiah(bersih),
+              bersih < 0 ? AppTheme.danger : Colors.teal),
         ],
       ));
     }
@@ -620,90 +585,6 @@ class _DashboardSkeleton extends StatelessWidget {
   }
 }
 
-class _SummaryCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final String subtitle;
-  final IconData icon;
-  final Color iconColor;
-  final VoidCallback? onTap;
-
-  const _SummaryCard({
-    required this.title,
-    required this.value,
-    required this.subtitle,
-    required this.icon,
-    required this.iconColor,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppTheme.borderLight),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      color: AppTheme.textPrimary,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: iconColor.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(icon, color: iconColor, size: 20),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w900,
-                color: AppTheme.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 12,
-                color: AppTheme.textSecondary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 // ───────────────────────── Section cards (dashboard adaptif) ──────────────
 
 /// Kontainer kartu section dengan judul + opsi widget kanan + isi.
@@ -815,6 +696,50 @@ Widget _lineRow(
   );
 }
 
+/// Kartu metrik ringkas untuk trio ringkasan (Penjualan/Pengeluaran/Bersih).
+/// Nilai di-scale-down agar nominal besar tetap muat saat 3 kartu sejajar.
+Widget _statTile(String label, String value, Color color) {
+  return Expanded(
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.borderLight),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+                color: color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 /// Blok angka besar berlatar tinted (untuk metrik penting).
 Widget _metricTile(String label, String value, Color color) {
   return Expanded(
@@ -885,28 +810,31 @@ class _ShiftCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isOpen = shift.status.toLowerCase() == 'open';
+    final isOpen = shift.isOpen;
     return _SectionCard(
       title: 'Shift Berjalan',
       icon: Icons.point_of_sale_outlined,
       trailing: _statusChip(_shiftStatusLabel(shift.status), positive: isOpen),
       children: [
-        Row(
-          children: [
-            _metricTile('Total Penjualan', formatRupiah(shift.totalSales),
-                AppTheme.brandBlue),
-            const SizedBox(width: 10),
-            _metricTile('Kas Seharusnya', formatRupiah(shift.expectedCash),
-                Colors.teal),
-          ],
-        ),
-        const SizedBox(height: 6),
         _separated([
+          if (shift.shiftName.isNotEmpty) _lineRow('Shift', shift.shiftName),
           _lineRow('Kasir', shift.cashierName),
           _lineRow('Modal Awal', formatRupiah(shift.openingCash)),
-          if (shift.payments.isNotEmpty)
-            ...shift.payments.map(
-              (p) => _lineRow(p.method.toUpperCase(), formatRupiah(p.total)),
+          _lineRow('Cash', formatRupiah(shift.cashSales)),
+          _lineRow('Kas Seharusnya', formatRupiah(shift.expectedCash)),
+          // Metode cash sudah ditampilkan sebagai baris "Cash" di atas
+          // (cash_sales), jadi di rincian pembayaran cukup metode non-cash.
+          ...shift.payments
+              .where((p) => p.method.toLowerCase() != 'cash')
+              .map((p) => _lineRow(p.method.toUpperCase(), formatRupiah(p.total))),
+          // Terisi hanya setelah shift ditutup.
+          if (shift.closingCash != null)
+            _lineRow('Kas Akhir', formatRupiah(shift.closingCash!)),
+          if (shift.difference != null)
+            _lineRow(
+              'Selisih',
+              formatRupiah(shift.difference!),
+              valueColor: shift.difference! < 0 ? AppTheme.danger : const Color(0xFF16A34A),
             ),
         ]),
       ],
@@ -978,7 +906,9 @@ class _TopProductsCard extends StatelessWidget {
         _separated([
           for (var i = 0; i < rows.length; i++)
             _lineRow(
-              rows[i].qty > 0 ? '${rows[i].name} · ${rows[i].qty}x' : rows[i].name,
+              rows[i].qty > 0
+                  ? '${rows[i].displayName} · ${rows[i].qty}x'
+                  : rows[i].displayName,
               formatRupiah(rows[i].total),
               leading: _rankBadge(i + 1),
             ),
@@ -1039,10 +969,69 @@ class _TeamAttendanceCard extends StatelessWidget {
       title: 'Absensi Tim',
       icon: Icons.groups_outlined,
       children: [
-        _separated(rows
-            .map((r) => _lineRow(r.name, r.status.isEmpty ? '-' : r.status))
-            .toList()),
+        _separated(rows.map(_attendanceTile).toList()),
       ],
+    );
+  }
+
+  Widget _attendanceTile(DashboardAttendanceRow r) {
+    // Rangkuman ringkas: hadir + catatan (tanpa checkout / di luar radius).
+    final notes = <String>[
+      if (r.noCheckoutDays > 0) '${r.noCheckoutDays}x tanpa pulang',
+      if (r.outsideRadiusDays > 0) '${r.outsideRadiusDays}x luar radius',
+    ].join(' · ');
+    final sub = <String>[
+      if (r.role.isNotEmpty) r.role.toUpperCase(),
+      if (notes.isNotEmpty) notes,
+    ].join(' · ');
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  r.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+                if (sub.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    sub,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: r.noCheckoutDays > 0 || r.outsideRadiusDays > 0
+                          ? AppTheme.danger
+                          : AppTheme.textSecondary,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            '${r.totalDays} hari',
+            style: const TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w900,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1132,6 +1121,7 @@ class _RecentTransactionsCard extends StatelessWidget {
       if (r.customerName != null && r.customerName!.isNotEmpty) r.invoiceNo,
       if (r.createdAt != null) _hm(r.createdAt),
       if (r.paymentMethod.isNotEmpty) r.paymentMethod.toUpperCase(),
+      if (r.actorName != null) r.actorName!,
     ].join(' · ');
 
     return Padding(
