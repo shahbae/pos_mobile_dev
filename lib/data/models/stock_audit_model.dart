@@ -40,11 +40,21 @@ class StockAudit {
 class StockAuditItem {
   final int? id;
   final int? materialId;
+  final String? itemName;
   final String? materialName;
   final int? toppingId;
   final String? toppingName;
   final double systemQty;
   final double physicalQty;
+
+  /// Jumlah yang dikembalikan (keluar cabang secara sah, bukan terjual/hilang).
+  /// diff = physical − (system − returned), dihitung BE. Default 0.
+  final double returnedQty;
+
+  /// Info read-only: jumlah masuk (movement IN) item ini di cabang hari ini.
+  /// Snapshot saat draft dibuat/di-update. Hanya konteks buat auditor.
+  final double incomingToday;
+
   final double diff;
 
   /// Nilai satuan item saat audit dibuat (purchase_price material / unit_cost
@@ -54,11 +64,14 @@ class StockAuditItem {
   StockAuditItem({
     this.id,
     this.materialId,
+    this.itemName,
     this.materialName,
     this.toppingId,
     this.toppingName,
     this.systemQty = 0,
     this.physicalQty = 0,
+    this.returnedQty = 0,
+    this.incomingToday = 0,
     this.diff = 0,
     this.unitValue = 0,
   });
@@ -67,9 +80,12 @@ class StockAuditItem {
   /// (diff < 0). 0 bila tidak ada kekurangan atau harga belum tersedia.
   double get lossValue => diff < 0 ? diff.abs() * unitValue : 0;
 
+  /// Sumber utama nama = `item_name` (BE versi sekarang). `material_name`/
+  /// `topping_name` disimpan sebagai fallback, praktis jarang terisi.
   String get displayName {
-    if (materialName != null) return materialName!;
-    if (toppingName != null) return toppingName!;
+    if (itemName != null && itemName!.isNotEmpty) return itemName!;
+    if (materialName != null && materialName!.isNotEmpty) return materialName!;
+    if (toppingName != null && toppingName!.isNotEmpty) return toppingName!;
     if (materialId != null) return 'Material #$materialId';
     if (toppingId != null) return 'Topping #$toppingId';
     return 'Item';
@@ -85,11 +101,14 @@ class StockAuditItem {
     return StockAuditItem(
       id: j['id'],
       materialId: j['material_id'],
+      itemName: j['item_name']?.toString(),
       materialName: j['material_name']?.toString(),
       toppingId: j['topping_id'],
       toppingName: j['topping_name']?.toString(),
       systemQty: _toDouble(j['system_qty']),
       physicalQty: _toDouble(j['physical_qty']),
+      returnedQty: _toDouble(j['returned_qty']),
+      incomingToday: _toDouble(j['incoming_today']),
       diff: _toDouble(j['diff']),
       unitValue: _toDouble(j['unit_value']),
     );

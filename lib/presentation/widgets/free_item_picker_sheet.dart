@@ -4,6 +4,7 @@ import 'package:pos_mobile/data/models/product_model.dart';
 import 'package:pos_mobile/presentation/providers/product_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/utils/currency.dart';
+import 'package:pos_mobile/utils/xl_promo.dart';
 
 /// Bottom sheet untuk memilih produk `freeable` sebagai item gratis (bonus).
 /// Mengembalikan [Product] terpilih, atau null bila dibatalkan. Pemilihan
@@ -95,17 +96,24 @@ class _FreeItemPickerSheetState extends ConsumerState<_FreeItemPickerSheet> {
               Expanded(
                 child: productsAsync.when(
                   data: (all) {
-                    // Hanya produk yang harga dasarnya (atau salah satu varian)
-                    // ≤ item termurah di keranjang yang boleh digratiskan.
-                    final products = all
-                        .where((p) => p.minVariantPriceNum <= widget.maxPrice)
-                        .toList();
+                    // Item gratis hanya ukuran XL, dan harganya ≤ item termurah
+                    // di keranjang. Untuk produk bervarian, ditampilkan bila ada
+                    // minimal satu varian XL yang memenuhi batas harga.
+                    final products = all.where((p) {
+                      if (p.hasVariants) {
+                        return p.variants.any((v) =>
+                            nameHasXL(v.name) &&
+                            v.sellingPriceNum <= widget.maxPrice);
+                      }
+                      return nameHasXL(p.name) &&
+                          p.sellingPriceNum <= widget.maxPrice;
+                    }).toList();
                     if (products.isEmpty) {
                       return const Center(
                         child: Padding(
                           padding: EdgeInsets.all(24),
                           child: Text(
-                              "Tidak ada menu yang bisa digratiskan "
+                              "Tidak ada menu XL yang bisa digratiskan "
                               "(harus ≤ item termurah di keranjang).",
                               textAlign: TextAlign.center,
                               style: TextStyle(color: AppTheme.textSecondary)),

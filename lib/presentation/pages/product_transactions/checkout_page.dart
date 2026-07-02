@@ -12,6 +12,7 @@ import 'package:pos_mobile/presentation/widgets/free_item_picker_sheet.dart';
 import 'package:pos_mobile/presentation/widgets/topping_picker_sheet.dart';
 import 'package:pos_mobile/presentation/widgets/variant_picker_sheet.dart';
 import 'package:pos_mobile/utils/currency.dart';
+import 'package:pos_mobile/utils/xl_promo.dart';
 import 'package:pos_mobile/core/utils/currency_input_formatter.dart';
 
 /// Metode pembayaran sesuai BE: CASH | TRANSFER | QRIS | DEBIT | CREDIT | EWALLET
@@ -629,6 +630,15 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       _toast("Tambahkan item ke keranjang dulu.", Colors.orange);
       return;
     }
+    // Promo item gratis hanya berlaku bila SEMUA item di keranjang berukuran XL
+    // (deteksi dari nama produk atau nama varian).
+    final allXL =
+        items.every((i) => nameHasXL(i.product.name) || nameHasXL(i.variant?.name));
+    if (!allXL) {
+      _toast("Item gratis hanya untuk transaksi yang semua itemnya ukuran XL.",
+          Colors.orange);
+      return;
+    }
     // Harga dasar item termurah di keranjang (harga variant/produk, tanpa topping).
     final cheapest =
         items.map((i) => i.unitPrice).reduce((a, b) => a < b ? a : b);
@@ -645,10 +655,12 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
         variants = const [];
       }
       if (!mounted) return;
-      // Hanya varian yang ≤ item termurah yang boleh dijadikan gratis.
-      variants = variants.where((v) => v.sellingPriceNum <= cheapest).toList();
+      // Hanya varian XL yang ≤ item termurah yang boleh dijadikan gratis.
+      variants = variants
+          .where((v) => v.sellingPriceNum <= cheapest && nameHasXL(v.name))
+          .toList();
       if (variants.isEmpty) {
-        _toast("Tidak ada varian yang memenuhi batas harga item gratis.", Colors.orange);
+        _toast("Tidak ada varian XL yang memenuhi batas harga item gratis.", Colors.orange);
         return;
       }
       variant = await showVariantPicker(

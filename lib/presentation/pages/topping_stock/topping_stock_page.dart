@@ -74,6 +74,11 @@ class ToppingStockPage extends ConsumerWidget {
                   '${_fmtQty(s.qty)} ${s.unit}'.trim(),
                   style: const TextStyle(fontSize: 14, color: AppTheme.brandBlue, fontWeight: FontWeight.w700),
                 ),
+                if (s.incomingToday > 0) ...[
+                  const SizedBox(height: 2),
+                  Text('Masuk hari ini: ${_fmtQty(s.incomingToday)} ${s.unit}'.trim(),
+                      style: const TextStyle(fontSize: 11, color: Colors.green, fontWeight: FontWeight.w700)),
+                ],
               ],
             ),
           ),

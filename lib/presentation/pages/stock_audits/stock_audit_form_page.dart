@@ -2,13 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:pos_mobile/data/models/stock_audit_model.dart';
 import 'package:pos_mobile/presentation/providers/material_provider.dart';
 import 'package:pos_mobile/presentation/providers/topping_provider.dart';
 import 'package:pos_mobile/presentation/providers/stock_audit_provider.dart';
+import 'package:pos_mobile/presentation/providers/stock_level_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
 class StockAuditFormPage extends ConsumerStatefulWidget {
-  const StockAuditFormPage({super.key});
+  /// Bila diisi = mode edit draft (prefill + PUT). Null = buat audit baru.
+  final StockAudit? audit;
+
+  const StockAuditFormPage({super.key, this.audit});
+
+  bool get isEdit => audit != null;
 
   @override
   ConsumerState<StockAuditFormPage> createState() => _StockAuditFormPageState();
@@ -16,15 +23,42 @@ class StockAuditFormPage extends ConsumerStatefulWidget {
 
 class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
   final _notes = TextEditingController();
-  // key "m:<id>" / "t:<id>" -> qty fisik (string desimal)
+  // key "m:<id>" / "t:<id>" -> qty (string). Bahan integer, topping desimal.
   final Map<String, String> _physical = {};
+  final Map<String, String> _returned = {};
+  // key yang field "Dikembalikan"-nya sedang ditampilkan.
+  final Set<String> _returnedOpen = {};
   bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final audit = widget.audit;
+    if (audit != null) {
+      _notes.text = audit.notes ?? '';
+      for (final it in audit.items) {
+        final key = it.materialId != null
+            ? 'm:${it.materialId}'
+            : (it.toppingId != null ? 't:${it.toppingId}' : null);
+        if (key == null) continue;
+        _physical[key] = _fmtNum(it.physicalQty);
+        if (it.returnedQty > 0) {
+          _returned[key] = _fmtNum(it.returnedQty);
+          _returnedOpen.add(key);
+        }
+      }
+    }
+  }
 
   @override
   void dispose() {
     _notes.dispose();
     super.dispose();
   }
+
+  /// Tampilkan bilangan bulat tanpa desimal, selain itu apa adanya.
+  String _fmtNum(double v) =>
+      v == v.roundToDouble() ? v.toInt().toString() : v.toString();
 
   Future<void> _submit() async {
     final items = <Map<String, dynamic>>[];
@@ -33,40 +67,49 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
       if (v.isEmpty) return;
       final id = int.tryParse(key.substring(2));
       if (id == null) return;
+      final isMaterial = key.startsWith('m:');
+      final ret = _returned[key]?.trim() ?? '';
       items.add({
-        if (key.startsWith('m:')) 'material_id': id,
-        if (key.startsWith('t:')) 'topping_id': id,
+        if (isMaterial) 'material_id': id,
+        if (!isMaterial) 'topping_id': id,
         'physical_qty': v, // string desimal sesuai BE
+        if (ret.isNotEmpty) 'returned_qty': ret,
       });
     });
 
     if (items.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Isi jumlah fisik minimal 1 item'),
-        backgroundColor: Colors.orange,
-        behavior: SnackBarBehavior.floating,
-      ));
+      _toast('Isi jumlah fisik minimal 1 item', Colors.orange);
       return;
     }
 
     setState(() => _saving = true);
     try {
-      await ref.read(stockAuditRepositoryProvider).createAudit(
-            notes: _notes.text.trim(),
-            items: items,
-          );
+      final repo = ref.read(stockAuditRepositoryProvider);
+      if (widget.isEdit) {
+        await repo.updateAudit(
+          id: widget.audit!.id,
+          notes: _notes.text.trim(),
+          items: items,
+        );
+        ref.invalidate(stockAuditDetailProvider(widget.audit!.id));
+      } else {
+        await repo.createAudit(notes: _notes.text.trim(), items: items);
+      }
+      ref.invalidate(stockAuditListProvider);
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('$e'),
-          backgroundColor: AppTheme.danger,
-          behavior: SnackBarBehavior.floating,
-        ));
-      }
+      if (mounted) _toast('$e', AppTheme.danger);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  void _toast(String msg, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: color,
+      behavior: SnackBarBehavior.floating,
+    ));
   }
 
   @override
@@ -76,7 +119,10 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
 
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
-      appBar: AppBar(title: const Text('Audit Baru'), centerTitle: true),
+      appBar: AppBar(
+        title: Text(widget.isEdit ? 'Edit Audit' : 'Audit Baru'),
+        centerTitle: true,
+      ),
       body: Builder(builder: (_) {
         if (materialsAsync.isLoading || toppingsAsync.isLoading) {
           return const Center(child: CircularProgressIndicator());
@@ -86,6 +132,16 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
         }
         final materials = materialsAsync.valueOrNull ?? [];
         final toppings = toppingsAsync.valueOrNull ?? [];
+
+        // Info stok (opsional): stok sistem + masuk hari ini per item. Tidak
+        // memblok tampilan — muncul begitu data stok tersedia.
+        final levels = ref.watch(materialStockLevelsProvider).valueOrNull ?? const [];
+        final toppingStocks = ref.watch(toppingStockListProvider).valueOrNull ?? const [];
+        final levelByMat = {
+          for (final l in levels)
+            if (l.materialId != null) l.materialId!: l,
+        };
+        final stockByTop = {for (final s in toppingStocks) s.toppingId: s};
 
         return Column(
           children: [
@@ -118,7 +174,10 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
                         children: [
                           for (int i = 0; i < materials.length; i++) ...[
                             if (i > 0) const Divider(height: 1, color: AppTheme.borderLight),
-                            _qtyRow('m:${materials[i].id}', materials[i].name, materials[i].unit),
+                            _qtyRow('m:${materials[i].id}', materials[i].name,
+                                materials[i].unit, true,
+                                systemQty: levelByMat[materials[i].id]?.qtyOnHand,
+                                incomingToday: levelByMat[materials[i].id]?.incomingToday),
                           ],
                         ],
                       ),
@@ -134,7 +193,10 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
                         children: [
                           for (int i = 0; i < toppings.length; i++) ...[
                             if (i > 0) const Divider(height: 1, color: AppTheme.borderLight),
-                            _qtyRow('t:${toppings[i].id}', toppings[i].name, toppings[i].unit),
+                            _qtyRow('t:${toppings[i].id}', toppings[i].name,
+                                toppings[i].unit, false,
+                                systemQty: stockByTop[toppings[i].id]?.qty,
+                                incomingToday: stockByTop[toppings[i].id]?.incomingToday),
                           ],
                         ],
                       ),
@@ -159,7 +221,8 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
                     ),
                     child: _saving
                         ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Text('Simpan Audit', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                        : Text(widget.isEdit ? 'Simpan Perubahan' : 'Simpan Audit',
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
                   ),
                 ),
               ),
@@ -170,46 +233,104 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
     );
   }
 
-  Widget _qtyRow(String key, String name, String unit) {
+  Widget _qtyRow(
+    String key,
+    String name,
+    String unit,
+    bool isMaterial, {
+    num? systemQty,
+    num? incomingToday,
+  }) {
+    final open = _returnedOpen.contains(key);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: Row(
+      child: Column(
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                if (unit.isNotEmpty)
-                  Text(unit, style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
-              ],
-            ),
-          ),
-          SizedBox(
-            width: 110,
-            child: TextField(
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-              textAlign: TextAlign.right,
-              onChanged: (v) => _physical[key] = v,
-              decoration: InputDecoration(
-                hintText: 'qty fisik',
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                filled: true,
-                fillColor: AppTheme.bgLight,
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide.none,
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: AppTheme.brandBlue),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                    if (unit.isNotEmpty)
+                      Text(unit, style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                    if (systemQty != null) ...[
+                      const SizedBox(height: 2),
+                      Text('Sistem: ${_fmtNum(systemQty.toDouble())}',
+                          style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
+                    ],
+                    if (incomingToday != null && incomingToday > 0)
+                      Text('Masuk hari ini: ${_fmtNum(incomingToday.toDouble())}',
+                          style: const TextStyle(fontSize: 11, color: Colors.green, fontWeight: FontWeight.w700)),
+                  ],
                 ),
               ),
-            ),
+              SizedBox(width: 96, child: _numField(key, _physical, isMaterial, 'qty fisik')),
+              IconButton(
+                tooltip: open ? 'Batalkan dikembalikan' : 'Barang dikembalikan',
+                visualDensity: VisualDensity.compact,
+                icon: Icon(
+                  open ? Icons.remove_circle_outline : Icons.assignment_return_outlined,
+                  size: 20,
+                  color: open ? AppTheme.danger : AppTheme.brandBlue,
+                ),
+                onPressed: () => setState(() {
+                  if (open) {
+                    _returnedOpen.remove(key);
+                    _returned.remove(key);
+                  } else {
+                    _returnedOpen.add(key);
+                  }
+                }),
+              ),
+            ],
           ),
+          if (open)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.assignment_return_outlined, size: 16, color: AppTheme.textSecondary),
+                  const SizedBox(width: 6),
+                  const Text('Dikembalikan',
+                      style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                  const Spacer(),
+                  SizedBox(width: 96, child: _numField(key, _returned, isMaterial, 'qty')),
+                ],
+              ),
+            ),
         ],
+      ),
+    );
+  }
+
+  /// Field angka: bahan integer-only (§1), topping boleh desimal.
+  Widget _numField(String key, Map<String, String> store, bool isMaterial, String hint) {
+    return TextFormField(
+      initialValue: store[key],
+      keyboardType: TextInputType.numberWithOptions(decimal: !isMaterial),
+      inputFormatters: [
+        isMaterial
+            ? FilteringTextInputFormatter.digitsOnly
+            : FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+      ],
+      textAlign: TextAlign.right,
+      onChanged: (v) => store[key] = v,
+      decoration: InputDecoration(
+        hintText: hint,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        filled: true,
+        fillColor: AppTheme.bgLight,
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppTheme.brandBlue),
+        ),
       ),
     );
   }

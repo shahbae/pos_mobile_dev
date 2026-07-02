@@ -6,6 +6,9 @@ class StockLevelModel {
   final int? qtyOnHand;
   final String? updatedAt;
 
+  /// Jumlah stok masuk (movement IN) hari ini. Bahan bertipe integer.
+  final int incomingToday;
+
   StockLevelModel({
     this.id,
     this.tenantId,
@@ -13,6 +16,7 @@ class StockLevelModel {
     this.materialId,
     this.qtyOnHand,
     this.updatedAt,
+    this.incomingToday = 0,
   });
 
   factory StockLevelModel.fromJson(Map<String, dynamic> j) {
@@ -23,6 +27,9 @@ class StockLevelModel {
       materialId: j['material_id'],
       qtyOnHand: j['qty_on_hand'],
       updatedAt: j['updated_at'],
+      incomingToday: (j['incoming_today'] as num?)?.toInt() ??
+          int.tryParse(j['incoming_today']?.toString() ?? '') ??
+          0,
     );
   }
 }

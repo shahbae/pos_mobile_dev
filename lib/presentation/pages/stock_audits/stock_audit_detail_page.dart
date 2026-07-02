@@ -8,6 +8,7 @@ import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/stock_audit_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/utils/currency.dart';
+import 'stock_audit_form_page.dart';
 import 'stock_audit_list_page.dart' show StatusChip;
 
 class StockAuditDetailPage extends ConsumerStatefulWidget {
@@ -20,6 +21,61 @@ class StockAuditDetailPage extends ConsumerStatefulWidget {
 
 class _StockAuditDetailPageState extends ConsumerState<StockAuditDetailPage> {
   bool _approving = false;
+  bool _deleting = false;
+
+  bool get _busy => _approving || _deleting;
+
+  void _snack(String msg, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: color,
+      behavior: SnackBarBehavior.floating,
+    ));
+  }
+
+  Future<void> _edit(StockAudit audit) async {
+    final saved = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => StockAuditFormPage(audit: audit)),
+    );
+    if (saved == true) {
+      ref.invalidate(stockAuditDetailProvider(widget.auditId));
+      ref.invalidate(stockAuditListProvider);
+    }
+  }
+
+  Future<void> _delete() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hapus Draft'),
+        content: const Text('Hapus draft audit ini beserta itemnya? Tindakan ini tidak bisa dibatalkan.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Hapus', style: TextStyle(color: AppTheme.danger)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    setState(() => _deleting = true);
+    try {
+      await ref.read(stockAuditRepositoryProvider).deleteAudit(widget.auditId);
+      ref.invalidate(stockAuditListProvider);
+      if (mounted) {
+        _snack('Draft audit dihapus', Colors.green);
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _deleting = false);
+        _snack('$e', AppTheme.danger);
+      }
+    }
+  }
 
   Future<void> _approve() async {
     final confirm = await showDialog<bool>(
@@ -63,10 +119,32 @@ class _StockAuditDetailPageState extends ConsumerState<StockAuditDetailPage> {
   @override
   Widget build(BuildContext context) {
     final auditAsync = ref.watch(stockAuditDetailProvider(widget.auditId));
+    final audit = auditAsync.valueOrNull;
+    final canManage =
+        audit != null && audit.isDraft && canCreateAudit(ref.watch(authProvider).role);
 
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
-      appBar: AppBar(title: Text('Audit #${widget.auditId}'), centerTitle: true),
+      appBar: AppBar(
+        title: Text('Audit #${widget.auditId}'),
+        centerTitle: true,
+        actions: canManage
+            ? [
+                IconButton(
+                  tooltip: 'Edit draft',
+                  icon: const Icon(Icons.edit_outlined),
+                  onPressed: _busy ? null : () => _edit(audit),
+                ),
+                IconButton(
+                  tooltip: 'Hapus draft',
+                  icon: _deleting
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.delete_outline),
+                  onPressed: _busy ? null : _delete,
+                ),
+              ]
+            : null,
+      ),
       body: auditAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Gagal memuat: $e')),
@@ -140,7 +218,7 @@ class _StockAuditDetailPageState extends ConsumerState<StockAuditDetailPage> {
               child: SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: _approving ? null : _approve,
+                  onPressed: _busy ? null : _approve,
                   icon: _approving
                       ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                       : const Icon(Icons.check_circle_outline),
@@ -176,6 +254,12 @@ class _StockAuditDetailPageState extends ConsumerState<StockAuditDetailPage> {
                 Text(it.displayName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                 if (it.typeLabel != null)
                   Text(it.typeLabel!, style: const TextStyle(fontSize: 10, color: AppTheme.textSecondary)),
+                if (it.returnedQty > 0)
+                  Text('Dikembalikan ${_fmtQty(it.returnedQty)}',
+                      style: const TextStyle(fontSize: 10, color: AppTheme.textSecondary)),
+                if (it.incomingToday > 0)
+                  Text('Masuk hari ini ${_fmtQty(it.incomingToday)}',
+                      style: const TextStyle(fontSize: 10, color: AppTheme.brandBlue)),
                 if (it.lossValue > 0)
                   Text('Rugi ${formatRupiah(it.lossValue)}',
                       style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppTheme.danger)),

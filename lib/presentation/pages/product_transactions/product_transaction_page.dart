@@ -91,10 +91,28 @@ class ProductTransactionPage extends ConsumerWidget {
               ),
             ),
           ),
+          // Tab kategori (client-side). "Semua" + tiap kategori dari katalog.
+          if (productState.categories.isNotEmpty)
+            _CategoryTabs(
+              categories: productState.categories,
+              selectedId: productState.categoryId,
+              onSelect: (id) =>
+                  ref.read(productPaginationProvider.notifier).selectCategory(id),
+            ),
           Expanded(
-            child: productState.items.isEmpty && productState.loading
+            child: productState.loading && productState.allItems.isEmpty
                 ? const Center(child: CircularProgressIndicator())
-                : GridView.builder(
+                : productState.items.isEmpty
+                    ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Text(
+                            "Produk tidak ditemukan",
+                            style: TextStyle(color: AppTheme.textSecondary),
+                          ),
+                        ),
+                      )
+                    : GridView.builder(
                     padding: const EdgeInsets.all(16),
                     gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                       maxCrossAxisExtent: 220,
@@ -244,6 +262,66 @@ class ProductTransactionPage extends ConsumerWidget {
                 ),
               ),
             ),
+    );
+  }
+}
+
+/// Baris tab kategori yang bisa di-scroll horizontal. "Semua" (id null) selalu
+/// paling depan, diikuti tiap kategori dari katalog.
+class _CategoryTabs extends StatelessWidget {
+  final List<ProductCategoryTab> categories;
+  final int? selectedId;
+  final ValueChanged<int?> onSelect;
+
+  const _CategoryTabs({
+    required this.categories,
+    required this.selectedId,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.only(bottom: 12),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          children: [
+            _chip('Semua', selectedId == null, () => onSelect(null)),
+            for (final c in categories) ...[
+              const SizedBox(width: 8),
+              _chip(c.name, selectedId == c.id, () => onSelect(c.id)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _chip(String label, bool selected, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected ? AppTheme.brandBlue : AppTheme.bgLight,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? AppTheme.brandBlue : AppTheme.borderLight,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? Colors.white : AppTheme.textSecondary,
+            fontWeight: FontWeight.w700,
+            fontSize: 13,
+          ),
+        ),
+      ),
     );
   }
 }

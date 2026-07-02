@@ -170,6 +170,11 @@ class _StockRow extends StatelessWidget {
                   '${level.qtyOnHand ?? 0} ${material?.unit ?? ''}'.trim(),
                   style: const TextStyle(fontSize: 14, color: AppTheme.brandBlue, fontWeight: FontWeight.w700),
                 ),
+                if (level.incomingToday > 0) ...[
+                  const SizedBox(height: 2),
+                  Text('Masuk hari ini: ${level.incomingToday} ${material?.unit ?? ''}'.trim(),
+                      style: const TextStyle(fontSize: 11, color: Colors.green, fontWeight: FontWeight.w700)),
+                ],
                 if (level.updatedAt != null) ...[
                   const SizedBox(height: 2),
                   Text('Update: ${_fmt(level.updatedAt!)}',

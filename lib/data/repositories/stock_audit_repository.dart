@@ -23,7 +23,7 @@ class StockAuditRepository {
   }
 
   /// Buat audit baru.
-  /// items: [{material_id, physical_qty}]
+  /// items: [{material_id|topping_id, physical_qty, returned_qty?}]
   Future<StockAudit> createAudit({
     String? notes,
     required List<Map<String, dynamic>> items,
@@ -36,6 +36,33 @@ class StockAuditRepository {
       return StockAudit.fromJson(res.data['data'] ?? res.data);
     } on DioException catch (e) {
       throw _msg(e, 'Gagal membuat audit stok');
+    }
+  }
+
+  /// Perbarui draft audit (notes + items). Snapshot dihitung ulang oleh BE.
+  /// Draft-only; audit approved → 409. branch_id tidak dikirim (tetap).
+  Future<StockAudit> updateAudit({
+    required int id,
+    String? notes,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    try {
+      final res = await api.dio.put('/stock-audits/$id', data: {
+        if (notes != null && notes.isNotEmpty) 'notes': notes,
+        'items': items,
+      });
+      return StockAudit.fromJson(res.data['data'] ?? res.data);
+    } on DioException catch (e) {
+      throw _msg(e, 'Gagal memperbarui audit stok');
+    }
+  }
+
+  /// Hapus draft audit beserta itemnya. Draft-only; audit approved → 409.
+  Future<void> deleteAudit(int id) async {
+    try {
+      await api.dio.delete('/stock-audits/$id');
+    } on DioException catch (e) {
+      throw _msg(e, 'Gagal menghapus audit stok');
     }
   }
 
@@ -52,6 +79,26 @@ class StockAuditRepository {
   String _msg(DioException e, String fallback) {
     final data = e.response?.data;
     final m = (data is Map) ? (data['message'] ?? data['error']) : null;
-    return m?.toString() ?? '$fallback (${e.response?.statusCode ?? e.message})';
+    final raw = m?.toString();
+    final friendly = _friendly(raw);
+    if (friendly != null) return friendly;
+    return raw ?? '$fallback (${e.response?.statusCode ?? e.message})';
+  }
+
+  /// Terjemahkan pesan error BE yang dikenal ke bahasa Indonesia yang ramah.
+  String? _friendly(String? code) {
+    switch (code?.toLowerCase().trim()) {
+      case 'insufficient stock to apply audit adjustment':
+        return 'Stok saat ini tidak cukup untuk menerapkan penyesuaian audit. '
+            'Hitung ulang stok fisik lalu coba lagi.';
+      case 'audit already approved':
+        return 'Audit sudah disetujui, tidak bisa diubah atau dihapus.';
+      case 'duplicate item in audit':
+        return 'Ada item yang tercatat lebih dari sekali dalam audit.';
+      case 'invalid input':
+        return 'Input tidak valid. Pastikan jumlah bahan berupa bilangan bulat.';
+      default:
+        return null;
+    }
   }
 }
