@@ -27,9 +27,11 @@ class ShiftRepository {
     }
   }
 
-  Future<ShiftModel> open(num openingCash) async {
+  /// Buka shift. Uang laci (opening_cash) di-set backend dari master cabang,
+  /// kasir tidak bisa meng-override, jadi FE tidak mengirim opening_cash.
+  Future<ShiftModel> open() async {
     try {
-      final res = await api.dio.post('/shifts', data: {'opening_cash': openingCash});
+      final res = await api.dio.post('/shifts', data: <String, dynamic>{});
       return ShiftModel.fromJson(res.data as Map<String, dynamic>);
     } on DioException catch (e) {
       throw e.response?.data?['message'] ?? 'Gagal membuka shift';

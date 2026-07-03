@@ -8,6 +8,7 @@ import 'package:pos_mobile/data/models/shift_model.dart';
 import 'package:pos_mobile/data/repositories/shift_repository.dart';
 import 'package:pos_mobile/presentation/pages/shifts/shift_list_page.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
+import 'package:pos_mobile/presentation/providers/branch_provider.dart';
 import 'package:pos_mobile/presentation/providers/shift_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/utils/currency.dart';
@@ -69,16 +70,13 @@ class ShiftPage extends ConsumerWidget {
   }
 
   Future<void> _openShift(BuildContext context, WidgetRef ref) async {
-    final amount = await _askAmount(
-      context,
-      title: 'Buka Shift',
-      label: 'Kas Awal (modal laci)',
-      confirmText: 'Buka Shift',
-    );
-    if (amount == null) return;
+    // Kas awal kini otomatis dari master cabang; kasir tidak input/override.
+    final defaultOpeningCash = ref.read(currentBranchProvider)?.defaultOpeningCash;
+    final confirmed = await _confirmOpenShift(context, defaultOpeningCash);
+    if (confirmed != true) return;
 
     await _runWithLoading(context, () async {
-      await ref.read(shiftRepositoryProvider).open(amount);
+      await ref.read(shiftRepositoryProvider).open();
       ref.invalidate(currentShiftProvider);
     }, successMsg: 'Shift dibuka');
   }
@@ -105,6 +103,60 @@ class ShiftPage extends ConsumerWidget {
       );
     }
   }
+}
+
+/// Dialog konfirmasi buka shift. Kas awal read-only (dari master cabang).
+Future<bool?> _confirmOpenShift(BuildContext context, num? defaultOpeningCash) {
+  return showDialog<bool>(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Buka Shift'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Kas awal (modal laci) otomatis ditetapkan dari pengaturan cabang.',
+              style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: AppTheme.brandBlue.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Kas Awal',
+                      style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                  const SizedBox(height: 4),
+                  Text(
+                    formatRupiah(defaultOpeningCash ?? 0),
+                    style: const TextStyle(
+                        fontSize: 22, fontWeight: FontWeight.w800, color: AppTheme.brandBlue),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.brandBlue, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Buka Shift'),
+          ),
+        ],
+      );
+    },
+  );
 }
 
 /// Dialog input nominal uang.

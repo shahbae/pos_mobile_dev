@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/data/models/daily_report_model.dart';
+import 'package:pos_mobile/data/models/leader_daily_report_model.dart';
 import 'package:pos_mobile/data/models/payments_report_model.dart';
 import 'package:pos_mobile/data/models/stock_alerts_report_model.dart';
 import 'package:pos_mobile/data/repositories/report_repository.dart';
@@ -20,6 +21,17 @@ final dailyReportProvider = FutureProvider<DailyReportData>((ref) async {
   final date = ref.watch(dailyReportDateProvider);
   final repo = ref.watch(reportRepositoryProvider);
   return repo.getDailyReport(date: date);
+});
+
+final leaderDailyReportDateProvider = StateProvider<DateTime>((ref) {
+  final now = DateTime.now();
+  return DateTime(now.year, now.month, now.day);
+});
+
+final leaderDailyReportProvider = FutureProvider<LeaderDailyReport>((ref) async {
+  final date = ref.watch(leaderDailyReportDateProvider);
+  final repo = ref.watch(reportRepositoryProvider);
+  return repo.getLeaderDailyReport(date: date);
 });
 
 final stockAlertsReportProvider = FutureProvider<StockAlertsData>((ref) async {

@@ -63,6 +63,10 @@ class TransactionHistoryNotifier extends StateNotifier<TransactionHistoryState> 
         to: today,
       );
 
+      // Provider autoDispose bisa sudah di-dispose saat request async selesai
+      // (mis. user pindah halaman) — jangan sentuh state kalau sudah mati.
+      if (!mounted) return;
+
       // Pengaman: pastikan hanya POS yang tampil walau server mengabaikan
       // filter `type`. hasMore tetap dihitung dari jumlah baris mentah/halaman.
       final posItems = result.items.where((t) => t.isPos).toList();
@@ -74,6 +78,7 @@ class TransactionHistoryNotifier extends StateNotifier<TransactionHistoryState> 
         page: page + 1,
       );
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(loading: false);
       // Handle error if needed
     }

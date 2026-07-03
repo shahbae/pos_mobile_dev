@@ -13,6 +13,7 @@ enum AppFeature {
   dashboard, // GET /dashboard/operational (tab Beranda)
   transactions, // GET /transactions (Riwayat Penjualan)
   reports, // GET /reports/daily, /reports/payments (Laporan Harian & Pembayaran)
+  leaderReport, // GET /reports/leader/daily (Laporan Harian Leader per shift)
   stockAlerts, // GET /reports/stock-alerts (Stok Menipis) — gate terpisah
   products, // GET /products (katalog baca di tab Stok)
   purchases, // /purchases (Pembelian)
@@ -36,6 +37,7 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.dashboard,
         AppFeature.transactions,
         AppFeature.reports,
+        AppFeature.leaderReport,
         AppFeature.stockAlerts,
         AppFeature.products,
         AppFeature.purchases,
@@ -54,6 +56,7 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.dashboard,
         AppFeature.transactions,
         AppFeature.reports,
+        AppFeature.leaderReport,
         AppFeature.stockAlerts,
         AppFeature.products,
         AppFeature.purchases,
@@ -72,6 +75,7 @@ Set<AppFeature> featuresForRole(String? role) {
       return {
         AppFeature.dashboard,
         AppFeature.transactions,
+        AppFeature.leaderReport, // laporan harian per shift (GET /reports/leader/daily)
         AppFeature.stockAlerts, // peringatan stok (per arahan user 2026-06-20)
         AppFeature.products,
         AppFeature.purchases,

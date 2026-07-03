@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/presentation/pages/reports/daily_report_page.dart';
+import 'package:pos_mobile/presentation/pages/reports/leader_daily_report_page.dart';
 import 'package:pos_mobile/presentation/pages/reports/payments_report_page.dart';
 import 'package:pos_mobile/presentation/pages/reports/stock_alerts_report_page.dart';
 import 'package:pos_mobile/presentation/pages/transactions/transaction_history_page.dart';
@@ -17,6 +18,7 @@ class ReportTab extends ConsumerWidget {
     const accent = Color(0xFF22C55E);
     final role = ref.watch(authProvider).role;
     final canReports = hasFeature(role, AppFeature.reports);
+    final canLeaderReport = hasFeature(role, AppFeature.leaderReport);
     final canStockAlerts = hasFeature(role, AppFeature.stockAlerts);
     final canTransactions = hasFeature(role, AppFeature.transactions);
 
@@ -87,6 +89,23 @@ class ReportTab extends ConsumerWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const PaymentsReportPage()),
+              );
+            },
+          ),
+        ],
+        if (canLeaderReport) ...[
+          const SizedBox(height: 16),
+          _ReportMenuCard(
+            title: "Laporan Harian Leader",
+            subtitle: "Rekap per shift: penjualan, item, kas",
+            icon: Icons.leaderboard_outlined,
+            color: accent,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const LeaderDailyReportPage(),
+                ),
               );
             },
           ),
