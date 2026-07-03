@@ -85,17 +85,43 @@ class _VariantPickerSheet extends StatelessWidget {
               separatorBuilder: (_, __) => const Divider(height: 1, color: AppTheme.borderLight),
               itemBuilder: (context, index) {
                 final v = shown[index];
+                // Varian yang bahannya habis (is_ready == false) tidak bisa dipilih.
+                final disabled = !v.ready;
                 return ListTile(
+                  enabled: !disabled,
                   contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                  title: Text(v.name,
-                      style: const TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w700, color: AppTheme.textPrimary)),
+                  title: Row(
+                    children: [
+                      Flexible(
+                        child: Text(v.name,
+                            style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: disabled ? AppTheme.textSecondary : AppTheme.textPrimary)),
+                      ),
+                      if (disabled) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppTheme.danger.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text('Habis',
+                              style: TextStyle(
+                                  fontSize: 11, fontWeight: FontWeight.w700, color: AppTheme.danger)),
+                        ),
+                      ],
+                    ],
+                  ),
                   trailing: Text(
                     formatRupiah(v.sellingPriceNum),
-                    style: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w800, color: AppTheme.brandBlue),
+                    style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: disabled ? AppTheme.textSecondary : AppTheme.brandBlue),
                   ),
-                  onTap: () => Navigator.pop(context, v),
+                  onTap: disabled ? null : () => Navigator.pop(context, v),
                 );
               },
             ),

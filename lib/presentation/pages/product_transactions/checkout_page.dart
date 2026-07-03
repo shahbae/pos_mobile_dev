@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:pos_mobile/data/models/product_variant_model.dart';
 import 'package:pos_mobile/data/models/promo_model.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
+import 'package:pos_mobile/presentation/providers/product_pagination_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_transaction_provider.dart';
 import 'package:pos_mobile/presentation/providers/promo_provider.dart';
@@ -108,6 +109,11 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       );
     } else if (newState.error != null) {
       _toast("Gagal: ${newState.error}", Colors.red);
+      // Stok bisa berubah sejak katalog dimuat (mis. ditolak karena bahan habis).
+      // Muat ulang daftar produk agar penanda ketersediaan ikut ter-refresh.
+      if (newState.error!.toLowerCase().contains('habis')) {
+        ref.read(productPaginationProvider.notifier).loadAll();
+      }
     }
   }
 

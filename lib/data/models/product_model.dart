@@ -16,6 +16,13 @@ class Product {
   final bool hasFreeToppings;
   final bool hasVariants;
   final List<ProductVariant> variants;
+
+  /// Kesiapan stok produk di cabang aktif (dari GET /products, branch-scoped).
+  /// `true` = minimal satu varian/produk siap dijual, `false` = habis,
+  /// `null` = tak dihitung (view lintas cabang / endpoint tanpa konteks cabang).
+  /// `null` diperlakukan "boleh dijual".
+  final bool? productReady;
+
   final String? createdAt;
 
   Product({
@@ -34,6 +41,7 @@ class Product {
     this.hasFreeToppings = false,
     this.hasVariants = false,
     this.variants = const [],
+    this.productReady,
     this.createdAt,
   });
 
@@ -71,9 +79,13 @@ class Product {
       hasFreeToppings: j['has_free_toppings'] as bool? ?? (slots > 0),
       hasVariants: j['has_variants'] as bool? ?? variants.isNotEmpty,
       variants: variants,
+      productReady: j['product_ready'] as bool?,
       createdAt: j['created_at'],
     );
   }
+
+  /// Produk boleh dipesan bila belum habis. `null` (tak dihitung) = boleh.
+  bool get ready => productReady != false;
 
   /// Parse price string to num for formatting
   num get purchasePriceNum => num.tryParse(purchasePrice) ?? 0;

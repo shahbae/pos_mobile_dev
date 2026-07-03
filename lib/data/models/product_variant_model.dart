@@ -14,6 +14,12 @@ class ProductVariant {
   final int freeToppingSlots;
 
   final bool isActive;
+
+  /// Kesiapan stok varian di cabang aktif (dari GET /products, branch-scoped).
+  /// `true` = bahan cukup, `false` = habis, `null` = tak dihitung (view lintas
+  /// cabang / endpoint tanpa konteks cabang). `null` diperlakukan "boleh dijual".
+  final bool? isReady;
+
   final String? createdAt;
 
   ProductVariant({
@@ -23,6 +29,7 @@ class ProductVariant {
     required this.sellingPrice,
     this.freeToppingSlots = 0,
     this.isActive = true,
+    this.isReady,
     this.createdAt,
   });
 
@@ -34,9 +41,13 @@ class ProductVariant {
       sellingPrice: j['selling_price']?.toString() ?? '0',
       freeToppingSlots: (j['free_topping_slots'] as num?)?.toInt() ?? 0,
       isActive: j['is_active'] as bool? ?? true,
+      isReady: j['is_ready'] as bool?,
       createdAt: j['created_at']?.toString(),
     );
   }
+
+  /// Varian boleh dipesan bila belum habis. `null` (tak dihitung) = boleh.
+  bool get ready => isReady != false;
 
   num get sellingPriceNum => num.tryParse(sellingPrice) ?? 0;
 

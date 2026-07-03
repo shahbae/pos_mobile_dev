@@ -18,6 +18,19 @@ class ProductTransactionPage extends ConsumerWidget {
   Future<void> _onProductTap(BuildContext context, WidgetRef ref, Product product) async {
     final notifier = ref.read(productTransactionProvider.notifier);
 
+    // Produk yang bahannya habis (product_ready == false) tak bisa dijual.
+    // productReady == null (view lintas cabang) tetap diizinkan.
+    if (!product.ready) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Produk ini stoknya habis'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
     // 1. Variant: pakai yang sudah embedded dari list produk; fallback fetch
     //    hanya bila ditandai punya variant tapi datanya belum ada.
     List<ProductVariant> variants = product.variants;
@@ -123,7 +136,12 @@ class ProductTransactionPage extends ConsumerWidget {
                     itemCount: productState.items.length,
                     itemBuilder: (context, index) {
                       final product = productState.items[index];
-                      return Container(
+                      // false = habis (dim + non-aktif). null = view lintas
+                      // cabang (jangan tampilkan indikator). true = tersedia.
+                      final soldOut = product.productReady == false;
+                      return Opacity(
+                        opacity: soldOut ? 0.5 : 1,
+                        child: Container(
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(20),
@@ -176,14 +194,23 @@ class ProductTransactionPage extends ConsumerWidget {
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    const Text(
-                                      "Tersedia",
-                                      style: TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.w600),
-                                    ),
+                                    // Indikator ketersediaan; disembunyikan bila
+                                    // productReady == null (view lintas cabang).
+                                    if (product.productReady != null)
+                                      Text(
+                                        soldOut ? "Habis" : "Tersedia",
+                                        style: TextStyle(
+                                          color: soldOut ? AppTheme.danger : Colors.green,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      )
+                                    else
+                                      const SizedBox.shrink(),
                                     Container(
                                       padding: const EdgeInsets.all(6),
-                                      decoration: const BoxDecoration(
-                                        color: AppTheme.brandBlue,
+                                      decoration: BoxDecoration(
+                                        color: soldOut ? AppTheme.textSecondary : AppTheme.brandBlue,
                                         shape: BoxShape.circle,
                                       ),
                                       child: const Icon(Icons.add, color: Colors.white, size: 16),
@@ -194,6 +221,7 @@ class ProductTransactionPage extends ConsumerWidget {
                             ),
                           ),
                         ),
+                      ),
                       );
                     },
                   ),

@@ -60,6 +60,8 @@ class ProductTransactionRepository {
       'variant does not belong to product': 'Variasi tidak sesuai dengan produk',
       'no active shift for this branch':
           'Belum ada shift aktif. Buka shift kasir terlebih dahulu.',
+      'product not ready: insufficient material stock':
+          'Stok bahan produk/varian ini habis. Refresh daftar produk lalu coba lagi.',
     };
     if (map.containsKey(key)) return map[key]!;
     if (raw != null && raw.isNotEmpty) return raw;
