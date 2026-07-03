@@ -4,7 +4,9 @@ class ShiftModel {
   final num openingCash;
   final num? closingCash;
   final num totalSales;
-  final num? netCash;
+  final num? cashSales; // tunai bersih masuk laci (BE: cash_sales, dulu net_cash)
+  final num? expectedCash; // kas seharusnya (dari BE bila tersedia)
+  final num? difference; // selisih kas (dari BE bila tersedia)
   final List<ShiftPayment> payments;
   final String status; // open / closed
   final DateTime? openedAt;
@@ -15,7 +17,9 @@ class ShiftModel {
     required this.openingCash,
     required this.closingCash,
     required this.totalSales,
-    required this.netCash,
+    required this.cashSales,
+    required this.expectedCash,
+    required this.difference,
     required this.payments,
     required this.status,
     required this.openedAt,
@@ -23,6 +27,28 @@ class ShiftModel {
   });
 
   bool get isOpen => status == 'open';
+
+  /// Total penjualan tunai (metode cash) dari breakdown pembayaran — fallback
+  /// bila BE tidak mengirim `cash_sales`.
+  num get _cashFromPayments => payments
+      .where((p) => p.method.toLowerCase() == 'cash')
+      .fold<num>(0, (sum, p) => sum + p.total);
+
+  /// Tunai bersih masuk laci. Pakai nilai BE (`cash_sales`) bila ada, kalau
+  /// tidak dihitung dari breakdown pembayaran.
+  num get cashSalesResolved => cashSales ?? _cashFromPayments;
+
+  /// Kas seharusnya. Pakai nilai BE bila ada, kalau tidak dihitung dari
+  /// kas awal + penjualan tunai.
+  num get expectedCashResolved => expectedCash ?? (openingCash + cashSalesResolved);
+
+  /// Selisih kas = kas fisik (kas akhir) - kas seharusnya.
+  /// Positif = lebih, negatif = kurang. null bila shift belum ditutup.
+  num? get differenceResolved {
+    if (difference != null) return difference;
+    if (closingCash == null) return null;
+    return closingCash! - expectedCashResolved;
+  }
 
   factory ShiftModel.fromJson(Map<String, dynamic> json) {
     final data = (json['data'] is Map) ? json['data'] as Map<String, dynamic> : json;
@@ -32,7 +58,13 @@ class ShiftModel {
       openingCash: _num(data['opening_cash']),
       closingCash: data['closing_cash'] == null ? null : _num(data['closing_cash']),
       totalSales: _num(data['total_sales']),
-      netCash: data['net_cash'] == null ? null : _num(data['net_cash']),
+      cashSales: (data['cash_sales'] ?? data['net_cash']) == null
+          ? null
+          : _num(data['cash_sales'] ?? data['net_cash']),
+      expectedCash: data['expected_cash'] == null ? null : _num(data['expected_cash']),
+      difference: (data['difference'] ?? data['cash_difference']) == null
+          ? null
+          : _num(data['difference'] ?? data['cash_difference']),
       payments: pays.map((e) => ShiftPayment.fromJson(e as Map<String, dynamic>)).toList(),
       status: (data['status'] ?? (data['closed_at'] == null ? 'open' : 'closed')).toString(),
       openedAt: DateTime.tryParse(data['opened_at']?.toString() ?? ''),

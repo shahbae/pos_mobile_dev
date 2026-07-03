@@ -350,6 +350,8 @@ class _ActiveShiftCard extends StatelessWidget {
                 _row('Dibuka', dateFmt.format(shift.openedAt!.toLocal())),
               _row('Kas Awal', formatRupiah(shift.openingCash)),
               _row('Penjualan', formatRupiah(shift.totalSales)),
+              _row('Penjualan Tunai', formatRupiah(shift.cashSalesResolved)),
+              _row('Kas Seharusnya (estimasi)', formatRupiah(shift.expectedCashResolved)),
               const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
@@ -407,18 +409,31 @@ class _ShiftSummaryDialog extends StatelessWidget {
             const SizedBox(height: 16),
             _row('Kas Awal', formatRupiah(shift.openingCash)),
             _row('Penjualan', formatRupiah(shift.totalSales)),
-            if (shift.closingCash != null) _row('Kas Akhir', formatRupiah(shift.closingCash!)),
-            if (shift.netCash != null) ...[
-              const Divider(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Kas Bersih (Net)',
-                      style: TextStyle(fontWeight: FontWeight.w900, color: AppTheme.brandBlue)),
-                  Text(formatRupiah(shift.netCash!),
-                      style: const TextStyle(fontWeight: FontWeight.w900, color: AppTheme.brandBlue, fontSize: 16)),
-                ],
-              ),
+            _row('Penjualan Tunai', formatRupiah(shift.cashSalesResolved)),
+            const Divider(height: 24),
+            _row('Kas Seharusnya', formatRupiah(shift.expectedCashResolved)),
+            if (shift.closingCash != null) _row('Kas Akhir (Fisik)', formatRupiah(shift.closingCash!)),
+            if (shift.differenceResolved != null) ...[
+              const SizedBox(height: 4),
+              Builder(builder: (_) {
+                final diff = shift.differenceResolved!;
+                final isMinus = diff < 0;
+                final color = diff == 0
+                    ? AppTheme.textSecondary
+                    : (isMinus ? AppTheme.danger : AppTheme.brandBlue);
+                final label = diff == 0
+                    ? 'Sesuai'
+                    : (isMinus ? 'Kurang' : 'Lebih');
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Selisih ($label)',
+                        style: TextStyle(fontWeight: FontWeight.w900, color: color, fontSize: 16)),
+                    Text('${isMinus ? '-' : ''}${formatRupiah(diff.abs())}',
+                        style: TextStyle(fontWeight: FontWeight.w900, color: color, fontSize: 16)),
+                  ],
+                );
+              }),
             ],
             if (shift.payments.isNotEmpty) ...[
               const SizedBox(height: 16),

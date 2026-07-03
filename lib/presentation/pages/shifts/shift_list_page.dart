@@ -73,8 +73,11 @@ class ShiftListPage extends ConsumerWidget {
                             style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
                       const Divider(height: 18),
                       _row('Penjualan', formatRupiah(s.totalSales)),
-                      if (!isOpen && s.netCash != null)
-                        _row('Kas Bersih', formatRupiah(s.netCash!), color: AppTheme.brandBlue),
+                      if (!isOpen) _row('Kas Seharusnya', formatRupiah(s.expectedCashResolved)),
+                      if (!isOpen && s.closingCash != null)
+                        _row('Kas Akhir', formatRupiah(s.closingCash!)),
+                      if (!isOpen && s.differenceResolved != null)
+                        _selisihRow(s.differenceResolved!),
                     ],
                   ),
                 );
@@ -83,6 +86,19 @@ class ShiftListPage extends ConsumerWidget {
           );
         },
       ),
+    );
+  }
+
+  Widget _selisihRow(num diff) {
+    final isMinus = diff < 0;
+    final color = diff == 0
+        ? AppTheme.textSecondary
+        : (isMinus ? AppTheme.danger : AppTheme.brandBlue);
+    final label = diff == 0 ? 'Sesuai' : (isMinus ? 'Kurang' : 'Lebih');
+    return _row(
+      'Selisih ($label)',
+      '${isMinus ? '-' : ''}${formatRupiah(diff.abs())}',
+      color: color,
     );
   }
 
