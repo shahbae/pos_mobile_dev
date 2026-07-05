@@ -44,6 +44,8 @@ class StockAuditItem {
   final String? materialName;
   final int? toppingId;
   final String? toppingName;
+  final int? plasticId;
+  final String? plasticName;
   final double systemQty;
   final double physicalQty;
 
@@ -68,6 +70,8 @@ class StockAuditItem {
     this.materialName,
     this.toppingId,
     this.toppingName,
+    this.plasticId,
+    this.plasticName,
     this.systemQty = 0,
     this.physicalQty = 0,
     this.returnedQty = 0,
@@ -86,14 +90,17 @@ class StockAuditItem {
     if (itemName != null && itemName!.isNotEmpty) return itemName!;
     if (materialName != null && materialName!.isNotEmpty) return materialName!;
     if (toppingName != null && toppingName!.isNotEmpty) return toppingName!;
+    if (plasticName != null && plasticName!.isNotEmpty) return plasticName!;
     if (materialId != null) return 'Material #$materialId';
     if (toppingId != null) return 'Topping #$toppingId';
+    if (plasticId != null) return 'Plastik #$plasticId';
     return 'Item';
   }
 
   String? get typeLabel {
     if (materialId != null) return 'Material';
     if (toppingId != null) return 'Topping';
+    if (plasticId != null) return 'Plastik';
     return null;
   }
 
@@ -105,6 +112,8 @@ class StockAuditItem {
       materialName: j['material_name']?.toString(),
       toppingId: j['topping_id'],
       toppingName: j['topping_name']?.toString(),
+      plasticId: j['plastic_id'],
+      plasticName: j['plastic_name']?.toString(),
       systemQty: _toDouble(j['system_qty']),
       physicalQty: _toDouble(j['physical_qty']),
       returnedQty: _toDouble(j['returned_qty']),

@@ -7,6 +7,7 @@ import '../../providers/purchase_provider.dart';
 import '../../providers/supplier_provider.dart';
 import '../../providers/material_provider.dart';
 import '../../providers/topping_provider.dart';
+import '../../providers/plastic_provider.dart';
 
 class PurchaseFormPage extends ConsumerStatefulWidget {
   const PurchaseFormPage({super.key});
@@ -94,6 +95,7 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
   Map<int, _TemplateOption> _buildTemplateOptions() {
     final materials = ref.read(materialListProvider).valueOrNull ?? [];
     final toppings = ref.read(toppingListProvider).valueOrNull ?? [];
+    final plastics = ref.read(plasticListProvider).valueOrNull ?? [];
     final map = <int, _TemplateOption>{};
 
     for (final m in materials) {
@@ -114,6 +116,17 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
           ownerName: tp.name,
           ownerType: 'Topping',
           unit: tp.unit,
+          template: t,
+        );
+      }
+    }
+    for (final pl in plastics) {
+      for (final t in pl.purchaseTemplates) {
+        map[t.id] = _TemplateOption(
+          templateId: t.id,
+          ownerName: pl.name,
+          ownerType: 'Plastik',
+          unit: pl.unit,
           template: t,
         );
       }
@@ -203,6 +216,7 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
     final suppliersAsync = ref.watch(supplierListProvider(null));
     final materialsAsync = ref.watch(materialListProvider);
     final toppingsAsync = ref.watch(toppingListProvider);
+    final plasticsAsync = ref.watch(plasticListProvider);
 
     final options = _buildTemplateOptions();
 
@@ -331,7 +345,7 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
                 ),
                 const SizedBox(height: 12),
 
-                if (materialsAsync.isLoading || toppingsAsync.isLoading)
+                if (materialsAsync.isLoading || toppingsAsync.isLoading || plasticsAsync.isLoading)
                   const Center(child: Padding(
                     padding: EdgeInsets.all(24),
                     child: CircularProgressIndicator(),

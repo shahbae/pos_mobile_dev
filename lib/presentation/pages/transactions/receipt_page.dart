@@ -275,6 +275,45 @@ class _ReceiptPreview extends StatelessWidget {
                   ],
                 ),
               ),
+              // ===== Kemasan (plastik) =====
+              if (receipt.plastics.isNotEmpty) ...[
+                const _DashedDivider(),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          'KEMASAN',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            color: AppTheme.textSecondary,
+                            letterSpacing: 1.0,
+                          ),
+                        ),
+                      ),
+                      ...receipt.plastics.map((p) => Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 3),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    p.name,
+                                    style: const TextStyle(
+                                        color: AppTheme.textPrimary, fontSize: 13),
+                                  ),
+                                ),
+                                Text('×${p.qty}', style: _moneyStyle),
+                              ],
+                            ),
+                          )),
+                    ],
+                  ),
+                ),
+              ],
               const _DashedDivider(),
               // ===== Ringkasan =====
               Padding(

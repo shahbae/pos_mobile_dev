@@ -7,6 +7,8 @@ import 'package:pos_mobile/presentation/pages/stock_audits/stock_audit_list_page
 import 'package:pos_mobile/presentation/pages/stock_levels/stock_level_page.dart';
 import 'package:pos_mobile/presentation/pages/topping_stock/topping_stock_page.dart';
 import 'package:pos_mobile/presentation/pages/topping_stock/topping_stock_movement_page.dart';
+import 'package:pos_mobile/presentation/pages/plastic_stock/plastic_stock_page.dart';
+import 'package:pos_mobile/presentation/pages/plastic_stock/plastic_stock_movement_page.dart';
 import 'package:pos_mobile/presentation/pages/expenses/expense_list_page.dart';
 import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
@@ -118,6 +120,19 @@ class StockTab extends ConsumerWidget {
               ),
             ),
           ],
+          if (features.contains(AppFeature.stockPlastic)) ...[
+            const SizedBox(height: 16),
+            _menuItem(
+              context,
+              icon: Icons.shopping_bag_outlined,
+              title: "Stok Plastik",
+              subtitle: "Lihat saldo & sesuaikan stok plastik",
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PlasticStockPage()),
+              ),
+            ),
+          ],
           if (features.contains(AppFeature.stockMovements)) ...[
             const SizedBox(height: 16),
             _menuItem(
@@ -141,6 +156,19 @@ class StockTab extends ConsumerWidget {
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const ToppingStockMovementPage()),
+              ),
+            ),
+          ],
+          if (features.contains(AppFeature.plasticMovements)) ...[
+            const SizedBox(height: 16),
+            _menuItem(
+              context,
+              icon: Icons.local_mall_outlined,
+              title: "Riwayat Stok Plastik",
+              subtitle: "Lihat keluar / masuk stok plastik",
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PlasticStockMovementPage()),
               ),
             ),
           ],

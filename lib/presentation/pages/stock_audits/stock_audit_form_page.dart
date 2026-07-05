@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/data/models/stock_audit_model.dart';
 import 'package:pos_mobile/presentation/providers/material_provider.dart';
 import 'package:pos_mobile/presentation/providers/topping_provider.dart';
+import 'package:pos_mobile/presentation/providers/plastic_provider.dart';
 import 'package:pos_mobile/presentation/providers/stock_audit_provider.dart';
 import 'package:pos_mobile/presentation/providers/stock_level_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
@@ -23,7 +24,8 @@ class StockAuditFormPage extends ConsumerStatefulWidget {
 
 class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
   final _notes = TextEditingController();
-  // key "m:<id>" / "t:<id>" -> qty (string). Bahan integer, topping desimal.
+  // key "m:<id>" / "t:<id>" / "p:<id>" -> qty (string).
+  // Bahan integer; topping & plastik desimal.
   final Map<String, String> _physical = {};
   final Map<String, String> _returned = {};
   // key yang field "Dikembalikan"-nya sedang ditampilkan.
@@ -39,7 +41,9 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
       for (final it in audit.items) {
         final key = it.materialId != null
             ? 'm:${it.materialId}'
-            : (it.toppingId != null ? 't:${it.toppingId}' : null);
+            : (it.toppingId != null
+                ? 't:${it.toppingId}'
+                : (it.plasticId != null ? 'p:${it.plasticId}' : null));
         if (key == null) continue;
         _physical[key] = _fmtNum(it.physicalQty);
         if (it.returnedQty > 0) {
@@ -67,11 +71,11 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
       if (v.isEmpty) return;
       final id = int.tryParse(key.substring(2));
       if (id == null) return;
-      final isMaterial = key.startsWith('m:');
       final ret = _returned[key]?.trim() ?? '';
       items.add({
-        if (isMaterial) 'material_id': id,
-        if (!isMaterial) 'topping_id': id,
+        if (key.startsWith('m:')) 'material_id': id,
+        if (key.startsWith('t:')) 'topping_id': id,
+        if (key.startsWith('p:')) 'plastic_id': id,
         'physical_qty': v, // string desimal sesuai BE
         if (ret.isNotEmpty) 'returned_qty': ret,
       });
@@ -116,6 +120,7 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
   Widget build(BuildContext context) {
     final materialsAsync = ref.watch(materialListProvider);
     final toppingsAsync = ref.watch(toppingListProvider);
+    final plasticsAsync = ref.watch(plasticListProvider);
 
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
@@ -124,24 +129,27 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
         centerTitle: true,
       ),
       body: Builder(builder: (_) {
-        if (materialsAsync.isLoading || toppingsAsync.isLoading) {
+        if (materialsAsync.isLoading || toppingsAsync.isLoading || plasticsAsync.isLoading) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (materialsAsync.hasError && toppingsAsync.hasError) {
-          return const Center(child: Text('Gagal memuat material & topping'));
+        if (materialsAsync.hasError && toppingsAsync.hasError && plasticsAsync.hasError) {
+          return const Center(child: Text('Gagal memuat material, topping & plastik'));
         }
         final materials = materialsAsync.valueOrNull ?? [];
         final toppings = toppingsAsync.valueOrNull ?? [];
+        final plastics = plasticsAsync.valueOrNull ?? [];
 
         // Info stok (opsional): stok sistem + masuk hari ini per item. Tidak
         // memblok tampilan — muncul begitu data stok tersedia.
         final levels = ref.watch(materialStockLevelsProvider).valueOrNull ?? const [];
         final toppingStocks = ref.watch(toppingStockListProvider).valueOrNull ?? const [];
+        final plasticStocks = ref.watch(plasticStockListProvider).valueOrNull ?? const [];
         final levelByMat = {
           for (final l in levels)
             if (l.materialId != null) l.materialId!: l,
         };
         final stockByTop = {for (final s in toppingStocks) s.toppingId: s};
+        final stockByPlastic = {for (final s in plasticStocks) s.plasticId: s};
 
         return Column(
           children: [
@@ -197,6 +205,25 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
                                 toppings[i].unit, false,
                                 systemQty: stockByTop[toppings[i].id]?.qty,
                                 incomingToday: stockByTop[toppings[i].id]?.incomingToday),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                  if (plastics.isNotEmpty) ...[
+                    _sectionLabel('PLASTIK'),
+                    const SizedBox(height: 8),
+                    Container(
+                      decoration: _box(),
+                      child: Column(
+                        children: [
+                          for (int i = 0; i < plastics.length; i++) ...[
+                            if (i > 0) const Divider(height: 1, color: AppTheme.borderLight),
+                            _qtyRow('p:${plastics[i].id}', plastics[i].name,
+                                plastics[i].unit, false,
+                                systemQty: stockByPlastic[plastics[i].id]?.qty,
+                                incomingToday: stockByPlastic[plastics[i].id]?.incomingToday),
                           ],
                         ],
                       ),

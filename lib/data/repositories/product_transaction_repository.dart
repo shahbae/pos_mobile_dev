@@ -62,6 +62,8 @@ class ProductTransactionRepository {
           'Belum ada shift aktif. Buka shift kasir terlebih dahulu.',
       'product not ready: insufficient material stock':
           'Stok bahan produk/varian ini habis. Refresh daftar produk lalu coba lagi.',
+      'plastic not found': 'Plastik/kemasan tidak ditemukan',
+      'plastic is not active': 'Plastik/kemasan sedang tidak aktif',
     };
     if (map.containsKey(key)) return map[key]!;
     if (raw != null && raw.isNotEmpty) return raw;

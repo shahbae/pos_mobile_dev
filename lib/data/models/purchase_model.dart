@@ -50,6 +50,9 @@ class PurchaseItemModel {
   final int? toppingId;
   final String? toppingName;
   final String? toppingUnit;
+  final int? plasticId;
+  final String? plasticName;
+  final String? plasticUnit;
   final int? templateId;
   final String? templateName; // mis. "Lusin"
   final String? templateBaseQty; // base unit per template
@@ -67,6 +70,9 @@ class PurchaseItemModel {
     this.toppingId,
     this.toppingName,
     this.toppingUnit,
+    this.plasticId,
+    this.plasticName,
+    this.plasticUnit,
     this.templateId,
     this.templateName,
     this.templateBaseQty,
@@ -78,7 +84,7 @@ class PurchaseItemModel {
   });
 
   /// Satuan base unit item (gram/ml/pcs).
-  String? get unit => materialUnit ?? toppingUnit;
+  String? get unit => materialUnit ?? toppingUnit ?? plasticUnit;
 
   /// Kuantitas base unit terbaca (string asli bila ada, fallback int).
   String get quantityDisplay {
@@ -102,8 +108,10 @@ class PurchaseItemModel {
   String get displayName {
     if (materialName != null) return materialName!;
     if (toppingName != null) return toppingName!;
+    if (plasticName != null) return plasticName!;
     if (materialId != null) return 'Material #$materialId';
     if (toppingId != null) return 'Topping #$toppingId';
+    if (plasticId != null) return 'Plastik #$plasticId';
     return 'Item';
   }
 
@@ -111,12 +119,14 @@ class PurchaseItemModel {
   String? get typeLabel {
     if (materialId != null) return 'Material';
     if (toppingId != null) return 'Topping';
+    if (plasticId != null) return 'Plastik';
     return null;
   }
 
   factory PurchaseItemModel.fromJson(Map<String, dynamic> j) {
     final mat = j['material'] as Map<String, dynamic>?;
     final top = j['topping'] as Map<String, dynamic>?;
+    final pls = j['plastic'] as Map<String, dynamic>?;
     final tpl = j['template'] as Map<String, dynamic>?;
     return PurchaseItemModel(
       id: _toIntOrNull(j['id']),
@@ -126,6 +136,9 @@ class PurchaseItemModel {
       toppingId: _toIntOrNull(j['topping_id']),
       toppingName: top?['name'] ?? j['topping_name'],
       toppingUnit: top?['unit']?.toString(),
+      plasticId: _toIntOrNull(j['plastic_id']),
+      plasticName: pls?['name'] ?? j['plastic_name'],
+      plasticUnit: pls?['unit']?.toString(),
       templateId: _toIntOrNull(j['template_id'] ?? tpl?['id']),
       templateName: tpl?['name']?.toString(),
       templateBaseQty: tpl?['base_qty']?.toString(),

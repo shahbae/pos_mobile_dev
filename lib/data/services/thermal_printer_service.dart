@@ -110,6 +110,18 @@ class ThermalPrinterService {
     }
     bytes += g.hr();
 
+    // Kemasan (plastik) — gratis, tanpa harga
+    if (r.plastics.isNotEmpty) {
+      bytes += g.text('KEMASAN', styles: const PosStyles(bold: true));
+      for (final p in r.plastics) {
+        bytes += g.row([
+          PosColumn(text: '  ${p.name}', width: 9),
+          PosColumn(text: 'x${p.qty}', width: 3, styles: const PosStyles(align: PosAlign.right)),
+        ]);
+      }
+      bytes += g.hr();
+    }
+
     // Ringkasan
     bytes += _summaryRow(g, 'Subtotal', r.subtotal);
     if (r.promos.isNotEmpty) {

@@ -5,6 +5,7 @@ import 'package:pos_mobile/data/models/product_model.dart';
 import 'package:pos_mobile/data/models/product_variant_model.dart';
 import 'package:pos_mobile/data/models/promo_model.dart';
 import 'package:pos_mobile/data/models/topping_model.dart';
+import 'package:pos_mobile/data/models/plastic_model.dart';
 import 'package:pos_mobile/data/models/product_transaction_model.dart';
 import 'package:pos_mobile/data/repositories/product_transaction_repository.dart';
 
@@ -111,10 +112,21 @@ class PromoFreeSelection {
       );
 }
 
+/// Plastik/kemasan terpilih untuk seluruh transaksi (bukan per item).
+class CartPlastic {
+  final Plastic plastic;
+  final int qty;
+
+  CartPlastic({required this.plastic, this.qty = 1});
+
+  PlasticSelection toSelection() => PlasticSelection(plasticId: plastic.id, qty: qty);
+}
+
 class ProductTransactionState {
   final List<CartItem> items;
   final Promo? selectedPromo;
   final List<PromoFreeSelection> promoFreeItems;
+  final List<CartPlastic> plastics;
   final bool isLoading;
   final String? error;
   final ProductTransactionResponse? lastResponse;
@@ -123,6 +135,7 @@ class ProductTransactionState {
     this.items = const [],
     this.selectedPromo,
     this.promoFreeItems = const [],
+    this.plastics = const [],
     this.isLoading = false,
     this.error,
     this.lastResponse,
@@ -152,6 +165,7 @@ class ProductTransactionState {
     Promo? selectedPromo,
     bool clearPromo = false,
     List<PromoFreeSelection>? promoFreeItems,
+    List<CartPlastic>? plastics,
     bool? isLoading,
     String? error,
     ProductTransactionResponse? lastResponse,
@@ -160,6 +174,7 @@ class ProductTransactionState {
       items: items ?? this.items,
       selectedPromo: clearPromo ? null : (selectedPromo ?? this.selectedPromo),
       promoFreeItems: promoFreeItems ?? this.promoFreeItems,
+      plastics: plastics ?? this.plastics,
       isLoading: isLoading ?? this.isLoading,
       error: error,
       lastResponse: lastResponse ?? this.lastResponse,
@@ -256,6 +271,20 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
     state = ProductTransactionState();
   }
 
+  // ── Plastik / kemasan ─────────────────────────────────
+  /// Set jumlah plastik untuk sebuah master plastik (0 = hapus dari transaksi).
+  void setPlastic(Plastic plastic, {required int qty}) {
+    final list = state.plastics.where((p) => p.plastic.id != plastic.id).toList();
+    if (qty > 0) list.add(CartPlastic(plastic: plastic, qty: qty));
+    state = state.copyWith(plastics: list);
+  }
+
+  void removePlastic(int plasticId) {
+    state = state.copyWith(
+      plastics: state.plastics.where((p) => p.plastic.id != plasticId).toList(),
+    );
+  }
+
   // ── Promo ──────────────────────────────────────────────
   void selectPromo(Promo? promo) {
     if (promo == null) {
@@ -342,6 +371,7 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
     final request = ProductTransactionRequest(
       items: items,
       promoFreeItems: promoFreeItems,
+      plastics: state.plastics.map((p) => p.toSelection()).toList(),
       paymentMethod: paymentMethod,
       paid: paid,
       discount: discount,

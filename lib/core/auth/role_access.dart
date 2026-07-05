@@ -19,8 +19,10 @@ enum AppFeature {
   purchases, // /purchases (Pembelian)
   stockMaterial, // /stock-levels (+ adjust)
   stockTopping, // /topping-stock (+ adjust)
+  stockPlastic, // /plastic-stock (+ adjust)
   stockMovements, // /stock-movements (Riwayat Mutasi)
   toppingMovements, // /topping-stock/movements (Riwayat Stok Topping)
+  plasticMovements, // /plastic-stock/movements (Riwayat Stok Plastik)
   stockAudit, // /stock-audits
   expenses, // /expenses (Pengeluaran)
   shift, // /shifts (Shift Kasir)
@@ -43,8 +45,10 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.purchases,
         AppFeature.stockMaterial,
         AppFeature.stockTopping,
+        AppFeature.stockPlastic,
         AppFeature.stockMovements,
         AppFeature.toppingMovements,
+        AppFeature.plasticMovements,
         AppFeature.stockAudit,
         AppFeature.expenses,
         AppFeature.shift,
@@ -62,8 +66,10 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.purchases,
         AppFeature.stockMaterial,
         AppFeature.stockTopping,
+        AppFeature.stockPlastic,
         AppFeature.stockMovements,
         AppFeature.toppingMovements,
+        AppFeature.plasticMovements,
         AppFeature.stockAudit,
         AppFeature.expenses,
         AppFeature.shift,
@@ -81,8 +87,10 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.purchases,
         AppFeature.stockMaterial,
         AppFeature.stockTopping,
+        AppFeature.stockPlastic,
         AppFeature.stockMovements,
         AppFeature.toppingMovements,
+        AppFeature.plasticMovements,
         AppFeature.expenses,
         AppFeature.shift,
         AppFeature.attendance,
@@ -98,8 +106,10 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.purchases,
         AppFeature.stockMaterial,
         AppFeature.stockTopping,
+        AppFeature.stockPlastic,
         AppFeature.stockMovements,
         AppFeature.toppingMovements,
+        AppFeature.plasticMovements,
         AppFeature.stockAudit,
         AppFeature.expenses,
         AppFeature.shift, // lihat saja (lihat canOperateShift)

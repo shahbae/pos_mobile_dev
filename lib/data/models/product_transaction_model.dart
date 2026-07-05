@@ -13,9 +13,24 @@ class ToppingSelection {
       };
 }
 
+/// Plastik/kemasan yang dipilih untuk seluruh transaksi (top-level, bukan per
+/// item). Gratis — tidak menambah total. Hanya pencatatan kemasan + COGS.
+class PlasticSelection {
+  final int plasticId;
+  final int qty;
+
+  PlasticSelection({required this.plasticId, required this.qty});
+
+  Map<String, dynamic> toJson() => {
+        'plastic_id': plasticId,
+        'qty': qty,
+      };
+}
+
 class ProductTransactionRequest {
   final List<TransactionItem> items;
   final List<PromoFreeItem> promoFreeItems;
+  final List<PlasticSelection> plastics; // kemasan gratis (opsional)
   final String paymentMethod; // CASH | TRANSFER | QRIS | DEBIT | CREDIT | EWALLET
   final int paid; // integer rupiah
   final int discount; // integer rupiah
@@ -26,6 +41,7 @@ class ProductTransactionRequest {
   ProductTransactionRequest({
     required this.items,
     this.promoFreeItems = const [],
+    this.plastics = const [],
     required this.paymentMethod,
     required this.paid,
     this.discount = 0,
@@ -43,6 +59,7 @@ class ProductTransactionRequest {
       'items': items.map((i) => i.toJson()).toList(),
       if (promoFreeItems.isNotEmpty)
         'promo_free_items': promoFreeItems.map((p) => p.toJson()).toList(),
+      if (plastics.isNotEmpty) 'plastics': plastics.map((p) => p.toJson()).toList(),
       if (customerName != null && customerName!.isNotEmpty) 'customer_name': customerName,
       if (idempotencyKey != null) 'idempotency_key': idempotencyKey,
     };

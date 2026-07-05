@@ -8,6 +8,7 @@ class Receipt {
   final String cashierName;
   final String? customerName;
   final List<ReceiptItem> items;
+  final List<ReceiptPlastic> plastics;
   final num subtotal;
   final num discount;
   final num promoDiscount;
@@ -26,6 +27,7 @@ class Receipt {
     required this.cashierName,
     this.customerName,
     required this.items,
+    this.plastics = const [],
     required this.subtotal,
     required this.discount,
     this.promoDiscount = 0,
@@ -43,6 +45,7 @@ class Receipt {
     final data = (json['data'] is Map) ? json['data'] as Map<String, dynamic> : json;
     final List<dynamic> itemsJson = data['items'] ?? [];
     final List<dynamic> promosJson = data['promos'] ?? [];
+    final List<dynamic> plasticsJson = data['plastics'] ?? [];
 
     return Receipt(
       invoiceNo: data['invoice_no']?.toString() ?? '',
@@ -52,6 +55,7 @@ class Receipt {
           ? null
           : data['customer_name'].toString(),
       items: itemsJson.map((i) => ReceiptItem.fromJson(i as Map<String, dynamic>)).toList(),
+      plastics: plasticsJson.map((p) => ReceiptPlastic.fromJson(p as Map<String, dynamic>)).toList(),
       subtotal: _num(data['subtotal']),
       discount: _num(data['discount']),
       promoDiscount: _num(data['promo_discount']),
@@ -116,6 +120,21 @@ class ReceiptTopping {
       name: json['name']?.toString() ?? '',
       qty: _num(json['qty']).toInt(),
       price: _num(json['price']),
+    );
+  }
+}
+
+/// Kemasan plastik pada struk. Gratis — tanpa harga.
+class ReceiptPlastic {
+  final String name;
+  final int qty;
+
+  ReceiptPlastic({required this.name, required this.qty});
+
+  factory ReceiptPlastic.fromJson(Map<String, dynamic> json) {
+    return ReceiptPlastic(
+      name: json['name']?.toString() ?? '',
+      qty: _num(json['qty']).toInt(),
     );
   }
 }

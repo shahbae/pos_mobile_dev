@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:pos_mobile/data/models/product_variant_model.dart';
 import 'package:pos_mobile/data/models/promo_model.dart';
+import 'package:pos_mobile/data/models/plastic_model.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/presentation/providers/product_pagination_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_transaction_provider.dart';
+import 'package:pos_mobile/presentation/providers/plastic_provider.dart';
 import 'package:pos_mobile/presentation/providers/promo_provider.dart';
 import 'package:pos_mobile/presentation/pages/product_transactions/transaction_success_page.dart';
 import 'package:pos_mobile/presentation/widgets/free_item_picker_sheet.dart';
@@ -294,6 +296,9 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
             ),
             const SizedBox(height: 24),
 
+            // ── Kemasan (Plastik) ──
+            _plasticSection(cartState),
+
             // ── Promo ──
             promosAsync.maybeWhen(
               data: (promos) => _promoSection(cartState, promos),
@@ -505,6 +510,94 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               fontSize: 11,
               fontWeight: FontWeight.w600,
               color: isFree ? Colors.green.shade700 : AppTheme.brandBlue)),
+    );
+  }
+
+  // ── Section kemasan (plastik) ──
+  Widget _plasticSection(ProductTransactionState cart) {
+    final plasticsAsync = ref.watch(plasticListProvider);
+    return plasticsAsync.maybeWhen(
+      data: (plastics) {
+        if (plastics.isEmpty) return const SizedBox.shrink();
+        // qty terpilih per plastic_id
+        final selected = {for (final cp in cart.plastics) cp.plastic.id: cp.qty};
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _sectionTitle("Kemasan (Plastik)", 18),
+            const SizedBox(height: 12),
+            _infoBox("Gratis — tidak menambah total. Pilih kemasan yang dipakai untuk pesanan ini."),
+            const SizedBox(height: 12),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppTheme.borderLight),
+              ),
+              child: Column(
+                children: [
+                  for (int i = 0; i < plastics.length; i++) ...[
+                    if (i > 0) const Divider(height: 1, color: AppTheme.borderLight),
+                    _plasticRow(plastics[i], selected[plastics[i].id] ?? 0),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+        );
+      },
+      orElse: () => const SizedBox.shrink(),
+    );
+  }
+
+  Widget _plasticRow(Plastic plastic, int qty) {
+    final notifier = ref.read(productTransactionProvider.notifier);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(plastic.name,
+                    style: const TextStyle(
+                        color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 14)),
+                if (plastic.unit.isNotEmpty)
+                  Text(plastic.unit,
+                      style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+              ],
+            ),
+          ),
+          Container(
+            decoration: BoxDecoration(
+              color: AppTheme.bgLight,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                _QtyButton(
+                  icon: Icons.remove,
+                  onTap: qty > 0 ? () => notifier.setPlastic(plastic, qty: qty - 1) : null,
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text("$qty",
+                      style: TextStyle(
+                          color: qty > 0 ? AppTheme.brandBlue : AppTheme.textSecondary,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15)),
+                ),
+                _QtyButton(
+                  icon: Icons.add,
+                  onTap: () => notifier.setPlastic(plastic, qty: qty + 1),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
