@@ -9,9 +9,11 @@ import 'package:pos_mobile/data/models/stock_level_model.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/material_provider.dart';
 import 'package:pos_mobile/presentation/providers/stock_level_provider.dart';
+import 'package:pos_mobile/presentation/widgets/stock_packs_view.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
 /// Stok material: lihat saldo per material + penyesuaian (adjust) stok.
+/// Qty material kini DESIMAL; nama/unit + kemasan (packs) datang dari response.
 class StockLevelPage extends ConsumerWidget {
   const StockLevelPage({super.key});
 
@@ -32,7 +34,7 @@ class StockLevelPage extends ConsumerWidget {
             Center(child: Text('Gagal memuat stok:\n$e', textAlign: TextAlign.center)),
           ]),
           data: (levels) {
-            // Peta material_id -> nama (dari daftar material).
+            // Fallback nama/unit bila response lama belum meng-enrich name/unit.
             final names = <int, MaterialItem>{};
             materialsAsync.whenData((mats) {
               for (final m in mats) {
@@ -56,11 +58,16 @@ class StockLevelPage extends ConsumerWidget {
               itemBuilder: (context, i) {
                 final lv = levels[i];
                 final mat = lv.materialId != null ? names[lv.materialId] : null;
+                final name = lv.name.isNotEmpty
+                    ? lv.name
+                    : (mat?.name ?? 'Material #${lv.materialId}');
+                final unit = lv.unit.isNotEmpty ? lv.unit : (mat?.unit ?? '');
                 return _StockRow(
                   level: lv,
-                  material: mat,
+                  name: name,
+                  unit: unit,
                   onAdjust: canAdjustStock(ref.watch(authProvider).role)
-                      ? () => _showAdjustDialog(context, ref, lv, mat)
+                      ? () => _showAdjustDialog(context, ref, lv, name, unit)
                       : null,
                 );
               },
@@ -75,28 +82,30 @@ class StockLevelPage extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     StockLevelModel lv,
-    MaterialItem? mat,
+    String name,
+    String unit,
   ) async {
-    final controller = TextEditingController(text: '${lv.qtyOnHand ?? 0}');
-    final result = await showDialog<int>(
+    final controller = TextEditingController(text: _fmtQty(lv.qtyOnHand));
+    final result = await showDialog<num>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Sesuaikan Stok — ${mat?.name ?? 'Material #${lv.materialId}'}'),
+        title: Text('Sesuaikan Stok — $name'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Stok sistem saat ini: ${lv.qtyOnHand ?? 0}',
+            Text('Stok sistem saat ini: ${_fmtQty(lv.qtyOnHand)} $unit'.trim(),
                 style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
             const SizedBox(height: 12),
             TextField(
               controller: controller,
               autofocus: true,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              decoration: const InputDecoration(
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+              decoration: InputDecoration(
                 labelText: 'Stok fisik (baru)',
-                border: OutlineInputBorder(),
+                suffixText: unit,
+                border: const OutlineInputBorder(),
               ),
             ),
           ],
@@ -105,8 +114,10 @@ class StockLevelPage extends ConsumerWidget {
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
           TextButton(
             onPressed: () {
-              final v = int.tryParse(controller.text.trim());
-              if (v != null) Navigator.pop(ctx, v);
+              final v = double.tryParse(controller.text.trim());
+              if (v == null) return;
+              // kirim int bila bulat, double bila desimal
+              Navigator.pop(ctx, v == v.roundToDouble() ? v.toInt() : v);
             },
             child: const Text('Simpan'),
           ),
@@ -139,14 +150,24 @@ class StockLevelPage extends ConsumerWidget {
       }
     }
   }
+
+  /// Tampilkan tanpa .0 bila bulat (2400.0 → "2400", 2400.5 → "2400.5").
+  static String _fmtQty(double q) =>
+      q == q.roundToDouble() ? q.toInt().toString() : q.toString();
 }
 
 class _StockRow extends StatelessWidget {
   final StockLevelModel level;
-  final MaterialItem? material;
+  final String name;
+  final String unit;
   final VoidCallback? onAdjust;
 
-  const _StockRow({required this.level, required this.material, required this.onAdjust});
+  const _StockRow({
+    required this.level,
+    required this.name,
+    required this.unit,
+    required this.onAdjust,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -158,21 +179,23 @@ class _StockRow extends StatelessWidget {
         border: Border.all(color: AppTheme.borderLight),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(material?.name ?? 'Material #${level.materialId}',
+                Text(name,
                     style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppTheme.textPrimary)),
                 const SizedBox(height: 2),
                 Text(
-                  '${level.qtyOnHand ?? 0} ${material?.unit ?? ''}'.trim(),
+                  '${StockLevelPage._fmtQty(level.qtyOnHand)} $unit'.trim(),
                   style: const TextStyle(fontSize: 14, color: AppTheme.brandBlue, fontWeight: FontWeight.w700),
                 ),
+                StockPacksView(packs: level.packs, unit: unit),
                 if (level.incomingToday > 0) ...[
                   const SizedBox(height: 2),
-                  Text('Masuk hari ini: ${level.incomingToday} ${material?.unit ?? ''}'.trim(),
+                  Text('Masuk hari ini: ${StockLevelPage._fmtQty(level.incomingToday)} $unit'.trim(),
                       style: const TextStyle(fontSize: 11, color: Colors.green, fontWeight: FontWeight.w700)),
                 ],
                 if (level.updatedAt != null) ...[

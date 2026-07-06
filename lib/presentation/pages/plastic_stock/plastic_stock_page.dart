@@ -6,6 +6,7 @@ import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/data/models/plastic_stock_model.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/plastic_provider.dart';
+import 'package:pos_mobile/presentation/widgets/stock_packs_view.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
 /// Stok plastik: lihat saldo per plastik + penyesuaian (adjust) stok. Qty desimal.
@@ -62,6 +63,7 @@ class PlasticStockPage extends ConsumerWidget {
         border: Border.all(color: AppTheme.borderLight),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
             child: Column(
@@ -77,6 +79,7 @@ class PlasticStockPage extends ConsumerWidget {
                       color: s.qty < 0 ? AppTheme.danger : AppTheme.brandBlue,
                       fontWeight: FontWeight.w700),
                 ),
+                StockPacksView(packs: s.packs, unit: s.unit),
                 if (s.incomingToday > 0) ...[
                   const SizedBox(height: 2),
                   Text('Masuk hari ini: ${_fmtQty(s.incomingToday)} ${s.unit}'.trim(),

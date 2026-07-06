@@ -17,11 +17,13 @@ class StockLevelRepository {
   }
 
   /// Set stok material ke nilai absolut. POST /stock/adjust
-  Future<void> adjustStock({required int materialId, required int newQty}) async {
+  ///
+  /// Stok material kini DESIMAL — BE minta new_qty sebagai STRING ("2400" / "12.5").
+  Future<void> adjustStock({required int materialId, required num newQty}) async {
     try {
       await api.dio.post('/stock/adjust', data: {
         'material_id': materialId,
-        'new_qty': newQty,
+        'new_qty': newQty.toString(),
         'reference_type': 'manual',
       });
     } on DioException catch (e) {

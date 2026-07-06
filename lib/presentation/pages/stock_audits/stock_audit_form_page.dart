@@ -3,11 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:pos_mobile/data/models/stock_audit_model.dart';
+import 'package:pos_mobile/data/models/stock_pack_model.dart';
 import 'package:pos_mobile/presentation/providers/material_provider.dart';
 import 'package:pos_mobile/presentation/providers/topping_provider.dart';
 import 'package:pos_mobile/presentation/providers/plastic_provider.dart';
 import 'package:pos_mobile/presentation/providers/stock_audit_provider.dart';
 import 'package:pos_mobile/presentation/providers/stock_level_provider.dart';
+import 'package:pos_mobile/presentation/widgets/stock_packs_view.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
 class StockAuditFormPage extends ConsumerStatefulWidget {
@@ -185,7 +187,8 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
                             _qtyRow('m:${materials[i].id}', materials[i].name,
                                 materials[i].unit, true,
                                 systemQty: levelByMat[materials[i].id]?.qtyOnHand,
-                                incomingToday: levelByMat[materials[i].id]?.incomingToday),
+                                incomingToday: levelByMat[materials[i].id]?.incomingToday,
+                                packs: levelByMat[materials[i].id]?.packs),
                           ],
                         ],
                       ),
@@ -204,7 +207,8 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
                             _qtyRow('t:${toppings[i].id}', toppings[i].name,
                                 toppings[i].unit, false,
                                 systemQty: stockByTop[toppings[i].id]?.qty,
-                                incomingToday: stockByTop[toppings[i].id]?.incomingToday),
+                                incomingToday: stockByTop[toppings[i].id]?.incomingToday,
+                                packs: stockByTop[toppings[i].id]?.packs),
                           ],
                         ],
                       ),
@@ -223,7 +227,8 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
                             _qtyRow('p:${plastics[i].id}', plastics[i].name,
                                 plastics[i].unit, false,
                                 systemQty: stockByPlastic[plastics[i].id]?.qty,
-                                incomingToday: stockByPlastic[plastics[i].id]?.incomingToday),
+                                incomingToday: stockByPlastic[plastics[i].id]?.incomingToday,
+                                packs: stockByPlastic[plastics[i].id]?.packs),
                           ],
                         ],
                       ),
@@ -267,6 +272,7 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
     bool isMaterial, {
     num? systemQty,
     num? incomingToday,
+    List<StockPack>? packs,
   }) {
     final open = _returnedOpen.contains(key);
     return Padding(
@@ -287,13 +293,17 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
                       Text('Sistem: ${_fmtNum(systemQty.toDouble())}',
                           style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
                     ],
+                    if (packs != null && packs.isNotEmpty)
+                      StockPacksView(packs: packs, unit: unit),
                     if (incomingToday != null && incomingToday > 0)
                       Text('Masuk hari ini: ${_fmtNum(incomingToday.toDouble())}',
                           style: const TextStyle(fontSize: 11, color: Colors.green, fontWeight: FontWeight.w700)),
                   ],
                 ),
               ),
-              SizedBox(width: 96, child: _numField(key, _physical, isMaterial, 'qty fisik')),
+              SizedBox(
+                  width: 120,
+                  child: _numField(key, _physical, isMaterial, 'qty fisik', unit: unit)),
               IconButton(
                 tooltip: open ? 'Batalkan dikembalikan' : 'Barang dikembalikan',
                 visualDensity: VisualDensity.compact,
@@ -323,7 +333,9 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
                   const Text('Dikembalikan',
                       style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
                   const Spacer(),
-                  SizedBox(width: 96, child: _numField(key, _returned, isMaterial, 'qty')),
+                  SizedBox(
+                      width: 120,
+                      child: _numField(key, _returned, isMaterial, 'qty', unit: unit)),
                 ],
               ),
             ),
@@ -332,20 +344,23 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
     );
   }
 
-  /// Field angka: bahan integer-only (§1), topping boleh desimal.
-  Widget _numField(String key, Map<String, String> store, bool isMaterial, String hint) {
+  /// Field angka: semua item (material/topping/plastik) kini DESIMAL.
+  /// [unit] ditampilkan sebagai suffix (mis. pcs / gram / ml) bila ada.
+  Widget _numField(String key, Map<String, String> store, bool isMaterial, String hint,
+      {String unit = ''}) {
     return TextFormField(
       initialValue: store[key],
-      keyboardType: TextInputType.numberWithOptions(decimal: !isMaterial),
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
       inputFormatters: [
-        isMaterial
-            ? FilteringTextInputFormatter.digitsOnly
-            : FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+        FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
       ],
       textAlign: TextAlign.right,
       onChanged: (v) => store[key] = v,
       decoration: InputDecoration(
         hintText: hint,
+        suffixText: unit.isEmpty ? null : unit,
+        suffixStyle: const TextStyle(
+            fontSize: 12, color: AppTheme.textSecondary, fontWeight: FontWeight.w600),
         isDense: true,
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         filled: true,
