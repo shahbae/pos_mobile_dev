@@ -165,7 +165,70 @@ class ExpenseDetailPage extends ConsumerWidget {
               ],
             ),
           ),
+
+          // ─── FOTO BUKTI ───
+          if (exp.photoUrl != null) ...[
+            const SizedBox(height: 24),
+            const Text("Foto Bukti",
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF374151))),
+            const SizedBox(height: 10),
+            GestureDetector(
+              onTap: () => _openPhoto(context, exp.photoUrl!),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Image.network(
+                  exp.photoUrl!,
+                  width: double.infinity,
+                  height: 220,
+                  fit: BoxFit.cover,
+                  loadingBuilder: (ctx, child, progress) => progress == null
+                      ? child
+                      : Container(
+                          height: 220,
+                          color: Colors.grey.shade100,
+                          child: const Center(child: CircularProgressIndicator()),
+                        ),
+                  errorBuilder: (ctx, _, __) => Container(
+                    height: 220,
+                    color: Colors.grey.shade100,
+                    child: const Center(
+                      child: Icon(Icons.broken_image_outlined, color: Colors.grey, size: 40),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+
+  void _openPhoto(BuildContext context, String url) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: const EdgeInsets.all(12),
+        child: Stack(
+          children: [
+            InteractiveViewer(
+              child: Center(
+                child: Image.network(url,
+                    errorBuilder: (c, _, __) =>
+                        const Icon(Icons.broken_image_outlined, color: Colors.white, size: 48)),
+              ),
+            ),
+            Positioned(
+              top: 4,
+              right: 4,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white),
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

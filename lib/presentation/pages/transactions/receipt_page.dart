@@ -385,6 +385,18 @@ class _ReceiptPreview extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
+                    if (receipt.store.complaintNote.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        receipt.store.complaintNote,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 6),
                     Text(
                       receipt.invoiceNo,

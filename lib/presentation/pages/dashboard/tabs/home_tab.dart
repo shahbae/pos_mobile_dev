@@ -67,11 +67,13 @@ class _DashboardSections extends StatelessWidget {
     final op = data.operational;
 
     if (op != null) {
-      sections.add(_RevenueChartCard(
-        title: "Grafik Hari Ini",
-        chart: op.chart,
-        primaryTransactionType: op.primaryTransactionType,
-      ));
+      sections.add(
+        _RevenueChartCard(
+          title: "Grafik Hari Ini",
+          chart: op.chart,
+          primaryTransactionType: op.primaryTransactionType,
+        ),
+      );
       // Ringkasan 3 metrik: Total Penjualan − Pengeluaran = Bersih.
       // Total Penjualan diambil dari shift berjalan (current_shift.total_sales)
       // agar konsisten dengan kartu Shift; fallback ke operasional bila tak ada
@@ -81,21 +83,37 @@ class _DashboardSections extends StatelessWidget {
       final pengeluaran = op.expenses.totalAmountNum;
       final bersih = penjualan - pengeluaran;
       sections.add(const SizedBox(height: 12));
-      sections.add(Row(
-        children: [
-          _statTile('Total Penjualan', formatRupiah(penjualan), AppTheme.brandBlue),
-          const SizedBox(width: 10),
-          _statTile('Pengeluaran', formatRupiah(pengeluaran), Colors.red),
-          const SizedBox(width: 10),
-          _statTile('Bersih', formatRupiah(bersih),
-              bersih < 0 ? AppTheme.danger : Colors.teal),
-        ],
-      ));
+      sections.add(
+        Row(
+          children: [
+            _statTile(
+              'Total Penjualan',
+              formatRupiah(penjualan),
+              AppTheme.brandBlue,
+            ),
+            const SizedBox(width: 10),
+            _statTile('Pengeluaran', formatRupiah(pengeluaran), Colors.red),
+            const SizedBox(width: 10),
+            _statTile(
+              'Bersih',
+              formatRupiah(bersih),
+              bersih < 0 ? AppTheme.danger : Colors.teal,
+            ),
+          ],
+        ),
+      );
     }
 
     if (data.currentShift != null) {
       sections.add(const SizedBox(height: 12));
       sections.add(_ShiftCard(shift: data.currentShift!));
+    }
+
+    // Rekap per-shift (kasir & leader). Hanya untuk rentang 1 hari (from == to);
+    // key null bila BE tak mengirimnya. Array kosong tetap dirender (info kosong).
+    if (data.shiftsSummary != null) {
+      sections.add(const SizedBox(height: 12));
+      sections.add(_ShiftsSummaryCard(rows: data.shiftsSummary!));
     }
 
     if (data.profit != null) {
@@ -437,7 +455,9 @@ class _Header extends ConsumerWidget {
                 Icon(
                   Icons.store_outlined,
                   size: 15,
-                  color: currentBranch != null ? accent : AppTheme.textSecondary,
+                  color: currentBranch != null
+                      ? accent
+                      : AppTheme.textSecondary,
                 ),
                 const SizedBox(width: 6),
                 Text(
@@ -445,14 +465,18 @@ class _Header extends ConsumerWidget {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: currentBranch != null ? accent : AppTheme.textSecondary,
+                    color: currentBranch != null
+                        ? accent
+                        : AppTheme.textSecondary,
                   ),
                 ),
                 const SizedBox(width: 4),
                 Icon(
                   Icons.keyboard_arrow_down_rounded,
                   size: 16,
-                  color: currentBranch != null ? accent : AppTheme.textSecondary,
+                  color: currentBranch != null
+                      ? accent
+                      : AppTheme.textSecondary,
                 ),
               ],
             ),
@@ -804,6 +828,139 @@ String _shiftStatusLabel(String s) {
   }
 }
 
+/// Rekap per-shift dalam sehari: total item terjual + jumlah transaksi.
+/// Baris "Total" dihitung sendiri di FE (jumlahkan semua elemen array).
+class _ShiftsSummaryCard extends StatelessWidget {
+  final List<DashboardShiftSummary> rows;
+  const _ShiftsSummaryCard({required this.rows});
+
+  @override
+  Widget build(BuildContext context) {
+    final totalItems = rows.fold<int>(0, (s, r) => s + r.totalItems);
+    final totalTx = rows.fold<int>(0, (s, r) => s + r.transactionCount);
+
+    return _SectionCard(
+      title: 'Rekap per Shift',
+      icon: Icons.compare_arrows_rounded,
+      children: [
+        _summaryHeader(),
+        Divider(height: 1, color: AppTheme.borderLight.withOpacity(0.7)),
+        if (rows.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Text(
+              'Belum ada shift hari ini',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppTheme.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          )
+        else ...[
+          ...rows.map(
+            (r) => _summaryRow(
+              r.shiftName,
+              r.totalItems.toString(),
+              r.transactionCount.toString(),
+            ),
+          ),
+          Divider(height: 1, color: AppTheme.borderLight.withOpacity(0.7)),
+          _summaryRow(
+            'Total',
+            totalItems.toString(),
+            totalTx.toString(),
+            strong: true,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _summaryHeader() {
+    return const Padding(
+      padding: EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Expanded(flex: 4, child: _HeadCell('Shift')),
+          Expanded(flex: 3, child: _HeadCell('Cup', end: true)),
+          Expanded(flex: 3, child: _HeadCell('Transaksi', end: true)),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryRow(
+    String shift,
+    String items,
+    String tx, {
+    bool strong = false,
+  }) {
+    final weight = strong ? FontWeight.w900 : FontWeight.w700;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 4,
+            child: Text(
+              shift,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: strong ? FontWeight.w900 : FontWeight.w600,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              items,
+              textAlign: TextAlign.end,
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: weight,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              tx,
+              textAlign: TextAlign.end,
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: weight,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeadCell extends StatelessWidget {
+  final String text;
+  final bool end;
+  const _HeadCell(this.text, {this.end = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      textAlign: end ? TextAlign.end : TextAlign.start,
+      style: const TextStyle(
+        fontSize: 11.5,
+        fontWeight: FontWeight.w700,
+        color: AppTheme.textSecondary,
+      ),
+    );
+  }
+}
+
 class _ShiftCard extends StatelessWidget {
   final DashboardShift shift;
   const _ShiftCard({required this.shift});
@@ -826,7 +983,9 @@ class _ShiftCard extends StatelessWidget {
           // (cash_sales), jadi di rincian pembayaran cukup metode non-cash.
           ...shift.payments
               .where((p) => p.method.toLowerCase() != 'cash')
-              .map((p) => _lineRow(p.method.toUpperCase(), formatRupiah(p.total))),
+              .map(
+                (p) => _lineRow(p.method.toUpperCase(), formatRupiah(p.total)),
+              ),
           // Terisi hanya setelah shift ditutup.
           if (shift.closingCash != null)
             _lineRow('Kas Akhir', formatRupiah(shift.closingCash!)),
@@ -834,7 +993,9 @@ class _ShiftCard extends StatelessWidget {
             _lineRow(
               'Selisih',
               formatRupiah(shift.difference!),
-              valueColor: shift.difference! < 0 ? AppTheme.danger : const Color(0xFF16A34A),
+              valueColor: shift.difference! < 0
+                  ? AppTheme.danger
+                  : const Color(0xFF16A34A),
             ),
         ]),
       ],
@@ -880,14 +1041,18 @@ class _PaymentsCard extends StatelessWidget {
       title: 'Pembayaran',
       icon: Icons.payments_outlined,
       children: [
-        _separated(rows
-            .map((r) => _lineRow(
+        _separated(
+          rows
+              .map(
+                (r) => _lineRow(
                   r.count > 0
                       ? '${r.method.toUpperCase()} · ${r.count}x'
                       : r.method.toUpperCase(),
                   formatRupiah(r.total),
-                ))
-            .toList()),
+                ),
+              )
+              .toList(),
+        ),
       ],
     );
   }
@@ -948,12 +1113,18 @@ class _PerBranchCard extends StatelessWidget {
       title: 'Per Cabang',
       icon: Icons.store_mall_directory_outlined,
       children: [
-        _separated(rows
-            .map((r) => _lineRow(
-                  r.transactions > 0 ? '${r.name} · ${r.transactions} trx' : r.name,
+        _separated(
+          rows
+              .map(
+                (r) => _lineRow(
+                  r.transactions > 0
+                      ? '${r.name} · ${r.transactions} trx'
+                      : r.name,
                   formatRupiah(r.sales),
-                ))
-            .toList()),
+                ),
+              )
+              .toList(),
+        ),
       ],
     );
   }
@@ -968,9 +1139,7 @@ class _TeamAttendanceCard extends StatelessWidget {
     return _SectionCard(
       title: 'Absensi Tim',
       icon: Icons.groups_outlined,
-      children: [
-        _separated(rows.map(_attendanceTile).toList()),
-      ],
+      children: [_separated(rows.map(_attendanceTile).toList())],
     );
   }
 
@@ -1069,7 +1238,10 @@ class _AttendanceTodayCard extends StatelessWidget {
         else
           _separated([
             _lineRow('Absen Masuk', _hm(day.checkInAt)),
-            _lineRow('Absen Pulang', day.hasCheckedOut ? _hm(day.checkOutAt) : 'Belum'),
+            _lineRow(
+              'Absen Pulang',
+              day.hasCheckedOut ? _hm(day.checkOutAt) : 'Belum',
+            ),
             if (day.shift.isNotEmpty) _lineRow('Shift', day.shift),
           ]),
       ],
@@ -1087,12 +1259,16 @@ class _AttendanceHistoryCard extends StatelessWidget {
       title: 'Riwayat Absensi',
       icon: Icons.history,
       children: [
-        _separated(rows
-            .map((r) => _lineRow(
+        _separated(
+          rows
+              .map(
+                (r) => _lineRow(
                   _dmy(r.date),
                   '${_hm(r.checkInAt)} - ${r.hasCheckedOut ? _hm(r.checkOutAt) : '...'}',
-                ))
-            .toList()),
+                ),
+              )
+              .toList(),
+        ),
       ],
     );
   }
@@ -1107,9 +1283,7 @@ class _RecentTransactionsCard extends StatelessWidget {
     return _SectionCard(
       title: 'Transaksi Terakhir',
       icon: Icons.receipt_long_outlined,
-      children: [
-        _separated(rows.map(_txTile).toList()),
-      ],
+      children: [_separated(rows.map(_txTile).toList())],
     );
   }
 
@@ -1135,8 +1309,11 @@ class _RecentTransactionsCard extends StatelessWidget {
               color: AppTheme.brandBlue.withOpacity(0.10),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.receipt_outlined,
-                size: 17, color: AppTheme.brandBlue),
+            child: const Icon(
+              Icons.receipt_outlined,
+              size: 17,
+              color: AppTheme.brandBlue,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1199,7 +1376,11 @@ class _EmptyDashboard extends StatelessWidget {
       ),
       child: const Column(
         children: [
-          Icon(Icons.dashboard_outlined, size: 36, color: AppTheme.textSecondary),
+          Icon(
+            Icons.dashboard_outlined,
+            size: 36,
+            color: AppTheme.textSecondary,
+          ),
           SizedBox(height: 10),
           Text(
             'Belum ada data untuk ditampilkan',

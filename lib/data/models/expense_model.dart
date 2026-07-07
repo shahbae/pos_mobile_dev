@@ -8,6 +8,10 @@ class ExpenseModel {
   final int? createdBy;
   final String? createdAt;
 
+  /// URL penuh foto bukti (siap dipakai di Image.network). Bisa `null` untuk
+  /// data lama sebelum fitur foto wajib (revisi BE 2026-07-07).
+  final String? photoUrl;
+
   ExpenseModel({
     this.id,
     this.tenantId,
@@ -17,6 +21,7 @@ class ExpenseModel {
     this.expenseDate,
     this.createdBy,
     this.createdAt,
+    this.photoUrl,
   });
 
   factory ExpenseModel.fromJson(Map<String, dynamic> j) {
@@ -29,6 +34,9 @@ class ExpenseModel {
       expenseDate: j['expense_date'],
       createdBy: j['created_by'],
       createdAt: j['created_at'],
+      photoUrl: (j['photo_url']?.toString().isEmpty ?? true)
+          ? null
+          : j['photo_url'].toString(),
     );
   }
 

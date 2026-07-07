@@ -26,6 +26,12 @@ class DashboardData {
   final List<DashboardTopProduct> topProducts;
   final List<DashboardBranchRow> perBranch;
   final DashboardShift? currentShift;
+
+  /// Rekap per-shift dalam 1 hari (revisi BE 2026-07-07). Untuk kasir & leader.
+  /// `null` bila key `shifts_summary` TIDAK dikirim (rentang > 1 hari, from != to).
+  /// `[]` bila key ada tapi belum ada shift hari itu (tetap tampilkan komponen).
+  final List<DashboardShiftSummary>? shiftsSummary;
+
   final List<DashboardAttendanceRow> teamAttendance;
   final List<DashboardRecentTx> recentTransactions;
   final DashboardAttendanceDay? attendanceToday;
@@ -44,6 +50,7 @@ class DashboardData {
     this.topProducts = const [],
     this.perBranch = const [],
     this.currentShift,
+    this.shiftsSummary,
     this.teamAttendance = const [],
     this.recentTransactions = const [],
     this.attendanceToday,
@@ -99,6 +106,13 @@ class DashboardData {
       currentShift: asMap(j['current_shift']) == null
           ? null
           : DashboardShift.fromJson(asMap(j['current_shift'])!),
+      // Key ada (from == to) → list (isi atau []); key absen (from != to) → null.
+      shiftsSummary: j.containsKey('shifts_summary')
+          ? asList(j['shifts_summary'])
+              .whereType<Map>()
+              .map((e) => DashboardShiftSummary.fromJson(e.cast<String, dynamic>()))
+              .toList()
+          : null,
       teamAttendance: teamList
           .whereType<Map>()
           .map((e) => DashboardAttendanceRow.fromJson(e.cast<String, dynamic>()))
@@ -272,6 +286,30 @@ class DashboardShift {
           .whereType<Map>()
           .map((e) => DashboardTopProduct.fromJson(e.cast<String, dynamic>()))
           .toList(),
+    );
+  }
+}
+
+/// Rekap satu shift dalam sehari: total item terjual + jumlah transaksi.
+class DashboardShiftSummary {
+  final int shiftId;
+  final String shiftName;
+  final int totalItems;
+  final int transactionCount;
+
+  const DashboardShiftSummary({
+    required this.shiftId,
+    required this.shiftName,
+    this.totalItems = 0,
+    this.transactionCount = 0,
+  });
+
+  factory DashboardShiftSummary.fromJson(Map<String, dynamic> j) {
+    return DashboardShiftSummary(
+      shiftId: _int(j['shift_id']),
+      shiftName: (j['shift_name'] ?? '-').toString(),
+      totalItems: _int(j['total_items']),
+      transactionCount: _int(j['transaction_count']),
     );
   }
 }

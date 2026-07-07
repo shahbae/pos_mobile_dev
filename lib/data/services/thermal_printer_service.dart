@@ -161,6 +161,10 @@ class ThermalPrinterService {
         ? r.store.footerNote
         : 'Terima kasih atas kunjungan Anda';
     bytes += g.text(footer, styles: const PosStyles(align: PosAlign.center, bold: true));
+    if (r.store.complaintNote.isNotEmpty) {
+      bytes += g.text(r.store.complaintNote,
+          styles: const PosStyles(align: PosAlign.center));
+    }
     bytes += g.feed(1);
     bytes += g.text(r.invoiceNo, styles: const PosStyles(align: PosAlign.center));
     bytes += g.feed(2);

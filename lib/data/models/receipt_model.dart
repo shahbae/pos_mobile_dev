@@ -158,13 +158,23 @@ class ReceiptStore {
   final String address;
   final String footerNote;
 
-  ReceiptStore({required this.name, required this.address, required this.footerNote});
+  /// Catatan komplain (revisi BE 2026-07-07). Di struk selalu string —
+  /// kosong ("") bila belum diisi. Render barisnya hanya bila tidak kosong.
+  final String complaintNote;
+
+  ReceiptStore({
+    required this.name,
+    required this.address,
+    required this.footerNote,
+    this.complaintNote = '',
+  });
 
   factory ReceiptStore.fromJson(Map<String, dynamic> json) {
     return ReceiptStore(
       name: json['name']?.toString() ?? '',
       address: json['address']?.toString() ?? '',
       footerNote: json['footer_note']?.toString() ?? '',
+      complaintNote: json['complaint_note']?.toString() ?? '',
     );
   }
 }
