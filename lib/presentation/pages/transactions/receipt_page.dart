@@ -165,14 +165,6 @@ class _ReceiptPreview extends StatelessWidget {
                         letterSpacing: 0.3,
                       ),
                     ),
-                    if (receipt.store.address.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        receipt.store.address,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary, height: 1.4),
-                      ),
-                    ],
                     const SizedBox(height: 12),
                     const _PaidBadge(),
                   ],

@@ -149,8 +149,15 @@ Set<AppFeature> featuresForRole(String? role) {
   }
 }
 
-/// Boleh masuk app? Role dikenali & punya minimal satu fitur.
-bool canAccessApp(String? role) => featuresForRole(role).isNotEmpty;
+/// Role yang diizinkan masuk ke aplikasi mobile ini (login gate).
+/// Hanya lima role ini; selain itu (mis. finance, karyawan) ditolak masuk.
+const allowedAppRoles = {'owner', 'kasir', 'supervisor', 'leader', 'produksi'};
+
+/// Boleh masuk app? Role harus ada di allowlist & punya minimal satu fitur.
+bool canAccessApp(String? role) {
+  final r = role?.toLowerCase();
+  return r != null && allowedAppRoles.contains(r) && featuresForRole(r).isNotEmpty;
+}
 
 bool hasFeature(String? role, AppFeature f) => featuresForRole(role).contains(f);
 

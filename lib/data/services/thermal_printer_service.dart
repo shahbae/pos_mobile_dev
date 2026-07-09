@@ -1,4 +1,6 @@
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:image/image.dart' as img;
 import 'package:intl/intl.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 
@@ -8,6 +10,37 @@ import 'package:pos_mobile/data/models/receipt_model.dart';
 class ThermalPrinterService {
   static final NumberFormat _money = NumberFormat.decimalPattern('id_ID');
   static final DateFormat _dateFmt = DateFormat('dd/MM/yyyy HH:mm');
+
+  static const String _logoAsset = 'lib/images/logo_estehcandi.png';
+
+  /// Cache logo yang sudah di-decode & di-resize per lebar kertas (px)
+  /// supaya tidak diproses ulang tiap cetak.
+  static final Map<int, img.Image?> _logoCache = {};
+
+  /// Muat logo dari asset, ubah ke grayscale, dan resize agar pas dengan lebar
+  /// area cetak. Return null bila asset tak ada / gagal decode (nota tetap
+  /// tercetak tanpa logo).
+  Future<img.Image?> _loadLogo(int maxWidth) async {
+    if (_logoCache.containsKey(maxWidth)) return _logoCache[maxWidth];
+    img.Image? logo;
+    try {
+      final data = await rootBundle.load(_logoAsset);
+      final decoded = img.decodeImage(data.buffer.asUint8List());
+      if (decoded != null) {
+        final resized = decoded.width > maxWidth
+            ? img.copyResize(decoded, width: maxWidth)
+            : decoded;
+        logo = img.grayscale(resized);
+      }
+    } catch (_) {
+      logo = null;
+    }
+    _logoCache[maxWidth] = logo;
+    return logo;
+  }
+
+  /// Lebar area cetak (px) per ukuran kertas.
+  int _printWidth(PaperSize size) => size == PaperSize.mm80 ? 512 : 384;
 
   /// Cek izin Bluetooth (akan meminta izin runtime di Android 12+).
   Future<bool> get permissionGranted => PrintBluetoothThermal.isPermissionBluetoothGranted;
@@ -52,6 +85,13 @@ class ThermalPrinterService {
     final g = Generator(paperSize, profile);
     List<int> bytes = [];
 
+    // Logo di paling atas (di-center). Dilewati bila gagal dimuat.
+    final logo = await _loadLogo(_printWidth(paperSize));
+    if (logo != null) {
+      bytes += g.image(logo, align: PosAlign.center);
+      bytes += g.feed(1);
+    }
+
     // Header toko
     if (r.store.name.isNotEmpty) {
       bytes += g.text(
@@ -63,9 +103,6 @@ class ThermalPrinterService {
           width: PosTextSize.size2,
         ),
       );
-    }
-    if (r.store.address.isNotEmpty) {
-      bytes += g.text(r.store.address, styles: const PosStyles(align: PosAlign.center));
     }
     bytes += g.text('LUNAS', styles: const PosStyles(align: PosAlign.center, bold: true));
     bytes += g.hr(ch: '=');
@@ -167,7 +204,6 @@ class ThermalPrinterService {
     }
     bytes += g.feed(1);
     bytes += g.text(r.invoiceNo, styles: const PosStyles(align: PosAlign.center));
-    bytes += g.feed(2);
     bytes += g.cut();
 
     return bytes;

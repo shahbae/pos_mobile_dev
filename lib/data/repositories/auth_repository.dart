@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:pos_mobile/data/models/me_model.dart';
 import 'package:pos_mobile/data/services/api_services.dart';
 import '../services/secure_storage.dart';
 
@@ -7,6 +8,18 @@ class AuthRepository {
   final ApiService api;
 
   AuthRepository(this.api);
+
+  /// Ambil identitas user aktif dari `GET /me` (role & branch otoritatif dari BE).
+  Future<MeModel> getMe() async {
+    final res = await api.dio.get('/me');
+    if (res.statusCode != 200 || res.data['success'] != true) {
+      final msg = res.data['message'] ?? res.data['error'] ?? 'Gagal memuat profil';
+      throw msg;
+    }
+    final data = res.data['data'];
+    if (data is! Map) throw 'Data profil tidak ditemukan';
+    return MeModel.fromJson(Map<String, dynamic>.from(data));
+  }
 
   Future<void> login(
     String email,

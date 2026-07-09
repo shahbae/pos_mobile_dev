@@ -106,12 +106,28 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  /// Ambil role & branch dari `GET /me` (otoritatif). Bila gagal (mis. jaringan),
+  /// jatuh balik ke klaim JWT supaya app tetap bisa menentukan akses.
+  Future<({String? role, int? branchId})> _resolveIdentity(String token) async {
+    try {
+      final me = await repo.getMe();
+      return (
+        role: me.role ?? _extractRoleFromToken(token),
+        branchId: me.branchId ?? _extractBranchIdFromToken(token),
+      );
+    } catch (_) {
+      return (
+        role: _extractRoleFromToken(token),
+        branchId: _extractBranchIdFromToken(token),
+      );
+    }
+  }
+
   Future<void> reloadFromToken() async {
     final token = await SecureStorage.getAccessToken();
     if (token == null) return;
-    final role = _extractRoleFromToken(token);
-    final branchId = _extractBranchIdFromToken(token);
-    state = state.copyWith(role: role, branchId: branchId);
+    final identity = await _resolveIdentity(token);
+    state = state.copyWith(role: identity.role, branchId: identity.branchId);
   }
 
   Future<void> _init() async {
@@ -166,8 +182,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
         await logout();
         return;
       }
-      final role = _extractRoleFromToken(latestToken);
-      final branchId = _extractBranchIdFromToken(latestToken);
+      final identity = await _resolveIdentity(latestToken);
+      final role = identity.role;
+      final branchId = identity.branchId;
 
       // Role tidak diizinkan → tolak masuk.
       if (!canAccessApp(role)) {
@@ -202,8 +219,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await repo.login(email, password, rememberMe: rememberMe);
 
       final accessToken = await SecureStorage.getAccessToken();
-      final role = accessToken == null ? null : _extractRoleFromToken(accessToken);
-      final branchId = accessToken == null ? null : _extractBranchIdFromToken(accessToken);
+      final identity = accessToken == null
+          ? (role: null, branchId: null)
+          : await _resolveIdentity(accessToken);
+      final role = identity.role;
+      final branchId = identity.branchId;
 
       // Role tidak diizinkan → batalkan login, bersihkan token.
       if (!canAccessApp(role)) {
