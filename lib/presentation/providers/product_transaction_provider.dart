@@ -7,6 +7,7 @@ import 'package:pos_mobile/data/models/promo_model.dart';
 import 'package:pos_mobile/data/models/topping_model.dart';
 import 'package:pos_mobile/data/models/plastic_model.dart';
 import 'package:pos_mobile/data/models/product_transaction_model.dart';
+import 'package:pos_mobile/data/models/qris_payment_model.dart';
 import 'package:pos_mobile/data/repositories/product_transaction_repository.dart';
 
 /// Topping terpilih pada satu baris cart (menyimpan harga untuk kalkulasi).
@@ -333,17 +334,14 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
     state = state.copyWith(promoFreeItems: reconciled);
   }
 
-  Future<void> submitTransaction({
+  /// Bangun payload transaksi dari state keranjang saat ini.
+  ProductTransactionRequest _buildRequest({
     required String paymentMethod,
     required int paid,
     int discount = 0,
     String? paymentRef,
     String? customerName,
-  }) async {
-    if (state.items.isEmpty) return;
-
-    state = state.copyWith(isLoading: true, error: null);
-
+  }) {
     final promo = state.selectedPromo;
     final freeSelections = (promo == null) ? const <PromoFreeSelection>[] : state.promoFreeItems;
 
@@ -368,7 +366,7 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
           )),
     ];
 
-    final request = ProductTransactionRequest(
+    return ProductTransactionRequest(
       items: items,
       promoFreeItems: promoFreeItems,
       plastics: state.plastics.map((p) => p.toSelection()).toList(),
@@ -379,12 +377,61 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
       customerName: customerName,
       idempotencyKey: _genIdempotencyKey(),
     );
+  }
+
+  Future<void> submitTransaction({
+    required String paymentMethod,
+    required int paid,
+    int discount = 0,
+    String? paymentRef,
+    String? customerName,
+  }) async {
+    if (state.items.isEmpty) return;
+
+    state = state.copyWith(isLoading: true, error: null);
+
+    final request = _buildRequest(
+      paymentMethod: paymentMethod,
+      paid: paid,
+      discount: discount,
+      paymentRef: paymentRef,
+      customerName: customerName,
+    );
 
     try {
       final response = await repo.createTransaction(request);
       state = ProductTransactionState(lastResponse: response); // reset cart on success
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
+    }
+  }
+
+  /// Charge QRIS. Keranjang TIDAK direset di sini — hanya direset saat sudah
+  /// lunas (dari QR page) supaya bisa retry bila QR kedaluwarsa/dibatalkan.
+  /// Return hasil (pending QR / langsung lunas), atau null bila gagal (lihat state.error).
+  Future<QrisChargeResult?> chargeQris({
+    int discount = 0,
+    String? customerName,
+  }) async {
+    if (state.items.isEmpty) return null;
+
+    state = state.copyWith(isLoading: true, error: null);
+
+    // QRIS: payment_method lowercase "qris", paid = total (BE tetap validasi paid).
+    final request = _buildRequest(
+      paymentMethod: 'qris',
+      paid: state.total.toInt(),
+      discount: discount,
+      customerName: customerName,
+    );
+
+    try {
+      final result = await repo.createQrisTransaction(request);
+      state = state.copyWith(isLoading: false);
+      return result;
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+      return null;
     }
   }
 

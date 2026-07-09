@@ -50,10 +50,12 @@ class ProductTransactionRequest {
     this.idempotencyKey,
   });
 
-  Map<String, dynamic> toJson() {
+  /// [forQris] = alur QRIS dinamis: `payment_ref` tidak dikirim (nomor ref
+  /// dibuat gateway). `paid` TETAP dikirim (= total) — BE memvalidasinya.
+  Map<String, dynamic> toJson({bool forQris = false}) {
     return {
       'payment_method': paymentMethod,
-      'payment_ref': paymentRef,
+      if (!forQris) 'payment_ref': paymentRef,
       'paid': paid,
       'discount': discount,
       'items': items.map((i) => i.toJson()).toList(),

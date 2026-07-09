@@ -4,6 +4,9 @@ import 'package:intl/intl.dart';
 import 'package:pos_mobile/data/models/product_variant_model.dart';
 import 'package:pos_mobile/data/models/promo_model.dart';
 import 'package:pos_mobile/data/models/plastic_model.dart';
+import 'package:pos_mobile/data/models/product_transaction_model.dart';
+import 'package:pos_mobile/data/models/qris_payment_model.dart';
+import 'package:pos_mobile/presentation/pages/product_transactions/qris_payment_page.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/presentation/providers/product_pagination_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_provider.dart';
@@ -51,6 +54,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   num _lastTotal = 0;
 
   bool get _isCash => _paymentMethod == 'CASH';
+  bool get _isQris => _paymentMethod == 'QRIS';
 
   @override
   void initState() {
@@ -78,6 +82,12 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   }
 
   Future<void> _submit(num total) async {
+    // QRIS pakai alur asinkron (buat QR → poll → lunas). Nominal = total otomatis.
+    if (_isQris) {
+      await _submitQris();
+      return;
+    }
+
     final rawPaid = _paidAmountController.text.replaceAll(RegExp(r'[^0-9]'), '');
     final paidValue = int.tryParse(rawPaid) ?? 0;
 
@@ -117,6 +127,59 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
         ref.read(productPaginationProvider.notifier).loadAll();
       }
     }
+  }
+
+  /// Alur QRIS dinamis: charge → (QR page + polling) → lunas cetak struk.
+  Future<void> _submitQris() async {
+    final notifier = ref.read(productTransactionProvider.notifier);
+    final customerName = _customerNameController.text.trim().isEmpty
+        ? null
+        : _customerNameController.text.trim();
+
+    final result = await notifier.chargeQris(customerName: customerName);
+    if (!mounted) return;
+
+    if (result == null) {
+      final err = ref.read(productTransactionProvider).error;
+      _toast("Gagal: ${err ?? 'tidak diketahui'}", Colors.red);
+      if ((err ?? '').toLowerCase().contains('habis')) {
+        ref.read(productPaginationProvider.notifier).loadAll();
+      }
+      return;
+    }
+
+    // Response B — Midtrans belum aktif, transaksi langsung lunas.
+    if (result is QrisChargeCompleted) {
+      notifier.clearCart();
+      _goToSuccess(result.response);
+      return;
+    }
+
+    // Response A — tampilkan QR, tunggu pembayaran.
+    if (result is QrisChargePending) {
+      final invoiceNo = await Navigator.push<String?>(
+        context,
+        MaterialPageRoute(builder: (_) => QrisPaymentPage(charge: result.charge)),
+      );
+      if (!mounted) return;
+      if (invoiceNo != null) {
+        // Lunas → reset keranjang & tampilkan struk (auto-print bila diset).
+        notifier.clearCart();
+        _goToSuccess(ProductTransactionResponse(
+          invoiceNumber: invoiceNo,
+          saleId: 0,
+          success: true,
+        ));
+      }
+      // Dibatalkan / kedaluwarsa → tetap di checkout, keranjang utuh (bisa ulangi).
+    }
+  }
+
+  void _goToSuccess(ProductTransactionResponse response) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => TransactionSuccessPage(response: response)),
+    );
   }
 
   void _toast(String msg, Color color) {
@@ -330,7 +393,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                   .toList(),
             ),
 
-            if (!_isCash) ...[
+            if (!_isCash && !_isQris) ...[
               const SizedBox(height: 24),
               _sectionTitle("Nomor Referensi", 18),
               const SizedBox(height: 12),
@@ -351,6 +414,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
 
             // ── Ringkasan biaya ──
             _totalsCard(cartState),
+            if (!_isQris) ...[
             const SizedBox(height: 24),
 
             // ── Jumlah Bayar ──
@@ -392,6 +456,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               const SizedBox(height: 12),
               _changeCard(cartState.total),
             ],
+            ],
             const SizedBox(height: 40),
 
             SizedBox(
@@ -407,7 +472,10 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                 ),
                 child: cartState.isLoading
                     ? const CircularProgressIndicator(color: Colors.white)
-                    : Text("Konfirmasi & Bayar ${formatRupiah(cartState.total)}",
+                    : Text(
+                        _isQris
+                            ? "Buat QR ${formatRupiah(cartState.total)}"
+                            : "Konfirmasi & Bayar ${formatRupiah(cartState.total)}",
                         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
               ),
             ),

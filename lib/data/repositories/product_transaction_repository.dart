@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/data/models/product_transaction_model.dart';
+import 'package:pos_mobile/data/models/qris_payment_model.dart';
 import 'package:pos_mobile/data/services/api_services.dart';
 import 'package:flutter/foundation.dart';
 
@@ -27,6 +28,64 @@ class ProductTransactionRepository {
       return ProductTransactionResponse.fromJson(res.data);
     } on DioException catch (e) {
       debugPrint('[TransactionRepo] DioError ${e.response?.statusCode}: ${e.response?.data}');
+      final data = e.response?.data;
+      final raw = (data is Map) ? (data['message'] ?? data['error']) : null;
+      throw _mapError(raw?.toString(), e.response?.statusCode, e.message);
+    }
+  }
+
+  /// Charge QRIS: sama-sama `POST /product-transactions` (payment_method "qris"),
+  /// tapi response bisa 2 bentuk — QR (pending) atau receipt biasa (langsung lunas).
+  Future<QrisChargeResult> createQrisTransaction(ProductTransactionRequest request) async {
+    try {
+      final payload = request.toJson(forQris: true);
+      debugPrint('[TransactionRepo] POST /product-transactions (QRIS) body: $payload');
+      final res = await api.dio.post('/product-transactions', data: payload);
+      debugPrint('[TransactionRepo] QRIS response: ${res.data}');
+      final body = res.data;
+      final data = (body is Map && body['data'] is Map) ? body['data'] as Map : body;
+
+      // Response A: ada qr_string / payment_ref tanpa invoice → tampilkan QR.
+      final hasQr = data is Map &&
+          (data['qr_string'] != null || data['payment_ref'] != null) &&
+          data['invoice_no'] == null &&
+          data['invoice_number'] == null;
+      if (hasQr) {
+        return QrisChargePending(QrisCharge.fromJson(Map<String, dynamic>.from(data)));
+      }
+      // Response B: receipt biasa (langsung lunas).
+      return QrisChargeCompleted(
+          ProductTransactionResponse.fromJson(Map<String, dynamic>.from(body)));
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      final raw = (data is Map) ? (data['message'] ?? data['error']) : null;
+      throw _mapError(raw?.toString(), e.response?.statusCode, e.message);
+    }
+  }
+
+  /// Cek status pembayaran QRIS (polling).
+  Future<QrisStatus> getQrisStatus(String paymentRef) async {
+    try {
+      final res = await api.dio.get('/qris-payments/$paymentRef');
+      final data = res.data['data'];
+      if (data is! Map) throw 'Data status tidak ditemukan';
+      return QrisStatus.fromJson(Map<String, dynamic>.from(data));
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      final raw = (data is Map) ? (data['message'] ?? data['error']) : null;
+      throw _mapError(raw?.toString(), e.response?.statusCode, e.message);
+    }
+  }
+
+  /// Batalkan QRIS yang masih pending. Return status akhir dari BE
+  /// (bisa `cancelled`, atau `paid` bila pelanggan keburu bayar — aman terhadap race).
+  Future<String> cancelQris(String paymentRef) async {
+    try {
+      final res = await api.dio.post('/qris-payments/$paymentRef/cancel');
+      final data = res.data['data'];
+      if (data is Map && data['status'] != null) return data['status'].toString();
+      return QrisStatusValue.cancelled;
+    } on DioException catch (e) {
       final data = e.response?.data;
       final raw = (data is Map) ? (data['message'] ?? data['error']) : null;
       throw _mapError(raw?.toString(), e.response?.statusCode, e.message);
