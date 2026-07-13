@@ -6,6 +6,7 @@ class ShiftModel {
   final num totalSales;
   final num? cashSales; // tunai bersih masuk laci (BE: cash_sales, dulu net_cash)
   final num? expectedCash; // kas seharusnya (dari BE bila tersedia)
+  final num totalExpense; // total pengeluaran shift (BE: total_expense)
   final num? difference; // selisih kas (dari BE bila tersedia)
   final List<ShiftPayment> payments;
   final String status; // open / closed
@@ -19,6 +20,7 @@ class ShiftModel {
     required this.totalSales,
     required this.cashSales,
     required this.expectedCash,
+    this.totalExpense = 0,
     required this.difference,
     required this.payments,
     required this.status,
@@ -38,9 +40,11 @@ class ShiftModel {
   /// tidak dihitung dari breakdown pembayaran.
   num get cashSalesResolved => cashSales ?? _cashFromPayments;
 
-  /// Kas seharusnya. Pakai nilai BE bila ada, kalau tidak dihitung dari
-  /// kas awal + penjualan tunai.
-  num get expectedCashResolved => expectedCash ?? (openingCash + cashSalesResolved);
+  /// Kas seharusnya — diambil langsung dari BE (`expected_cash`), yang sudah
+  /// memperhitungkan pengeluaran (kas awal + penjualan tunai − pengeluaran),
+  /// selaras dengan dashboard `current_shift`. FE tidak menghitung sendiri;
+  /// 0 bila BE tidak mengirimnya.
+  num get expectedCashResolved => expectedCash ?? 0;
 
   /// Selisih kas = kas fisik (kas akhir) - kas seharusnya.
   /// Positif = lebih, negatif = kurang. null bila shift belum ditutup.
@@ -62,6 +66,7 @@ class ShiftModel {
           ? null
           : _num(data['cash_sales'] ?? data['net_cash']),
       expectedCash: data['expected_cash'] == null ? null : _num(data['expected_cash']),
+      totalExpense: _num(data['total_expense']),
       difference: (data['difference'] ?? data['cash_difference']) == null
           ? null
           : _num(data['difference'] ?? data['cash_difference']),

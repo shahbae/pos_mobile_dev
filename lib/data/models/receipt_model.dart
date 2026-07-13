@@ -9,6 +9,7 @@ class Receipt {
   final String? customerName;
   final List<ReceiptItem> items;
   final List<ReceiptPlastic> plastics;
+  final List<ReceiptSedotan> sedotans;
   final num subtotal;
   final num discount;
   final num promoDiscount;
@@ -28,6 +29,7 @@ class Receipt {
     this.customerName,
     required this.items,
     this.plastics = const [],
+    this.sedotans = const [],
     required this.subtotal,
     required this.discount,
     this.promoDiscount = 0,
@@ -46,6 +48,7 @@ class Receipt {
     final List<dynamic> itemsJson = data['items'] ?? [];
     final List<dynamic> promosJson = data['promos'] ?? [];
     final List<dynamic> plasticsJson = data['plastics'] ?? [];
+    final List<dynamic> sedotansJson = data['sedotans'] ?? [];
 
     return Receipt(
       invoiceNo: data['invoice_no']?.toString() ?? '',
@@ -56,6 +59,7 @@ class Receipt {
           : data['customer_name'].toString(),
       items: itemsJson.map((i) => ReceiptItem.fromJson(i as Map<String, dynamic>)).toList(),
       plastics: plasticsJson.map((p) => ReceiptPlastic.fromJson(p as Map<String, dynamic>)).toList(),
+      sedotans: sedotansJson.map((s) => ReceiptSedotan.fromJson(s as Map<String, dynamic>)).toList(),
       subtotal: _num(data['subtotal']),
       discount: _num(data['discount']),
       promoDiscount: _num(data['promo_discount']),
@@ -133,6 +137,21 @@ class ReceiptPlastic {
 
   factory ReceiptPlastic.fromJson(Map<String, dynamic> json) {
     return ReceiptPlastic(
+      name: json['name']?.toString() ?? '',
+      qty: _num(json['qty']).toInt(),
+    );
+  }
+}
+
+/// Sedotan pada struk. Gratis — tanpa harga.
+class ReceiptSedotan {
+  final String name;
+  final int qty;
+
+  ReceiptSedotan({required this.name, required this.qty});
+
+  factory ReceiptSedotan.fromJson(Map<String, dynamic> json) {
+    return ReceiptSedotan(
       name: json['name']?.toString() ?? '',
       qty: _num(json['qty']).toInt(),
     );

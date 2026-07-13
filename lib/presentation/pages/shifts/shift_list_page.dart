@@ -73,6 +73,7 @@ class ShiftListPage extends ConsumerWidget {
                             style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
                       const Divider(height: 18),
                       _row('Penjualan', formatRupiah(s.totalSales)),
+                      if (s.totalExpense > 0) _row('Pengeluaran', '- ${formatRupiah(s.totalExpense)}'),
                       if (!isOpen) _row('Kas Seharusnya', formatRupiah(s.expectedCashResolved)),
                       if (!isOpen && s.closingCash != null)
                         _row('Kas Akhir', formatRupiah(s.closingCash!)),

@@ -8,6 +8,11 @@ class ApiService {
   late final Dio dio;
   final Dio _authClient = Dio(); // khusus refresh — tanpa interceptor
 
+  /// Single-flight: satu proses refresh dipakai bersama semua request yang
+  /// kena 401 bersamaan. Tanpa ini, refresh token yang dirotasi BE akan
+  /// dipakai berkali-kali → request kedua gagal → user logout paksa.
+  Future<bool>? _refreshing;
+
   ApiService() {
     dio = Dio(
       BaseOptions(
@@ -32,42 +37,62 @@ class ApiService {
         },
 
         onError: (e, handler) async {
-          // hanya tangani 401
-          if (e.response?.statusCode == 401) {
-            final refreshed = await _refreshToken();
+          final req = e.requestOptions;
 
-            if (refreshed) {
-              final newToken = await SecureStorage.getAccessToken();
-
-              final opts = Options(
-                method: e.requestOptions.method,
-                headers: {
-                  ...e.requestOptions.headers,
-                  'Authorization': 'Bearer $newToken',
-                },
-              );
-
-              try {
-                final clone = await dio.request(
-                  e.requestOptions.path,
-                  data: e.requestOptions.data,
-                  queryParameters: e.requestOptions.queryParameters,
-                  options: opts,
-                );
-
-                return handler.resolve(clone);
-              } catch (_) {
-                await SecureStorage.clear();
-              }
-            } else {
-              await SecureStorage.clear();
-            }
+          // Hanya tangani 401. Lewati bila:
+          // - request ini sudah pernah di-retry (hindari loop tak berujung), atau
+          // - request ke endpoint auth (login/refresh/logout tak boleh di-refresh).
+          final alreadyRetried = req.extra['__retried'] == true;
+          if (e.response?.statusCode != 401 ||
+              alreadyRetried ||
+              _isAuthPath(req.path)) {
+            return handler.next(e);
           }
 
-          return handler.next(e);
+          final refreshed = await _refreshSingleFlight();
+
+          if (!refreshed) {
+            await SecureStorage.clear();
+            return handler.next(e);
+          }
+
+          final newToken = await SecureStorage.getAccessToken();
+          final opts = Options(
+            method: req.method,
+            headers: {
+              ...req.headers,
+              'Authorization': 'Bearer $newToken',
+            },
+            extra: {...req.extra, '__retried': true},
+          );
+
+          try {
+            final clone = await dio.request(
+              req.path,
+              data: req.data,
+              queryParameters: req.queryParameters,
+              options: opts,
+            );
+            return handler.resolve(clone);
+          } catch (err) {
+            return handler.next(err is DioException ? err : e);
+          }
         },
       ),
     );
+  }
+
+  bool _isAuthPath(String path) =>
+      path.contains('/auth/login') ||
+      path.contains('/auth/refresh') ||
+      path.contains('/auth/logout');
+
+  /// Menjamin hanya ada SATU proses refresh berjalan. Request lain yang kena
+  /// 401 di saat bersamaan ikut menunggu Future yang sama.
+  Future<bool> _refreshSingleFlight() {
+    return _refreshing ??= _refreshToken().whenComplete(() {
+      _refreshing = null;
+    });
   }
 
   Future<bool> _refreshToken() async {

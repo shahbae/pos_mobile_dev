@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
@@ -262,6 +263,8 @@ class _QrisPaymentPageState extends ConsumerState<QrisPaymentPage> {
                   style: TextStyle(color: AppTheme.textSecondary)),
             ],
           ),
+          const SizedBox(height: 20),
+          _devPanel(),
           const SizedBox(height: 24),
           OutlinedButton.icon(
             onPressed: _onCancelPressed,
@@ -275,6 +278,79 @@ class _QrisPaymentPageState extends ConsumerState<QrisPaymentPage> {
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _copy(String label, String value) async {
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('$label disalin'),
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 1),
+    ));
+  }
+
+  /// Panel bantu development: tampilkan qr_url & payment_ref + tombol copy
+  /// supaya bisa dites tanpa buka console. (Aman ditinggal; hanya info.)
+  Widget _devPanel() {
+    final qrUrl = widget.charge.qrUrl;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.bgLight,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.borderLight),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('DEV / Test',
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
+                  color: AppTheme.textSecondary)),
+          const SizedBox(height: 8),
+          _copyField('Payment Ref', widget.charge.paymentRef),
+          if (qrUrl != null && qrUrl.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _copyField('QR URL', qrUrl),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _copyField(String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: const TextStyle(
+                      fontSize: 11, color: AppTheme.textSecondary)),
+              const SizedBox(height: 2),
+              Text(value,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textPrimary)),
+            ],
+          ),
+        ),
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          icon: const Icon(Icons.copy, size: 18, color: AppTheme.brandBlue),
+          tooltip: 'Salin $label',
+          onPressed: () => _copy(label, value),
+        ),
+      ],
     );
   }
 

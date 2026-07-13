@@ -403,7 +403,8 @@ class _ActiveShiftCard extends StatelessWidget {
               _row('Kas Awal', formatRupiah(shift.openingCash)),
               _row('Penjualan', formatRupiah(shift.totalSales)),
               _row('Penjualan Tunai', formatRupiah(shift.cashSalesResolved)),
-              _row('Kas Seharusnya (estimasi)', formatRupiah(shift.expectedCashResolved)),
+              _row('Pengeluaran', '- ${formatRupiah(shift.totalExpense)}'),
+              _row('Kas Seharusnya', formatRupiah(shift.expectedCashResolved)),
               const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
@@ -462,6 +463,7 @@ class _ShiftSummaryDialog extends StatelessWidget {
             _row('Kas Awal', formatRupiah(shift.openingCash)),
             _row('Penjualan', formatRupiah(shift.totalSales)),
             _row('Penjualan Tunai', formatRupiah(shift.cashSalesResolved)),
+            _row('Pengeluaran', '- ${formatRupiah(shift.totalExpense)}'),
             const Divider(height: 24),
             _row('Kas Seharusnya', formatRupiah(shift.expectedCashResolved)),
             if (shift.closingCash != null) _row('Kas Akhir (Fisik)', formatRupiah(shift.closingCash!)),

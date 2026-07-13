@@ -6,6 +6,7 @@ import 'package:pos_mobile/data/models/product_variant_model.dart';
 import 'package:pos_mobile/data/models/promo_model.dart';
 import 'package:pos_mobile/data/models/topping_model.dart';
 import 'package:pos_mobile/data/models/plastic_model.dart';
+import 'package:pos_mobile/data/models/sedotan_model.dart';
 import 'package:pos_mobile/data/models/product_transaction_model.dart';
 import 'package:pos_mobile/data/models/qris_payment_model.dart';
 import 'package:pos_mobile/data/repositories/product_transaction_repository.dart';
@@ -123,11 +124,22 @@ class CartPlastic {
   PlasticSelection toSelection() => PlasticSelection(plasticId: plastic.id, qty: qty);
 }
 
+/// Sedotan terpilih untuk seluruh transaksi (bukan per item).
+class CartSedotan {
+  final Sedotan sedotan;
+  final int qty;
+
+  CartSedotan({required this.sedotan, this.qty = 1});
+
+  SedotanSelection toSelection() => SedotanSelection(sedotanId: sedotan.id, qty: qty);
+}
+
 class ProductTransactionState {
   final List<CartItem> items;
   final Promo? selectedPromo;
   final List<PromoFreeSelection> promoFreeItems;
   final List<CartPlastic> plastics;
+  final List<CartSedotan> sedotans;
   final bool isLoading;
   final String? error;
   final ProductTransactionResponse? lastResponse;
@@ -137,6 +149,7 @@ class ProductTransactionState {
     this.selectedPromo,
     this.promoFreeItems = const [],
     this.plastics = const [],
+    this.sedotans = const [],
     this.isLoading = false,
     this.error,
     this.lastResponse,
@@ -167,6 +180,7 @@ class ProductTransactionState {
     bool clearPromo = false,
     List<PromoFreeSelection>? promoFreeItems,
     List<CartPlastic>? plastics,
+    List<CartSedotan>? sedotans,
     bool? isLoading,
     String? error,
     ProductTransactionResponse? lastResponse,
@@ -176,6 +190,7 @@ class ProductTransactionState {
       selectedPromo: clearPromo ? null : (selectedPromo ?? this.selectedPromo),
       promoFreeItems: promoFreeItems ?? this.promoFreeItems,
       plastics: plastics ?? this.plastics,
+      sedotans: sedotans ?? this.sedotans,
       isLoading: isLoading ?? this.isLoading,
       error: error,
       lastResponse: lastResponse ?? this.lastResponse,
@@ -286,6 +301,20 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
     );
   }
 
+  // ── Sedotan ───────────────────────────────────────────
+  /// Set jumlah sedotan untuk sebuah master sedotan (0 = hapus dari transaksi).
+  void setSedotan(Sedotan sedotan, {required int qty}) {
+    final list = state.sedotans.where((s) => s.sedotan.id != sedotan.id).toList();
+    if (qty > 0) list.add(CartSedotan(sedotan: sedotan, qty: qty));
+    state = state.copyWith(sedotans: list);
+  }
+
+  void removeSedotan(int sedotanId) {
+    state = state.copyWith(
+      sedotans: state.sedotans.where((s) => s.sedotan.id != sedotanId).toList(),
+    );
+  }
+
   // ── Promo ──────────────────────────────────────────────
   void selectPromo(Promo? promo) {
     if (promo == null) {
@@ -370,6 +399,7 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
       items: items,
       promoFreeItems: promoFreeItems,
       plastics: state.plastics.map((p) => p.toSelection()).toList(),
+      sedotans: state.sedotans.map((s) => s.toSelection()).toList(),
       paymentMethod: paymentMethod,
       paid: paid,
       discount: discount,

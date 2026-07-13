@@ -20,9 +20,11 @@ enum AppFeature {
   stockMaterial, // /stock-levels (+ adjust)
   stockTopping, // /topping-stock (+ adjust)
   stockPlastic, // /plastic-stock (+ adjust)
+  stockStraw, // /sedotan-stock (+ adjust)
   stockMovements, // /stock-movements (Riwayat Mutasi)
   toppingMovements, // /topping-stock/movements (Riwayat Stok Topping)
   plasticMovements, // /plastic-stock/movements (Riwayat Stok Plastik)
+  strawMovements, // /sedotan-stock/movements (Riwayat Stok Sedotan)
   stockAudit, // /stock-audits
   expenses, // /expenses (Pengeluaran)
   shift, // /shifts (Shift Kasir)
@@ -46,9 +48,11 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.stockMaterial,
         AppFeature.stockTopping,
         AppFeature.stockPlastic,
+        AppFeature.stockStraw,
         AppFeature.stockMovements,
         AppFeature.toppingMovements,
         AppFeature.plasticMovements,
+        AppFeature.strawMovements,
         AppFeature.stockAudit,
         AppFeature.expenses,
         AppFeature.shift,
@@ -67,18 +71,21 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.stockMaterial,
         AppFeature.stockTopping,
         AppFeature.stockPlastic,
+        AppFeature.stockStraw,
         AppFeature.stockMovements,
         AppFeature.toppingMovements,
         AppFeature.plasticMovements,
+        AppFeature.strawMovements,
         AppFeature.stockAudit,
         AppFeature.expenses,
         AppFeature.shift,
         AppFeature.attendance,
       };
     case 'leader':
-      // Operasional cabang. TANPA POS, reports, & audit stok
-      // (per arahan user 2026-06-20; matriks menandai leader ✅ untuk semua itu).
+      // Operasional cabang + POS (per arahan user 2026-07-11).
+      // TANPA reports & audit stok (per arahan user 2026-06-20).
       return {
+        AppFeature.pos,
         AppFeature.dashboard,
         AppFeature.transactions,
         AppFeature.leaderReport, // laporan harian per shift (GET /reports/leader/daily)
@@ -88,9 +95,11 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.stockMaterial,
         AppFeature.stockTopping,
         AppFeature.stockPlastic,
+        AppFeature.stockStraw,
         AppFeature.stockMovements,
         AppFeature.toppingMovements,
         AppFeature.plasticMovements,
+        AppFeature.strawMovements,
         AppFeature.expenses,
         AppFeature.shift,
         AppFeature.attendance,
@@ -107,9 +116,11 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.stockMaterial,
         AppFeature.stockTopping,
         AppFeature.stockPlastic,
+        AppFeature.stockStraw,
         AppFeature.stockMovements,
         AppFeature.toppingMovements,
         AppFeature.plasticMovements,
+        AppFeature.strawMovements,
         AppFeature.stockAudit,
         AppFeature.expenses,
         AppFeature.shift, // lihat saja (lihat canOperateShift)

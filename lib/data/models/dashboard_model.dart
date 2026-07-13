@@ -238,6 +238,9 @@ class DashboardShift {
   /// Tunai masuk dari penjualan cash (field baru BE).
   final num cashSales;
   final num totalSales;
+
+  /// Total pengeluaran shift (field baru BE, sudah dipotong dari expectedCash).
+  final num totalExpense;
   final num expectedCash;
 
   /// null selama shift masih `open`; terisi setelah shift ditutup.
@@ -255,6 +258,7 @@ class DashboardShift {
     required this.openingCash,
     this.cashSales = 0,
     required this.totalSales,
+    this.totalExpense = 0,
     required this.expectedCash,
     this.closingCash,
     this.difference,
@@ -274,6 +278,7 @@ class DashboardShift {
       openingCash: _num(j['opening_cash']),
       cashSales: _num(j['cash_sales']),
       totalSales: _num(j['total_sales']),
+      totalExpense: _num(j['total_expense']),
       expectedCash: _num(j['expected_cash']),
       closingCash: j['closing_cash'] == null ? null : _num(j['closing_cash']),
       difference: j['difference'] == null ? null : _num(j['difference']),

@@ -146,27 +146,25 @@ class _ReceiptPreview extends StatelessWidget {
                 child: Column(
                   children: [
                     Container(
-                      width: 56,
-                      height: 56,
+                      width: 40,
+                      height: 40,
                       decoration: BoxDecoration(
                         color: AppTheme.brandBlue.withOpacity(0.12),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.storefront_rounded, color: AppTheme.brandBlue, size: 30),
+                      child: const Icon(Icons.storefront_rounded, color: AppTheme.brandBlue, size: 22),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
                     Text(
                       receipt.store.name.isNotEmpty ? receipt.store.name : 'Toko',
                       textAlign: TextAlign.center,
                       style: const TextStyle(
-                        fontSize: 20,
+                        fontSize: 15,
                         fontWeight: FontWeight.w900,
                         color: AppTheme.textPrimary,
                         letterSpacing: 0.3,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    const _PaidBadge(),
                   ],
                 ),
               ),
@@ -267,45 +265,6 @@ class _ReceiptPreview extends StatelessWidget {
                   ],
                 ),
               ),
-              // ===== Kemasan (plastik) =====
-              if (receipt.plastics.isNotEmpty) ...[
-                const _DashedDivider(),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Padding(
-                        padding: EdgeInsets.only(bottom: 8),
-                        child: Text(
-                          'KEMASAN',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            color: AppTheme.textSecondary,
-                            letterSpacing: 1.0,
-                          ),
-                        ),
-                      ),
-                      ...receipt.plastics.map((p) => Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 3),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    p.name,
-                                    style: const TextStyle(
-                                        color: AppTheme.textPrimary, fontSize: 13),
-                                  ),
-                                ),
-                                Text('×${p.qty}', style: _moneyStyle),
-                              ],
-                            ),
-                          )),
-                    ],
-                  ),
-                ),
-              ],
               const _DashedDivider(),
               // ===== Ringkasan =====
               Padding(
@@ -389,54 +348,12 @@ class _ReceiptPreview extends StatelessWidget {
                         ),
                       ),
                     ],
-                    const SizedBox(height: 6),
-                    Text(
-                      receipt.invoiceNo,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: AppTheme.textSecondary,
-                        fontSize: 11,
-                        letterSpacing: 1.0,
-                        fontFamily: 'monospace',
-                      ),
-                    ),
                   ],
                 ),
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _PaidBadge extends StatelessWidget {
-  const _PaidBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-      decoration: BoxDecoration(
-        color: AppTheme.brandBlue.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: const Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.check_circle_rounded, size: 15, color: AppTheme.brandBlue),
-          SizedBox(width: 6),
-          Text(
-            'LUNAS',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w900,
-              color: AppTheme.brandBlue,
-              letterSpacing: 1.0,
-            ),
-          ),
-        ],
       ),
     );
   }

@@ -7,6 +7,7 @@ import 'package:pos_mobile/data/models/stock_pack_model.dart';
 import 'package:pos_mobile/presentation/providers/material_provider.dart';
 import 'package:pos_mobile/presentation/providers/topping_provider.dart';
 import 'package:pos_mobile/presentation/providers/plastic_provider.dart';
+import 'package:pos_mobile/presentation/providers/sedotan_provider.dart';
 import 'package:pos_mobile/presentation/providers/stock_audit_provider.dart';
 import 'package:pos_mobile/presentation/providers/stock_level_provider.dart';
 import 'package:pos_mobile/presentation/widgets/stock_packs_view.dart';
@@ -26,8 +27,8 @@ class StockAuditFormPage extends ConsumerStatefulWidget {
 
 class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
   final _notes = TextEditingController();
-  // key "m:<id>" / "t:<id>" / "p:<id>" -> qty (string).
-  // Bahan integer; topping & plastik desimal.
+  // key "m:<id>" / "t:<id>" / "p:<id>" / "s:<id>" -> qty (string).
+  // Bahan integer; topping, plastik & sedotan desimal.
   final Map<String, String> _physical = {};
   final Map<String, String> _returned = {};
   // key yang field "Dikembalikan"-nya sedang ditampilkan.
@@ -45,7 +46,9 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
             ? 'm:${it.materialId}'
             : (it.toppingId != null
                 ? 't:${it.toppingId}'
-                : (it.plasticId != null ? 'p:${it.plasticId}' : null));
+                : (it.plasticId != null
+                    ? 'p:${it.plasticId}'
+                    : (it.sedotanId != null ? 's:${it.sedotanId}' : null)));
         if (key == null) continue;
         _physical[key] = _fmtNum(it.physicalQty);
         if (it.returnedQty > 0) {
@@ -78,6 +81,7 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
         if (key.startsWith('m:')) 'material_id': id,
         if (key.startsWith('t:')) 'topping_id': id,
         if (key.startsWith('p:')) 'plastic_id': id,
+        if (key.startsWith('s:')) 'sedotan_id': id,
         'physical_qty': v, // string desimal sesuai BE
         if (ret.isNotEmpty) 'returned_qty': ret,
       });
@@ -123,6 +127,7 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
     final materialsAsync = ref.watch(materialListProvider);
     final toppingsAsync = ref.watch(toppingListProvider);
     final plasticsAsync = ref.watch(plasticListProvider);
+    final sedotansAsync = ref.watch(sedotanListProvider);
 
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
@@ -131,27 +136,30 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
         centerTitle: true,
       ),
       body: Builder(builder: (_) {
-        if (materialsAsync.isLoading || toppingsAsync.isLoading || plasticsAsync.isLoading) {
+        if (materialsAsync.isLoading || toppingsAsync.isLoading || plasticsAsync.isLoading || sedotansAsync.isLoading) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (materialsAsync.hasError && toppingsAsync.hasError && plasticsAsync.hasError) {
-          return const Center(child: Text('Gagal memuat material, topping & plastik'));
+        if (materialsAsync.hasError && toppingsAsync.hasError && plasticsAsync.hasError && sedotansAsync.hasError) {
+          return const Center(child: Text('Gagal memuat material, topping, plastik & sedotan'));
         }
         final materials = materialsAsync.valueOrNull ?? [];
         final toppings = toppingsAsync.valueOrNull ?? [];
         final plastics = plasticsAsync.valueOrNull ?? [];
+        final sedotans = sedotansAsync.valueOrNull ?? [];
 
         // Info stok (opsional): stok sistem + masuk hari ini per item. Tidak
         // memblok tampilan — muncul begitu data stok tersedia.
         final levels = ref.watch(materialStockLevelsProvider).valueOrNull ?? const [];
         final toppingStocks = ref.watch(toppingStockListProvider).valueOrNull ?? const [];
         final plasticStocks = ref.watch(plasticStockListProvider).valueOrNull ?? const [];
+        final sedotanStocks = ref.watch(sedotanStockListProvider).valueOrNull ?? const [];
         final levelByMat = {
           for (final l in levels)
             if (l.materialId != null) l.materialId!: l,
         };
         final stockByTop = {for (final s in toppingStocks) s.toppingId: s};
         final stockByPlastic = {for (final s in plasticStocks) s.plasticId: s};
+        final stockBySedotan = {for (final s in sedotanStocks) s.sedotanId: s};
 
         return Column(
           children: [
@@ -229,6 +237,26 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
                                 systemQty: stockByPlastic[plastics[i].id]?.qty,
                                 incomingToday: stockByPlastic[plastics[i].id]?.incomingToday,
                                 packs: stockByPlastic[plastics[i].id]?.packs),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                  if (sedotans.isNotEmpty) ...[
+                    const SizedBox(height: 20),
+                    _sectionLabel('SEDOTAN'),
+                    const SizedBox(height: 8),
+                    Container(
+                      decoration: _box(),
+                      child: Column(
+                        children: [
+                          for (int i = 0; i < sedotans.length; i++) ...[
+                            if (i > 0) const Divider(height: 1, color: AppTheme.borderLight),
+                            _qtyRow('s:${sedotans[i].id}', sedotans[i].name,
+                                sedotans[i].unit, false,
+                                systemQty: stockBySedotan[sedotans[i].id]?.qty,
+                                incomingToday: stockBySedotan[sedotans[i].id]?.incomingToday,
+                                packs: stockBySedotan[sedotans[i].id]?.packs),
                           ],
                         ],
                       ),

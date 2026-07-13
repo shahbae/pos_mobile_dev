@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:pos_mobile/data/models/product_variant_model.dart';
 import 'package:pos_mobile/data/models/promo_model.dart';
 import 'package:pos_mobile/data/models/plastic_model.dart';
+import 'package:pos_mobile/data/models/sedotan_model.dart';
 import 'package:pos_mobile/data/models/product_transaction_model.dart';
 import 'package:pos_mobile/data/models/qris_payment_model.dart';
 import 'package:pos_mobile/presentation/pages/product_transactions/qris_payment_page.dart';
@@ -12,6 +13,7 @@ import 'package:pos_mobile/presentation/providers/product_pagination_provider.da
 import 'package:pos_mobile/presentation/providers/product_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_transaction_provider.dart';
 import 'package:pos_mobile/presentation/providers/plastic_provider.dart';
+import 'package:pos_mobile/presentation/providers/sedotan_provider.dart';
 import 'package:pos_mobile/presentation/providers/promo_provider.dart';
 import 'package:pos_mobile/presentation/pages/product_transactions/transaction_success_page.dart';
 import 'package:pos_mobile/presentation/widgets/free_item_picker_sheet.dart';
@@ -320,7 +322,10 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       appBar: AppBar(title: const Text("Konfirmasi Pembayaran"), centerTitle: true),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
-        child: Column(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ── Atas Nama ──
@@ -362,6 +367,9 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
             // ── Kemasan (Plastik) ──
             _plasticSection(cartState),
 
+            // ── Sedotan ──
+            _sedotanSection(cartState),
+
             // ── Promo ──
             promosAsync.maybeWhen(
               data: (promos) => _promoSection(cartState, promos),
@@ -375,9 +383,9 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               crossAxisCount: 2,
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              childAspectRatio: 1.4,
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: 2.8,
               children: _payMethods
                   .map((m) => _PaymentMethodCard(
                         label: m.label,
@@ -481,6 +489,8 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
             ),
             const SizedBox(height: 40),
           ],
+            ),
+          ),
         ),
       ),
     );
@@ -660,6 +670,94 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                 _QtyButton(
                   icon: Icons.add,
                   onTap: () => notifier.setPlastic(plastic, qty: qty + 1),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Section sedotan ──
+  Widget _sedotanSection(ProductTransactionState cart) {
+    final sedotansAsync = ref.watch(sedotanListProvider);
+    return sedotansAsync.maybeWhen(
+      data: (sedotans) {
+        if (sedotans.isEmpty) return const SizedBox.shrink();
+        // qty terpilih per sedotan_id
+        final selected = {for (final cs in cart.sedotans) cs.sedotan.id: cs.qty};
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _sectionTitle("Sedotan", 18),
+            const SizedBox(height: 12),
+            _infoBox("Gratis — tidak menambah total. Pilih sedotan yang dipakai untuk pesanan ini."),
+            const SizedBox(height: 12),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppTheme.borderLight),
+              ),
+              child: Column(
+                children: [
+                  for (int i = 0; i < sedotans.length; i++) ...[
+                    if (i > 0) const Divider(height: 1, color: AppTheme.borderLight),
+                    _sedotanRow(sedotans[i], selected[sedotans[i].id] ?? 0),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+        );
+      },
+      orElse: () => const SizedBox.shrink(),
+    );
+  }
+
+  Widget _sedotanRow(Sedotan sedotan, int qty) {
+    final notifier = ref.read(productTransactionProvider.notifier);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(sedotan.name,
+                    style: const TextStyle(
+                        color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 14)),
+                if (sedotan.unit.isNotEmpty)
+                  Text(sedotan.unit,
+                      style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+              ],
+            ),
+          ),
+          Container(
+            decoration: BoxDecoration(
+              color: AppTheme.bgLight,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                _QtyButton(
+                  icon: Icons.remove,
+                  onTap: qty > 0 ? () => notifier.setSedotan(sedotan, qty: qty - 1) : null,
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text("$qty",
+                      style: TextStyle(
+                          color: qty > 0 ? AppTheme.brandBlue : AppTheme.textSecondary,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15)),
+                ),
+                _QtyButton(
+                  icon: Icons.add,
+                  onTap: () => notifier.setSedotan(sedotan, qty: qty + 1),
                 ),
               ],
             ),
@@ -948,30 +1046,30 @@ class _PaymentMethodCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(14),
       child: Container(
         decoration: BoxDecoration(
           color: isSelected ? AppTheme.brandBlue : Colors.white,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isSelected ? AppTheme.brandBlue : AppTheme.borderLight,
-            width: 2,
+            width: 1.5,
           ),
           boxShadow: isSelected
               ? [
                   BoxShadow(
                     color: AppTheme.brandBlue.withOpacity(0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
                   ),
                 ]
               : null,
         ),
-        child: Column(
+        child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: isSelected ? Colors.white : AppTheme.textSecondary, size: 28),
-            const SizedBox(height: 8),
+            Icon(icon, color: isSelected ? Colors.white : AppTheme.textSecondary, size: 18),
+            const SizedBox(width: 8),
             Text(
               label,
               style: TextStyle(

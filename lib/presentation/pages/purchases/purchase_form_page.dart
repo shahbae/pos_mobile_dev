@@ -8,6 +8,7 @@ import '../../providers/supplier_provider.dart';
 import '../../providers/material_provider.dart';
 import '../../providers/topping_provider.dart';
 import '../../providers/plastic_provider.dart';
+import '../../providers/sedotan_provider.dart';
 
 class PurchaseFormPage extends ConsumerStatefulWidget {
   const PurchaseFormPage({super.key});
@@ -96,6 +97,7 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
     final materials = ref.read(materialListProvider).valueOrNull ?? [];
     final toppings = ref.read(toppingListProvider).valueOrNull ?? [];
     final plastics = ref.read(plasticListProvider).valueOrNull ?? [];
+    final sedotans = ref.read(sedotanListProvider).valueOrNull ?? [];
     final map = <int, _TemplateOption>{};
 
     for (final m in materials) {
@@ -127,6 +129,17 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
           ownerName: pl.name,
           ownerType: 'Plastik',
           unit: pl.unit,
+          template: t,
+        );
+      }
+    }
+    for (final sd in sedotans) {
+      for (final t in sd.purchaseTemplates) {
+        map[t.id] = _TemplateOption(
+          templateId: t.id,
+          ownerName: sd.name,
+          ownerType: 'Sedotan',
+          unit: sd.unit,
           template: t,
         );
       }
@@ -217,6 +230,7 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
     final materialsAsync = ref.watch(materialListProvider);
     final toppingsAsync = ref.watch(toppingListProvider);
     final plasticsAsync = ref.watch(plasticListProvider);
+    final sedotansAsync = ref.watch(sedotanListProvider);
 
     final options = _buildTemplateOptions();
 
@@ -345,7 +359,7 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
                 ),
                 const SizedBox(height: 12),
 
-                if (materialsAsync.isLoading || toppingsAsync.isLoading || plasticsAsync.isLoading)
+                if (materialsAsync.isLoading || toppingsAsync.isLoading || plasticsAsync.isLoading || sedotansAsync.isLoading)
                   const Center(child: Padding(
                     padding: EdgeInsets.all(24),
                     child: CircularProgressIndicator(),

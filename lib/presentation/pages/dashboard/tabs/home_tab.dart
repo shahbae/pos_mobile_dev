@@ -178,7 +178,42 @@ class _RevenueChartCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final points = chart?.points ?? const <DashboardOperationalChartPoint>[];
-    if (points.isEmpty) return const SizedBox.shrink();
+    if (points.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppTheme.borderLight),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                fontWeight: FontWeight.w900,
+                color: AppTheme.textPrimary,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 28),
+            const Center(
+              child: Text(
+                'Belum ada transaksi di shift ini',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+            ),
+            const SizedBox(height: 28),
+          ],
+        ),
+      );
+    }
 
     final primaryValues = points.map((e) => e.primaryRevenueNum).toList();
     final totalValues = points.map((e) => e.revenueTotalNum).toList();
@@ -276,9 +311,9 @@ class _RevenueChartCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          Row(
-            children: [
-              Text(
+          if (points.length == 1)
+            Center(
+              child: Text(
                 startLabel,
                 style: const TextStyle(
                   fontSize: 11,
@@ -286,26 +321,38 @@ class _RevenueChartCard extends StatelessWidget {
                   color: AppTheme.textSecondary,
                 ),
               ),
-              const Spacer(),
-              Text(
-                midLabel,
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: AppTheme.textSecondary,
+            )
+          else
+            Row(
+              children: [
+                Text(
+                  startLabel,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textSecondary,
+                  ),
                 ),
-              ),
-              const Spacer(),
-              Text(
-                endLabel,
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: AppTheme.textSecondary,
+                const Spacer(),
+                Text(
+                  midLabel,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textSecondary,
+                  ),
                 ),
-              ),
-            ],
-          ),
+                const Spacer(),
+                Text(
+                  endLabel,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+              ],
+            ),
         ],
       ),
     );
@@ -344,14 +391,14 @@ class _RevenueLineChartPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     final count = values.length;
-    if (count < 2) return;
+    if (count == 0) return;
 
     final left = 2.0;
     final top = 6.0;
     final right = size.width - 2.0;
     final bottom = size.height - 8.0;
-    final w = (right - left).clamp(0, double.infinity);
-    final h = (bottom - top).clamp(0, double.infinity);
+    final w = (right - left).clamp(0.0, double.infinity);
+    final h = (bottom - top).clamp(0.0, double.infinity);
 
     for (var i = 0; i < 4; i++) {
       final y = top + (h / 3) * i;
@@ -359,32 +406,37 @@ class _RevenueLineChartPainter extends CustomPainter {
       canvas.drawLine(Offset(left, y), Offset(right, y), bgPaint);
     }
 
-    final path = Path();
-    final fillPath = Path();
-    for (var i = 0; i < count; i++) {
-      final x = left + (w * i / (count - 1));
-      final v = values[i];
-      final ratio = (v / maxValue).clamp(0, 1);
-      final y = top + (h * (1 - ratio));
-      if (i == 0) {
-        path.moveTo(x, y);
-        fillPath.moveTo(x, bottom);
-        fillPath.lineTo(x, y);
-      } else {
-        path.lineTo(x, y);
-        fillPath.lineTo(x, y);
+    // Posisi x: 1 titik → di tengah (hindari bagi-nol), >1 → dibagi rata.
+    double dx(int i) => count == 1 ? left + w / 2 : left + (w * i / (count - 1));
+    double dy(num v) => top + (h * (1 - (v / maxValue).clamp(0.0, 1.0)));
+
+    // Garis + area hanya bila ada minimal 2 titik.
+    if (count >= 2) {
+      final path = Path();
+      final fillPath = Path();
+      for (var i = 0; i < count; i++) {
+        final x = dx(i);
+        final y = dy(values[i]);
+        if (i == 0) {
+          path.moveTo(x, y);
+          fillPath.moveTo(x, bottom);
+          fillPath.lineTo(x, y);
+        } else {
+          path.lineTo(x, y);
+          fillPath.lineTo(x, y);
+        }
       }
+      fillPath.lineTo(right, bottom);
+      fillPath.close();
+
+      canvas.drawPath(fillPath, fillPaint);
+      canvas.drawPath(path, linePaint);
     }
-    fillPath.lineTo(right, bottom);
-    fillPath.close();
 
-    canvas.drawPath(fillPath, fillPaint);
-    canvas.drawPath(path, linePaint);
-
-    final lastX = left + w;
-    final lastRatio = (values.last / maxValue).clamp(0, 1);
-    final lastY = top + (h * (1 - lastRatio));
-    canvas.drawCircle(Offset(lastX, lastY), 3.4, dotPaint);
+    // Dot di tiap titik agar 1 titik tunggal pun tetap terlihat.
+    for (var i = 0; i < count; i++) {
+      canvas.drawCircle(Offset(dx(i), dy(values[i])), 4, dotPaint);
+    }
   }
 
   @override
@@ -978,6 +1030,7 @@ class _ShiftCard extends StatelessWidget {
           _lineRow('Kasir', shift.cashierName),
           _lineRow('Modal Awal', formatRupiah(shift.openingCash)),
           _lineRow('Cash', formatRupiah(shift.cashSales)),
+          _lineRow('Pengeluaran', '- ${formatRupiah(shift.totalExpense)}'),
           _lineRow('Kas Seharusnya', formatRupiah(shift.expectedCash)),
           // Metode cash sudah ditampilkan sebagai baris "Cash" di atas
           // (cash_sales), jadi di rincian pembayaran cukup metode non-cash.

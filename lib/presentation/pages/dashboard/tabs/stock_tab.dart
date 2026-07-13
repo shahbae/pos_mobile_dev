@@ -9,6 +9,8 @@ import 'package:pos_mobile/presentation/pages/topping_stock/topping_stock_page.d
 import 'package:pos_mobile/presentation/pages/topping_stock/topping_stock_movement_page.dart';
 import 'package:pos_mobile/presentation/pages/plastic_stock/plastic_stock_page.dart';
 import 'package:pos_mobile/presentation/pages/plastic_stock/plastic_stock_movement_page.dart';
+import 'package:pos_mobile/presentation/pages/sedotan_stock/sedotan_stock_page.dart';
+import 'package:pos_mobile/presentation/pages/sedotan_stock/sedotan_stock_movement_page.dart';
 import 'package:pos_mobile/presentation/pages/expenses/expense_list_page.dart';
 import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
@@ -133,6 +135,19 @@ class StockTab extends ConsumerWidget {
               ),
             ),
           ],
+          if (features.contains(AppFeature.stockStraw)) ...[
+            const SizedBox(height: 16),
+            _menuItem(
+              context,
+              icon: Icons.local_drink_outlined,
+              title: "Stok Sedotan",
+              subtitle: "Lihat saldo & sesuaikan stok sedotan",
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SedotanStockPage()),
+              ),
+            ),
+          ],
           if (features.contains(AppFeature.stockMovements)) ...[
             const SizedBox(height: 16),
             _menuItem(
@@ -169,6 +184,19 @@ class StockTab extends ConsumerWidget {
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const PlasticStockMovementPage()),
+              ),
+            ),
+          ],
+          if (features.contains(AppFeature.strawMovements)) ...[
+            const SizedBox(height: 16),
+            _menuItem(
+              context,
+              icon: Icons.local_drink_outlined,
+              title: "Riwayat Stok Sedotan",
+              subtitle: "Lihat keluar / masuk stok sedotan",
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SedotanStockMovementPage()),
               ),
             ),
           ],

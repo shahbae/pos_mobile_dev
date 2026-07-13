@@ -27,10 +27,25 @@ class PlasticSelection {
       };
 }
 
+/// Sedotan yang dipilih untuk seluruh transaksi (top-level, bukan per item).
+/// Gratis — tidak menambah total. Hanya pencatatan sedotan + COGS.
+class SedotanSelection {
+  final int sedotanId;
+  final int qty;
+
+  SedotanSelection({required this.sedotanId, required this.qty});
+
+  Map<String, dynamic> toJson() => {
+        'sedotan_id': sedotanId,
+        'qty': qty,
+      };
+}
+
 class ProductTransactionRequest {
   final List<TransactionItem> items;
   final List<PromoFreeItem> promoFreeItems;
   final List<PlasticSelection> plastics; // kemasan gratis (opsional)
+  final List<SedotanSelection> sedotans; // sedotan gratis (opsional)
   final String paymentMethod; // CASH | TRANSFER | QRIS | DEBIT | CREDIT | EWALLET
   final int paid; // integer rupiah
   final int discount; // integer rupiah
@@ -42,6 +57,7 @@ class ProductTransactionRequest {
     required this.items,
     this.promoFreeItems = const [],
     this.plastics = const [],
+    this.sedotans = const [],
     required this.paymentMethod,
     required this.paid,
     this.discount = 0,
@@ -62,6 +78,7 @@ class ProductTransactionRequest {
       if (promoFreeItems.isNotEmpty)
         'promo_free_items': promoFreeItems.map((p) => p.toJson()).toList(),
       if (plastics.isNotEmpty) 'plastics': plastics.map((p) => p.toJson()).toList(),
+      if (sedotans.isNotEmpty) 'sedotans': sedotans.map((s) => s.toJson()).toList(),
       if (customerName != null && customerName!.isNotEmpty) 'customer_name': customerName,
       if (idempotencyKey != null) 'idempotency_key': idempotencyKey,
     };

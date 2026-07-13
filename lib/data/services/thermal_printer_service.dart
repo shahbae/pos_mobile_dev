@@ -86,10 +86,11 @@ class ThermalPrinterService {
     List<int> bytes = [];
 
     // Logo di paling atas (di-center). Dilewati bila gagal dimuat.
-    final logo = await _loadLogo(_printWidth(paperSize));
+    // Ukuran ideal ~55% lebar cetak: tidak terlalu kecil, tak melebihi awal.
+    final logo = await _loadLogo((_printWidth(paperSize) * 0.55).round());
     if (logo != null) {
+      // Tanpa feed agar nama cabang menempel dekat di bawah logo.
       bytes += g.image(logo, align: PosAlign.center);
-      bytes += g.feed(1);
     }
 
     // Header toko
@@ -99,12 +100,9 @@ class ThermalPrinterService {
         styles: const PosStyles(
           align: PosAlign.center,
           bold: true,
-          height: PosTextSize.size2,
-          width: PosTextSize.size2,
         ),
       );
     }
-    bytes += g.text('LUNAS', styles: const PosStyles(align: PosAlign.center, bold: true));
     bytes += g.hr(ch: '=');
 
     // Info transaksi
@@ -146,18 +144,6 @@ class ThermalPrinterService {
       }
     }
     bytes += g.hr();
-
-    // Kemasan (plastik) — gratis, tanpa harga
-    if (r.plastics.isNotEmpty) {
-      bytes += g.text('KEMASAN', styles: const PosStyles(bold: true));
-      for (final p in r.plastics) {
-        bytes += g.row([
-          PosColumn(text: '  ${p.name}', width: 9),
-          PosColumn(text: 'x${p.qty}', width: 3, styles: const PosStyles(align: PosAlign.right)),
-        ]);
-      }
-      bytes += g.hr();
-    }
 
     // Ringkasan
     bytes += _summaryRow(g, 'Subtotal', r.subtotal);
@@ -203,7 +189,6 @@ class ThermalPrinterService {
           styles: const PosStyles(align: PosAlign.center));
     }
     bytes += g.feed(1);
-    bytes += g.text(r.invoiceNo, styles: const PosStyles(align: PosAlign.center));
     bytes += g.cut();
 
     return bytes;
