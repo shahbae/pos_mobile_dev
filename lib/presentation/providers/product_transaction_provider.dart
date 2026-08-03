@@ -184,6 +184,7 @@ class ProductTransactionState {
     bool? isLoading,
     String? error,
     ProductTransactionResponse? lastResponse,
+    bool clearLastResponse = false,
   }) {
     return ProductTransactionState(
       items: items ?? this.items,
@@ -193,7 +194,7 @@ class ProductTransactionState {
       sedotans: sedotans ?? this.sedotans,
       isLoading: isLoading ?? this.isLoading,
       error: error,
-      lastResponse: lastResponse ?? this.lastResponse,
+      lastResponse: clearLastResponse ? null : (lastResponse ?? this.lastResponse),
     );
   }
 }
@@ -418,7 +419,12 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
   }) async {
     if (state.items.isEmpty) return;
 
-    state = state.copyWith(isLoading: true, error: null);
+    // `lastResponse` WAJIB dibersihkan di awal: halaman checkout memutuskan
+    // sukses/gagal dari field ini, dan notifier ini hidup terus selama kasir
+    // tidak meninggalkan halaman POS. Kalau invoice transaksi sebelumnya
+    // tertinggal, submit yang GAGAL akan tetap membuka halaman "Transaksi
+    // Berhasil" dengan invoice lama — dan struk lama tercetak dua kali.
+    state = state.copyWith(isLoading: true, error: null, clearLastResponse: true);
 
     final request = _buildRequest(
       paymentMethod: paymentMethod,

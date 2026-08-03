@@ -29,17 +29,24 @@ class ReportRepository {
     return DailyReportData.fromJson(data);
   }
 
-  /// Laporan harian leader — rekap 1 hari dipecah per shift (Shift 1 & 2).
+  /// Laporan leader — rekap dipecah per shift (Shift 1 & 2).
   /// Branch-scoped via token; owner boleh melewatkan [branchId] opsional.
+  ///
+  /// [from]/[to] adalah rentang tanggal **inklusif** di kedua ujung (BE
+  /// 2026-08-03 §2b). Untuk satu hari, kirim tanggal yang sama di keduanya.
   Future<LeaderDailyReport> getLeaderDailyReport({
-    required DateTime date,
+    required DateTime from,
+    required DateTime to,
     int? branchId,
   }) async {
     final fmt = DateFormat('yyyy-MM-dd');
+    final fromDay = DateTime(from.year, from.month, from.day);
+    final toDay = DateTime(to.year, to.month, to.day);
     final res = await api.dio.get(
       '/reports/leader/daily',
       queryParameters: {
-        'date': fmt.format(date),
+        'from': fmt.format(fromDay),
+        'to': fmt.format(toDay),
         if (branchId != null) 'branch_id': branchId,
       },
     );

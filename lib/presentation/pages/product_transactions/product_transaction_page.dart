@@ -6,13 +6,42 @@ import 'package:pos_mobile/data/models/product_variant_model.dart';
 import 'package:pos_mobile/presentation/providers/product_pagination_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_transaction_provider.dart';
+import 'package:pos_mobile/presentation/providers/transaction_refresh.dart';
 import 'package:pos_mobile/presentation/pages/product_transactions/checkout_page.dart';
 import 'package:pos_mobile/presentation/widgets/topping_picker_sheet.dart';
 import 'package:pos_mobile/presentation/widgets/variant_picker_sheet.dart';
 import 'package:pos_mobile/utils/currency.dart';
 
-class ProductTransactionPage extends ConsumerWidget {
+class ProductTransactionPage extends ConsumerStatefulWidget {
   const ProductTransactionPage({super.key});
+
+  @override
+  ConsumerState<ProductTransactionPage> createState() => _ProductTransactionPageState();
+}
+
+class _ProductTransactionPageState extends ConsumerState<ProductTransactionPage> {
+  final _searchController = TextEditingController();
+  final _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  /// Kembalikan layar ke kondisi awal setelah sebuah transaksi selesai: kotak
+  /// pencarian kosong, tab kategori kembali ke "Semua", scroll ke atas, keyboard
+  /// tertutup. Halaman ini tidak pernah dibuang dari stack selama alur checkout,
+  /// jadi tanpa ini sisa transaksi pelanggan sebelumnya ikut terbawa.
+  void _resetView() {
+    final notifier = ref.read(productPaginationProvider.notifier);
+    _searchController.clear();
+    notifier.search('');
+    notifier.selectCategory(null);
+    if (_scrollController.hasClients) _scrollController.jumpTo(0);
+    FocusScope.of(context).unfocus();
+  }
 
   /// Alur tap produk: cek variant → (pilih variant) → (pilih topping) → masuk cart.
   Future<void> _onProductTap(BuildContext context, WidgetRef ref, Product product) async {
@@ -71,7 +100,10 @@ class ProductTransactionPage extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    // Transaksi baru saja selesai → bersihkan sisa layar transaksi sebelumnya.
+    ref.listen(posResetSignalProvider, (_, __) => _resetView());
+
     final productState = ref.watch(productPaginationProvider);
     final cartState = ref.watch(productTransactionProvider);
 
@@ -87,6 +119,7 @@ class ProductTransactionPage extends ConsumerWidget {
             padding: const EdgeInsets.all(16.0),
             color: Colors.white,
             child: TextField(
+              controller: _searchController,
               onChanged: (value) => ref.read(productPaginationProvider.notifier).search(value),
               decoration: InputDecoration(
                 hintText: "Cari produk...",
@@ -112,20 +145,40 @@ class ProductTransactionPage extends ConsumerWidget {
               onSelect: (id) =>
                   ref.read(productPaginationProvider.notifier).selectCategory(id),
             ),
+          // Banner saat muat ulang katalog gagal — katalog lama tetap dipakai,
+          // tapi kasir perlu tahu stoknya belum tentu terbaru.
+          if (productState.error != null && productState.allItems.isNotEmpty)
+            _StaleBanner(
+              onRetry: () => ref.read(productPaginationProvider.notifier).loadAll(),
+            ),
           Expanded(
-            child: productState.loading && productState.allItems.isEmpty
+            child: RefreshIndicator(
+              onRefresh: () => ref.read(productPaginationProvider.notifier).loadAll(),
+              child: productState.loading && productState.allItems.isEmpty
                 ? const Center(child: CircularProgressIndicator())
                 : productState.items.isEmpty
-                    ? const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(24),
-                          child: Text(
-                            "Produk tidak ditemukan",
-                            style: TextStyle(color: AppTheme.textSecondary),
+                    ? ListView(
+                        // Harus scrollable walau kosong supaya tarik-refresh jalan.
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: [
+                          const SizedBox(height: 80),
+                          Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Text(
+                                productState.error != null
+                                    ? "Gagal memuat produk. Tarik ke bawah untuk coba lagi."
+                                    : "Produk tidak ditemukan",
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(color: AppTheme.textSecondary),
+                              ),
+                            ),
                           ),
-                        ),
+                        ],
                       )
                     : GridView.builder(
+                    controller: _scrollController,
+                    physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.all(16),
                     gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                       maxCrossAxisExtent: 220,
@@ -225,6 +278,7 @@ class ProductTransactionPage extends ConsumerWidget {
                       );
                     },
                   ),
+            ),
           ),
         ],
       ),
@@ -290,6 +344,43 @@ class ProductTransactionPage extends ConsumerWidget {
                 ),
               ),
             ),
+    );
+  }
+}
+
+/// Peringatan bahwa katalog yang tampil berasal dari muat sebelumnya karena
+/// refresh terakhir gagal — penanda "Tersedia/Habis" bisa sudah tidak akurat.
+class _StaleBanner extends StatelessWidget {
+  final VoidCallback onRetry;
+  const _StaleBanner({required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      color: Colors.orange.withOpacity(0.12),
+      padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+      child: Row(
+        children: [
+          const Icon(Icons.wifi_off_outlined, size: 16, color: Colors.orange),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text(
+              "Gagal memuat ulang. Stok yang tampil mungkin belum terbaru.",
+              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+            ),
+          ),
+          TextButton(
+            onPressed: onRetry,
+            style: TextButton.styleFrom(
+              minimumSize: const Size(0, 32),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text("Coba lagi",
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
     );
   }
 }

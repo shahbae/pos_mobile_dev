@@ -6,6 +6,7 @@ import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/data/models/stock_audit_model.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/stock_audit_provider.dart';
+import 'package:pos_mobile/presentation/widgets/branch_switch_sheet.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'stock_audit_detail_page.dart';
 import 'stock_audit_form_page.dart';
@@ -15,8 +16,22 @@ class StockAuditListPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final auth = ref.watch(authProvider);
+    final canCreate = canCreateAudit(auth.role);
+
+    // BE 2026-08-03 §4: role non-owner terkunci ke cabang di token dan wajib
+    // punya konteks cabang. Tangkap lebih awal supaya tidak berujung 400.
+    final needsBranch =
+        auth.role?.toLowerCase() != 'owner' && auth.branchId == null;
+    if (needsBranch) {
+      return Scaffold(
+        backgroundColor: AppTheme.bgLight,
+        appBar: AppBar(title: const Text('Audit Stok'), centerTitle: true),
+        body: const _BranchRequiredView(),
+      );
+    }
+
     final auditsAsync = ref.watch(stockAuditListProvider);
-    final canCreate = canCreateAudit(ref.watch(authProvider).role);
 
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
@@ -64,6 +79,49 @@ class StockAuditListPage extends ConsumerWidget {
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+/// Ditampilkan saat role non-owner belum punya cabang aktif — audit stok
+/// selalu terikat cabang, jadi menu ini tidak bisa dibuka tanpa itu.
+class _BranchRequiredView extends StatelessWidget {
+  const _BranchRequiredView();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.store_outlined, size: 56, color: AppTheme.textSecondary),
+          const SizedBox(height: 12),
+          const Text(
+            'Pilih cabang dulu',
+            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppTheme.textPrimary),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Audit stok dihitung per cabang. Pilih cabang aktif dulu '
+            'sebelum membuka menu ini.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+          ),
+          const SizedBox(height: 20),
+          ElevatedButton.icon(
+            onPressed: () => showBranchSwitchSheet(context),
+            icon: const Icon(Icons.swap_horiz),
+            label: const Text('Pilih Cabang'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.brandBlue,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -11,11 +11,35 @@ import 'package:pos_mobile/utils/currency.dart';
 class LeaderDailyReportPage extends ConsumerWidget {
   const LeaderDailyReportPage({super.key});
 
+  /// Label rentang: satu hari → "03 Agu 2026", lebih → "01 – 03 Agu 2026".
+  static String _rangeLabel(DateTimeRange range) {
+    final fmt = DateFormat('dd MMM yyyy', 'id_ID');
+    if (DateUtils.isSameDay(range.start, range.end)) {
+      return fmt.format(range.start);
+    }
+    return "${fmt.format(range.start)} – ${fmt.format(range.end)}";
+  }
+
+  Future<void> _pickRange(BuildContext context, WidgetRef ref) async {
+    final current = ref.read(leaderDailyReportRangeProvider);
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year + 1, 12, 31),
+      initialDateRange: current,
+    );
+    if (picked == null) return;
+    ref.read(leaderDailyReportRangeProvider.notifier).state = picked;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final date = ref.watch(leaderDailyReportDateProvider);
+    final range = ref.watch(leaderDailyReportRangeProvider);
     final reportAsync = ref.watch(leaderDailyReportProvider);
-    final fmt = DateFormat('dd MMM yyyy', 'id_ID');
+    final rangeLabel = _rangeLabel(range);
+    final isToday = DateUtils.isSameDay(range.start, range.end) &&
+        DateUtils.isSameDay(range.start, DateTime.now());
 
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
@@ -32,28 +56,24 @@ class LeaderDailyReportPage extends ConsumerWidget {
           padding: const EdgeInsets.all(20),
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
-            reportAsync.when(
-              data: (data) => _DateBranchCard(
-                dateLabel: fmt.format(date),
-                branchName: data.branchName,
-              ),
-              loading: () => _DateBranchCard(
-                dateLabel: fmt.format(date),
-                branchName: null,
-              ),
-              error: (_, _) => _DateBranchCard(
-                dateLabel: fmt.format(date),
-                branchName: null,
-              ),
+            _DateBranchCard(
+              dateLabel: rangeLabel,
+              caption: isToday ? "Hari Ini" : "Rentang Tanggal",
+              branchName: reportAsync.valueOrNull?.branchName,
+              onTap: () => _pickRange(context, ref),
             ),
             const SizedBox(height: 14),
             reportAsync.when(
               data: (data) {
+                // Pakai rentang yang dipantulkan BE, bukan state lokal, supaya
+                // baris shift selalu cocok dengan data yang benar-benar dimuat.
+                final multiDay = data.isMultiDay;
                 if (data.shifts.isEmpty) {
                   return _InfoCard(
                     title: "Belum ada shift",
-                    message:
-                        "Belum ada shift yang tercatat untuk tanggal ini.",
+                    message: multiDay
+                        ? "Belum ada shift yang tercatat pada rentang ini."
+                        : "Belum ada shift yang tercatat untuk tanggal ini.",
                   );
                 }
                 return Column(
@@ -63,11 +83,11 @@ class LeaderDailyReportPage extends ConsumerWidget {
                       const SizedBox(height: 12),
                     ],
                     for (final shift in data.shifts) ...[
-                      _ShiftCard(shift: shift),
+                      _ShiftCard(shift: shift, showDate: multiDay),
                       const SizedBox(height: 12),
                     ],
                     const SizedBox(height: 4),
-                    _TotalsCard(totals: data.totals),
+                    _TotalsCard(totals: data.totals, multiDay: multiDay),
                   ],
                 );
               },
@@ -84,83 +104,113 @@ class LeaderDailyReportPage extends ConsumerWidget {
   }
 }
 
+/// Format selisih kas: `null` (shift masih buka) → "-", selain itu bertanda.
+String _formatDifference(num? value) {
+  if (value == null) return "-";
+  if (value == 0) return formatRupiah(0);
+  final sign = value > 0 ? "+" : "-";
+  return "$sign${formatRupiah(value.abs())}";
+}
+
+/// Merah bila kurang, hijau bila lebih, netral bila pas / belum ada.
+Color _differenceColor(num? value) {
+  if (value == null || value == 0) return AppTheme.textPrimary;
+  return value < 0 ? AppTheme.danger : AppTheme.brandGreenDark;
+}
+
 class _DateBranchCard extends StatelessWidget {
   final String dateLabel;
+  final String caption;
   final String? branchName;
+  final VoidCallback onTap;
 
-  const _DateBranchCard({required this.dateLabel, required this.branchName});
+  const _DateBranchCard({
+    required this.dateLabel,
+    required this.caption,
+    required this.branchName,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.borderLight),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: AppTheme.brandBlue.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppTheme.borderLight),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppTheme.brandBlue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.date_range_outlined,
+                color: AppTheme.brandBlue,
+              ),
             ),
-            child: const Icon(
-              Icons.date_range_outlined,
-              color: AppTheme.brandBlue,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  "Hari Ini",
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textSecondary,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    caption,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  dateLabel,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                    color: AppTheme.textPrimary,
+                  const SizedBox(height: 2),
+                  Text(
+                    dateLabel,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      color: AppTheme.textPrimary,
+                    ),
                   ),
-                ),
-                if (branchName != null && branchName!.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.store_outlined,
-                        size: 13,
-                        color: AppTheme.textSecondary,
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          branchName!,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.textSecondary,
+                  if (branchName != null && branchName!.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.store_outlined,
+                          size: 13,
+                          color: AppTheme.textSecondary,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            branchName!,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.textSecondary,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-        ],
+            const Icon(
+              Icons.edit_calendar_outlined,
+              size: 20,
+              color: AppTheme.brandBlue,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -169,7 +219,17 @@ class _DateBranchCard extends StatelessWidget {
 class _ShiftCard extends StatelessWidget {
   final LeaderShiftReport shift;
 
-  const _ShiftCard({required this.shift});
+  /// Tampilkan tanggal shift — dipakai saat rentang mencakup lebih dari 1 hari.
+  final bool showDate;
+
+  const _ShiftCard({required this.shift, required this.showDate});
+
+  /// "2026-08-03" → "03 Agu 2026"; kalau gagal parse, tampilkan apa adanya.
+  String get _dateLabel {
+    final parsed = DateTime.tryParse(shift.shiftDate);
+    if (parsed == null) return shift.shiftDate;
+    return DateFormat('dd MMM yyyy', 'id_ID').format(parsed);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -197,6 +257,17 @@ class _ShiftCard extends StatelessWidget {
                         fontSize: 15,
                       ),
                     ),
+                    if (showDate && shift.shiftDate.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        _dateLabel,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.brandBlue,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 2),
                     Text(
                       "Kasir: ${shift.cashierName.isEmpty ? '-' : shift.cashierName}",
@@ -242,12 +313,38 @@ class _ShiftCard extends StatelessWidget {
           _line("Modal Awal", formatRupiah(shift.openingCash)),
           _line("Penjualan Tunai", formatRupiah(shift.cashSales)),
           _line("Pengeluaran", formatRupiah(shift.expenses)),
+          const SizedBox(height: 6),
+          const Divider(height: 1, color: AppTheme.borderLight),
+          const SizedBox(height: 8),
+          // Angka laci — rumusnya sama persis dengan GET /shifts (BE §2a).
+          _line("Kas Seharusnya", formatRupiah(shift.expectedCash)),
+          _line(
+            "Kas Fisik (Tutup)",
+            shift.closingCash == null ? "-" : formatRupiah(shift.closingCash!),
+          ),
+          _line(
+            "Selisih",
+            _formatDifference(shift.difference),
+            valueColor: _differenceColor(shift.difference),
+          ),
+          if (shift.isOpen)
+            const Padding(
+              padding: EdgeInsets.only(top: 4),
+              child: Text(
+                "Shift masih buka — selisih dihitung setelah tutup.",
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+            ),
         ],
       ),
     );
   }
 
-  Widget _line(String label, String value) {
+  Widget _line(String label, String value, {Color? valueColor}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
@@ -264,10 +361,10 @@ class _ShiftCard extends StatelessWidget {
           ),
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w800,
-              color: AppTheme.textPrimary,
+              color: valueColor ?? AppTheme.textPrimary,
             ),
           ),
         ],
@@ -350,8 +447,9 @@ class _StatusChip extends StatelessWidget {
 
 class _TotalsCard extends StatelessWidget {
   final LeaderDailyTotals totals;
+  final bool multiDay;
 
-  const _TotalsCard({required this.totals});
+  const _TotalsCard({required this.totals, required this.multiDay});
 
   @override
   Widget build(BuildContext context) {
@@ -373,9 +471,9 @@ class _TotalsCard extends StatelessWidget {
                 size: 20,
               ),
               const SizedBox(width: 8),
-              const Text(
-                "Total Harian",
-                style: TextStyle(
+              Text(
+                multiDay ? "Total Rentang" : "Total Harian",
+                style: const TextStyle(
                   fontWeight: FontWeight.w900,
                   color: AppTheme.textPrimary,
                   fontSize: 15,
@@ -388,7 +486,19 @@ class _TotalsCard extends StatelessWidget {
           _line("Total Item", "${totals.totalItems} item"),
           _line("Total Transaksi", "${totals.transactionCount} transaksi"),
           _line("Total Pengeluaran", formatRupiah(totals.expenses)),
-          _line("Total Cash (2 Shift)", formatRupiah(totals.totalCash)),
+          _line(
+            multiDay ? "Total Cash" : "Total Cash (2 Shift)",
+            formatRupiah(totals.totalCash),
+          ),
+          _line("Total Modal Awal", formatRupiah(totals.openingCash)),
+          _line("Total Kas Seharusnya", formatRupiah(totals.expectedCash)),
+          // BE hanya menjumlahkan shift yang sudah ditutup untuk dua baris ini.
+          _line("Total Kas Fisik", formatRupiah(totals.closingCash)),
+          _line(
+            "Total Selisih",
+            _formatDifference(totals.difference),
+            valueColor: _differenceColor(totals.difference),
+          ),
           const SizedBox(height: 6),
           const Divider(height: 1, color: AppTheme.borderLight),
           const SizedBox(height: 8),
@@ -421,7 +531,7 @@ class _TotalsCard extends StatelessWidget {
     );
   }
 
-  Widget _line(String label, String value) {
+  Widget _line(String label, String value, {Color? valueColor}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
@@ -438,10 +548,10 @@ class _TotalsCard extends StatelessWidget {
           ),
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w800,
-              color: AppTheme.textPrimary,
+              color: valueColor ?? AppTheme.textPrimary,
             ),
           ),
         ],

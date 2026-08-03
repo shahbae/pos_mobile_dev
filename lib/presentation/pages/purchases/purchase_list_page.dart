@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../providers/purchase_provider.dart';
 import '../../providers/auth_provider.dart';
@@ -22,6 +23,9 @@ class _PurchaseListPageState extends ConsumerState<PurchaseListPage> {
   bool loadingMore = false;
   bool hasMore = true;
   bool isInitialLoading = true;
+
+  /// Rentang tanggal aktif; null = tanpa filter tanggal (semua pembelian).
+  DateTimeRange? _range;
 
   Timer? _debounce;
   final ScrollController _scroll = ScrollController();
@@ -65,6 +69,8 @@ class _PurchaseListPageState extends ConsumerState<PurchaseListPage> {
         page: page,
         limit: 10,
         search: search,
+        from: _range?.start,
+        to: _range?.end,
       );
 
       setState(() {
@@ -82,9 +88,37 @@ class _PurchaseListPageState extends ConsumerState<PurchaseListPage> {
     }
   }
 
+  /// Label rentang aktif: satu hari → "03 Agu 2026", lebih → "01 – 03 Agu 2026".
+  String get _rangeLabel {
+    final r = _range;
+    if (r == null) return "Semua Tanggal";
+    final fmt = DateFormat('dd MMM yyyy', 'id_ID');
+    if (DateUtils.isSameDay(r.start, r.end)) return fmt.format(r.start);
+    return "${fmt.format(r.start)} – ${fmt.format(r.end)}";
+  }
+
+  Future<void> _pickRange() async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year + 1, 12, 31),
+      initialDateRange: _range,
+    );
+    if (picked == null) return;
+    setState(() => _range = picked);
+    _load(reset: true);
+  }
+
+  void _clearRange() {
+    setState(() => _range = null);
+    _load(reset: true);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final hasRange = _range != null;
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
@@ -93,11 +127,23 @@ class _PurchaseListPageState extends ConsumerState<PurchaseListPage> {
         title: const Text("Data Pembelian"),
         backgroundColor: theme.colorScheme.surface,
         elevation: 0,
+        actions: [
+          IconButton(
+            tooltip: "Filter tanggal",
+            icon: Icon(
+              hasRange ? Icons.event_available : Icons.date_range_outlined,
+              color: hasRange ? theme.colorScheme.primary : null,
+            ),
+            onPressed: _pickRange,
+          ),
+        ],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(60),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: TextField(
+          preferredSize: Size.fromHeight(hasRange ? 108 : 60),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: TextField(
               style: TextStyle(color: Colors.grey.shade900),
               decoration: InputDecoration(
                 hintText: "Cari pembelian (opsional)...",
@@ -134,6 +180,43 @@ class _PurchaseListPageState extends ConsumerState<PurchaseListPage> {
                 });
               },
             ),
+              ),
+              if (hasRange)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: InputChip(
+                          avatar: Icon(
+                            Icons.date_range,
+                            size: 18,
+                            color: theme.colorScheme.primary,
+                          ),
+                          label: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              _rangeLabel,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: Colors.grey.shade900,
+                              ),
+                            ),
+                          ),
+                          backgroundColor:
+                              theme.colorScheme.primary.withOpacity(0.08),
+                          side: BorderSide(
+                            color: theme.colorScheme.primary.withOpacity(0.3),
+                          ),
+                          onPressed: _pickRange,
+                          onDeleted: _clearRange,
+                          deleteIcon: const Icon(Icons.close, size: 18),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
           ),
         ),
       ),
@@ -156,11 +239,17 @@ class _PurchaseListPageState extends ConsumerState<PurchaseListPage> {
           ? const Center(child: CircularProgressIndicator())
           : items.isEmpty
               ? Center(
-                  child: Text(
-                    search.isEmpty
-                        ? "Belum ada transaksi pembelian"
-                        : "Pembelian tidak ditemukan",
-                    style: TextStyle(color: Colors.grey.shade600),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    child: Text(
+                      search.isNotEmpty
+                          ? "Pembelian tidak ditemukan"
+                          : hasRange
+                              ? "Tidak ada pembelian pada $_rangeLabel"
+                              : "Belum ada transaksi pembelian",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey.shade600),
+                    ),
                   ),
                 )
               : ListView.separated(

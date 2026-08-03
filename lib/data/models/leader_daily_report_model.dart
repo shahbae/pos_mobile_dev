@@ -12,9 +12,18 @@ int _int(dynamic raw) {
   return int.tryParse(raw?.toString() ?? '') ?? 0;
 }
 
+/// Seperti [_num] tapi mempertahankan `null` — dipakai untuk angka laci yang
+/// memang belum ada selama shift masih buka (jangan dianggap 0).
+num? _numOrNull(dynamic raw) {
+  if (raw == null) return null;
+  if (raw is num) return raw;
+  return num.tryParse(raw.toString());
+}
+
 /// Ringkasan satu shift dalam laporan harian leader.
 class LeaderShiftReport {
   final int shiftId;
+  final String shiftDate; // "YYYY-MM-DD" — relevan saat rentang > 1 hari
   final String shiftName;
   final String cashierName;
   final String status; // open / closed
@@ -25,9 +34,13 @@ class LeaderShiftReport {
   final num cashSales; // cash tanpa modal awal
   final num expenses; // pengeluaran saat shift buka
   final num net; // total_sales - expenses
+  final num? closingCash; // kas fisik saat tutup; null selama shift buka
+  final num expectedCash; // opening_cash + cash_sales - expenses
+  final num? difference; // closing_cash - expected_cash; null selama buka
 
   const LeaderShiftReport({
     required this.shiftId,
+    required this.shiftDate,
     required this.shiftName,
     required this.cashierName,
     required this.status,
@@ -38,6 +51,9 @@ class LeaderShiftReport {
     required this.cashSales,
     required this.expenses,
     required this.net,
+    required this.closingCash,
+    required this.expectedCash,
+    required this.difference,
   });
 
   bool get isOpen => status.toLowerCase() == 'open';
@@ -45,6 +61,7 @@ class LeaderShiftReport {
   factory LeaderShiftReport.fromJson(Map<String, dynamic> json) {
     return LeaderShiftReport(
       shiftId: _int(json['shift_id']),
+      shiftDate: (json['shift_date'] ?? '').toString(),
       shiftName: (json['shift_name'] ?? '').toString(),
       cashierName: (json['cashier_name'] ?? '').toString(),
       status: (json['status'] ?? '').toString(),
@@ -55,6 +72,9 @@ class LeaderShiftReport {
       cashSales: _num(json['cash_sales']),
       expenses: _num(json['expenses']),
       net: _num(json['net']),
+      closingCash: _numOrNull(json['closing_cash']),
+      expectedCash: _num(json['expected_cash']),
+      difference: _numOrNull(json['difference']),
     );
   }
 }
@@ -67,6 +87,10 @@ class LeaderDailyTotals {
   final num expenses;
   final num net;
   final num totalCash; // Σ cash_sales (tanpa modal awal)
+  final num openingCash; // Σ modal awal
+  final num closingCash; // Σ kas fisik — hanya shift yang sudah ditutup
+  final num expectedCash; // Σ kas seharusnya
+  final num difference; // Σ selisih — hanya shift yang sudah ditutup
 
   const LeaderDailyTotals({
     required this.totalSales,
@@ -75,6 +99,10 @@ class LeaderDailyTotals {
     required this.expenses,
     required this.net,
     required this.totalCash,
+    required this.openingCash,
+    required this.closingCash,
+    required this.expectedCash,
+    required this.difference,
   });
 
   factory LeaderDailyTotals.fromJson(Map<String, dynamic> json) {
@@ -85,6 +113,10 @@ class LeaderDailyTotals {
       expenses: _num(json['expenses']),
       net: _num(json['net']),
       totalCash: _num(json['total_cash']),
+      openingCash: _num(json['opening_cash']),
+      closingCash: _num(json['closing_cash']),
+      expectedCash: _num(json['expected_cash']),
+      difference: _num(json['difference']),
     );
   }
 
@@ -95,6 +127,10 @@ class LeaderDailyTotals {
     expenses: 0,
     net: 0,
     totalCash: 0,
+    openingCash: 0,
+    closingCash: 0,
+    expectedCash: 0,
+    difference: 0,
   );
 }
 
@@ -150,7 +186,9 @@ class LeaderReportChart {
 }
 
 class LeaderDailyReport {
-  final String date;
+  final String date; // = from; dipertahankan BE demi kompatibilitas
+  final String from; // awal rentang, inklusif
+  final String to; // akhir rentang, inklusif
   final int? branchId;
   final String branchName;
   final List<LeaderShiftReport> shifts;
@@ -159,6 +197,8 @@ class LeaderDailyReport {
 
   const LeaderDailyReport({
     required this.date,
+    required this.from,
+    required this.to,
     required this.branchId,
     required this.branchName,
     required this.shifts,
@@ -166,12 +206,19 @@ class LeaderDailyReport {
     required this.chart,
   });
 
+  /// Rentang mencakup lebih dari satu hari? Kalau ya, tanggal tiap shift
+  /// perlu ditampilkan supaya barisnya tidak ambigu.
+  bool get isMultiDay => from.isNotEmpty && to.isNotEmpty && from != to;
+
   factory LeaderDailyReport.fromJson(Map<String, dynamic> json) {
     final rawShifts = (json['shifts'] as List?) ?? const [];
     final rawTotals = json['totals'];
     final rawChart = json['chart'];
+    final date = (json['date'] ?? '').toString();
     return LeaderDailyReport(
-      date: (json['date'] ?? '').toString(),
+      date: date,
+      from: (json['from'] ?? date).toString(),
+      to: (json['to'] ?? date).toString(),
       branchId: json['branch_id'] == null ? null : _int(json['branch_id']),
       branchName: (json['branch_name'] ?? '').toString(),
       shifts: rawShifts

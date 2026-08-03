@@ -10,16 +10,6 @@ final productRepositoryProvider = Provider<ProductRepository>((ref) {
   return ProductRepository(api);
 });
 
-/// Provider list produk (support search param)
-final productListProvider = FutureProvider.family<List<Product>, String?>((
-  ref,
-  search,
-) async {
-  final repo = ref.watch(productRepositoryProvider);
-
-  return repo.getProducts(page: 1, limit: 10, search: search ?? "");
-});
-
 /// Daftar produk `freeable` (untuk picker item gratis promo), bisa dicari.
 /// Hanya produk dari kategori freeable yang dikembalikan.
 final freeableProductsProvider =

@@ -4,13 +4,16 @@ import 'package:pos_mobile/data/models/sedotan_stock_model.dart';
 import 'package:pos_mobile/data/models/sedotan_stock_movement_model.dart';
 import 'package:pos_mobile/data/repositories/sedotan_repository.dart';
 import 'package:pos_mobile/data/services/api_provider.dart';
+import 'package:pos_mobile/presentation/providers/master_data_cache.dart';
 
 final sedotanRepositoryProvider = Provider<SedotanRepository>((ref) {
   return SedotanRepository(ref.watch(apiProvider));
 });
 
 /// Daftar sedotan aktif untuk dipakai di POS (picker) & audit/pembelian.
-final sedotanListProvider = FutureProvider<List<Sedotan>>((ref) async {
+/// Di-cache ber-TTL dengan alasan yang sama seperti plasticListProvider.
+final sedotanListProvider = FutureProvider.autoDispose<List<Sedotan>>((ref) async {
+  cacheFor(ref);
   return ref.watch(sedotanRepositoryProvider).getSedotans(activeOnly: true);
 });
 

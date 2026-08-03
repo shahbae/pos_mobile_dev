@@ -15,6 +15,7 @@ import 'package:pos_mobile/presentation/providers/product_transaction_provider.d
 import 'package:pos_mobile/presentation/providers/plastic_provider.dart';
 import 'package:pos_mobile/presentation/providers/sedotan_provider.dart';
 import 'package:pos_mobile/presentation/providers/promo_provider.dart';
+import 'package:pos_mobile/presentation/providers/transaction_refresh.dart';
 import 'package:pos_mobile/presentation/pages/product_transactions/transaction_success_page.dart';
 import 'package:pos_mobile/presentation/widgets/free_item_picker_sheet.dart';
 import 'package:pos_mobile/presentation/widgets/topping_picker_sheet.dart';
@@ -52,8 +53,13 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   final TextEditingController _paidAmountController = TextEditingController();
   final TextEditingController _customerNameController = TextEditingController();
   final TextEditingController _paymentRefController = TextEditingController();
+  final FocusNode _paidFocus = FocusNode();
   String _paymentMethod = 'CASH';
   num _lastTotal = 0;
+
+  /// Kasir sudah menyentuh field "Jumlah Bayar"? Kalau sudah, isinya tidak
+  /// pernah ditimpa otomatis lagi — termasuk saat sengaja dikosongkan.
+  bool _paidTouched = false;
 
   bool get _isCash => _paymentMethod == 'CASH';
   bool get _isQris => _paymentMethod == 'QRIS';
@@ -63,6 +69,15 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     super.initState();
     _lastTotal = ref.read(productTransactionProvider).total;
     _paidAmountController.text = NumberFormat.decimalPattern('id_ID').format(_lastTotal);
+    // Fokus ke field = langsung blok semua teks, jadi mengetik nominal baru
+    // tidak perlu menghapus angka lama satu per satu.
+    _paidFocus.addListener(() {
+      if (!_paidFocus.hasFocus) return;
+      _paidAmountController.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: _paidAmountController.text.length,
+      );
+    });
   }
 
   @override
@@ -70,17 +85,17 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     _paidAmountController.dispose();
     _customerNameController.dispose();
     _paymentRefController.dispose();
+    _paidFocus.dispose();
     super.dispose();
   }
 
-  /// Sinkronkan "Jumlah Bayar" mengikuti total bila kasir belum mengubah manual.
+  /// Ikutkan "Jumlah Bayar" ke total belanja selama kasir belum mengubahnya
+  /// sendiri. Field yang sudah disentuh dibiarkan apa adanya.
   void _syncPaidIfUntouched(num total) {
-    final currentRaw = _paidAmountController.text.replaceAll(RegExp(r'[^0-9]'), '');
-    final lastRaw = _lastTotal.toInt().toString();
-    if (currentRaw == lastRaw || currentRaw.isEmpty) {
-      _paidAmountController.text = NumberFormat.decimalPattern('id_ID').format(total);
-    }
+    if (total == _lastTotal) return;
     _lastTotal = total;
+    if (_paidTouched) return;
+    _paidAmountController.text = NumberFormat.decimalPattern('id_ID').format(total);
   }
 
   Future<void> _submit(num total) async {
@@ -93,6 +108,10 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     final rawPaid = _paidAmountController.text.replaceAll(RegExp(r'[^0-9]'), '');
     final paidValue = int.tryParse(rawPaid) ?? 0;
 
+    if (rawPaid.isEmpty) {
+      _toast("Jumlah bayar belum diisi", Colors.orange);
+      return;
+    }
     if (paidValue < total) {
       _toast("Jumlah bayar kurang dari total belanja", Colors.orange);
       return;
@@ -115,12 +134,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     if (!mounted) return;
     final newState = ref.read(productTransactionProvider);
     if (newState.lastResponse != null) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => TransactionSuccessPage(response: newState.lastResponse!),
-        ),
-      );
+      _goToSuccess(newState.lastResponse!);
     } else if (newState.error != null) {
       _toast("Gagal: ${newState.error}", Colors.red);
       // Stok bisa berubah sejak katalog dimuat (mis. ditolak karena bahan habis).
@@ -177,7 +191,11 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     }
   }
 
+  /// Satu-satunya pintu ke halaman sukses — sekaligus tempat membuang cache
+  /// data yang sudah basi begitu transaksi tercatat (katalog, dashboard,
+  /// shift, riwayat, stok plastik/sedotan).
   void _goToSuccess(ProductTransactionResponse response) {
+    invalidateAfterTransaction(ref);
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => TransactionSuccessPage(response: response)),
@@ -194,7 +212,12 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
 
   void _setPaid(num amount) {
     _paidAmountController.text = NumberFormat.decimalPattern('id_ID').format(amount);
-    setState(() {});
+    setState(() => _paidTouched = true);
+  }
+
+  void _clearPaid() {
+    _paidAmountController.clear();
+    setState(() => _paidTouched = true);
   }
 
   /// Tombol nominal cepat untuk tunai.
@@ -227,12 +250,14 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     );
   }
 
-  /// Kartu kembalian / kurang, dihitung real-time.
+  /// Kartu kembalian / kurang, dihitung real-time. Untuk metode non-tunai
+  /// kelebihannya bukan "kembalian", jadi labelnya dibedakan.
   Widget _changeCard(num total) {
     final paid = _paidValue();
     final change = paid - total;
     final isEnough = change >= 0;
     final color = isEnough ? Colors.green : Colors.orange;
+    final enoughLabel = _isCash ? "Kembalian" : "Lebih Bayar";
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -244,7 +269,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(isEnough ? "Kembalian" : "Kurang",
+          Text(isEnough ? enoughLabel : "Kurang",
               style: TextStyle(color: color, fontSize: 15, fontWeight: FontWeight.w700)),
           Text(formatRupiah(change.abs()),
               style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.w900)),
@@ -393,7 +418,9 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                         isSelected: _paymentMethod == m.value,
                         onTap: () => setState(() {
                           _paymentMethod = m.value;
-                          // Reset jumlah bayar ke total saat ganti metode.
+                          // Reset jumlah bayar ke total saat ganti metode —
+                          // sekaligus mengembalikan sinkronisasi otomatis.
+                          _paidTouched = false;
                           _paidAmountController.text =
                               NumberFormat.decimalPattern('id_ID').format(cartState.total);
                         }),
@@ -435,35 +462,54 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: AppTheme.borderLight),
               ),
-              child: TextField(
-                controller: _paidAmountController,
-                keyboardType: TextInputType.number,
-                textAlign: TextAlign.right,
-                readOnly: !_isCash,
-                inputFormatters: [CurrencyInputFormatter()],
-                onChanged: (_) => setState(() {}),
-                style: TextStyle(
-                  color: _isCash ? AppTheme.brandBlue : AppTheme.textSecondary,
-                  fontSize: 28,
-                  fontWeight: FontWeight.w800,
-                ),
-                decoration: const InputDecoration(
-                  prefixText: "Rp ",
-                  prefixStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 20, fontWeight: FontWeight.w600),
-                  filled: false,
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  contentPadding: EdgeInsets.zero,
-                ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _paidAmountController,
+                      focusNode: _paidFocus,
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.right,
+                      inputFormatters: [CurrencyInputFormatter()],
+                      onChanged: (_) => setState(() => _paidTouched = true),
+                      style: const TextStyle(
+                        color: AppTheme.brandBlue,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w800,
+                      ),
+                      decoration: const InputDecoration(
+                        hintText: "0",
+                        hintStyle: TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 28,
+                          fontWeight: FontWeight.w800,
+                        ),
+                        prefixText: "Rp ",
+                        prefixStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 20, fontWeight: FontWeight.w600),
+                        filled: false,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                  ),
+                  if (_paidAmountController.text.isNotEmpty)
+                    IconButton(
+                      tooltip: "Bersihkan",
+                      icon: const Icon(Icons.backspace_outlined, size: 20),
+                      color: AppTheme.textSecondary,
+                      onPressed: _clearPaid,
+                    ),
+                ],
               ),
             ),
+            const SizedBox(height: 12),
             if (_isCash) ...[
-              const SizedBox(height: 12),
               _quickCash(cartState.total),
               const SizedBox(height: 12),
-              _changeCard(cartState.total),
             ],
+            _changeCard(cartState.total),
             ],
             const SizedBox(height: 40),
 
@@ -594,7 +640,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   // ── Section kemasan (plastik) ──
   Widget _plasticSection(ProductTransactionState cart) {
     final plasticsAsync = ref.watch(plasticListProvider);
-    return plasticsAsync.maybeWhen(
+    return plasticsAsync.when(
       data: (plastics) {
         if (plastics.isEmpty) return const SizedBox.shrink();
         // qty terpilih per plastic_id
@@ -625,7 +671,82 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
           ],
         );
       },
-      orElse: () => const SizedBox.shrink(),
+      // Jangan diam-diam menghilang: kalau seksi ini lenyap saat data belum
+      // siap / gagal dimuat, kasir mengira transaksi ini memang tanpa kemasan
+      // dan pemakaian plastik tidak tercatat.
+      loading: () => _sectionPlaceholder("Kemasan (Plastik)"),
+      error: (_, __) => _sectionError(
+        "Kemasan (Plastik)",
+        () => ref.invalidate(plasticListProvider),
+      ),
+    );
+  }
+
+  /// Rangka seksi saat daftar master masih dimuat.
+  Widget _sectionPlaceholder(String title) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionTitle(title, 18),
+        const SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppTheme.borderLight),
+          ),
+          child: const Center(
+            child: SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  /// Seksi gagal dimuat — tetap terlihat supaya kasir sadar ada yang belum siap.
+  Widget _sectionError(String title, VoidCallback onRetry) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionTitle(title, 18),
+        const SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.orange.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.orange.withOpacity(0.3)),
+          ),
+          child: Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  "Gagal memuat daftar.",
+                  style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+                ),
+              ),
+              TextButton(
+                onPressed: onRetry,
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(0, 32),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text("Coba lagi",
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+      ],
     );
   }
 
@@ -682,7 +803,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   // ── Section sedotan ──
   Widget _sedotanSection(ProductTransactionState cart) {
     final sedotansAsync = ref.watch(sedotanListProvider);
-    return sedotansAsync.maybeWhen(
+    return sedotansAsync.when(
       data: (sedotans) {
         if (sedotans.isEmpty) return const SizedBox.shrink();
         // qty terpilih per sedotan_id
@@ -713,7 +834,11 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
           ],
         );
       },
-      orElse: () => const SizedBox.shrink(),
+      loading: () => _sectionPlaceholder("Sedotan"),
+      error: (_, __) => _sectionError(
+        "Sedotan",
+        () => ref.invalidate(sedotanListProvider),
+      ),
     );
   }
 

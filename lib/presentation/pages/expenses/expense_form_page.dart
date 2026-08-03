@@ -116,9 +116,7 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal: $e')),
-      );
+      _snack('$e', error: true);
     } finally {
       if (mounted) setState(() => _loading = false);
     }

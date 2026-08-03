@@ -83,7 +83,8 @@ Set<AppFeature> featuresForRole(String? role) {
       };
     case 'leader':
       // Operasional cabang + POS (per arahan user 2026-07-11).
-      // TANPA reports & audit stok (per arahan user 2026-06-20).
+      // TANPA reports (per arahan user 2026-06-20). Audit stok dibuka lagi
+      // per revisi BE 2026-08-03 §4 (input boleh, approve tidak).
       return {
         AppFeature.pos,
         AppFeature.dashboard,
@@ -100,6 +101,7 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.toppingMovements,
         AppFeature.plasticMovements,
         AppFeature.strawMovements,
+        AppFeature.stockAudit,
         AppFeature.expenses,
         AppFeature.shift,
         AppFeature.attendance,
@@ -129,10 +131,13 @@ Set<AppFeature> featuresForRole(String? role) {
     case 'kasir':
       // Fokus POS, shift, transaksi, absensi. + dashboard (GET /dashboard
       // adaptif: section current_shift + recent_transactions).
+      // + audit stok (revisi BE 2026-08-03 §4): kasir input hitung fisik,
+      //   approve tetap milik owner/supervisor.
       return {
         AppFeature.dashboard,
         AppFeature.pos,
         AppFeature.transactions,
+        AppFeature.stockAudit,
         AppFeature.shift,
         AppFeature.attendance,
       };
@@ -140,10 +145,12 @@ Set<AppFeature> featuresForRole(String? role) {
       // POS + shift + absensi + riwayat transaksi + dashboard adaptif.
       // CATATAN: matriks (baris 243) menandai GET /transactions ❌ untuk
       // karyawan, tapi per arahan user karyawan boleh akses transaksi.
+      // + audit stok (revisi BE 2026-08-03 §4), sama seperti kasir.
       return {
         AppFeature.dashboard,
         AppFeature.pos,
         AppFeature.transactions,
+        AppFeature.stockAudit,
         AppFeature.shift,
         AppFeature.attendance,
       };
@@ -202,10 +209,40 @@ bool canCreatePurchase(String? role) {
   }
 }
 
-/// Boleh membuat audit stok. Hanya Owner & Supervisor (leader tak akses audit).
-bool canCreateAudit(String? role) => canAdjustStock(role);
+/// Boleh mencatat / mengubah / menghapus pengeluaran.
+/// Owner, Supervisor, Finance, Leader (BE 2026-08-01: gate create == edit ==
+/// delete). Role lain hanya melihat daftar.
+bool canManageExpense(String? role) {
+  switch (role?.toLowerCase()) {
+    case 'owner':
+    case 'supervisor':
+    case 'finance':
+    case 'leader':
+      return true;
+    default:
+      return false;
+  }
+}
 
-/// Boleh menyetujui (approve) audit stok. Hanya Owner & Supervisor.
+/// Boleh membuat / mengubah / menghapus draft audit stok.
+/// Revisi BE 2026-08-03 §4 memisahkan input dari persetujuan: Owner,
+/// Supervisor, Leader, Kasir, dan Karyawan boleh menginput hitung fisik.
+/// Finance & Produksi tidak (read-only / tanpa akses).
+bool canCreateAudit(String? role) {
+  switch (role?.toLowerCase()) {
+    case 'owner':
+    case 'supervisor':
+    case 'leader':
+    case 'kasir':
+    case 'karyawan':
+      return true;
+    default:
+      return false;
+  }
+}
+
+/// Boleh menyetujui (approve) audit stok. Hanya Owner & Supervisor —
+/// approve-lah yang benar-benar mengubah stok (revisi BE 2026-08-03 §4).
 bool canApproveAudit(String? role) {
   switch (role?.toLowerCase()) {
     case 'owner':

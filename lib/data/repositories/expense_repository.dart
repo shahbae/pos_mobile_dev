@@ -51,15 +51,27 @@ class ExpenseRepository {
       );
       return res.data;
     } on DioException catch (e) {
-      throw _mapCreateError(e);
+      throw _mapExpenseError(e);
     }
   }
 
-  String _mapCreateError(DioException e) {
+  /// Mapping error create/update/delete pengeluaran → pesan siap tampil.
+  String _mapExpenseError(DioException e) {
+    final status = e.response?.statusCode;
+    if (status == 404) return 'Pengeluaran tidak ditemukan atau sudah dihapus.';
+
     final d = e.response?.data;
     final raw = (d is Map ? (d['message'] ?? d['error']) : null)
         ?.toString()
         .toLowerCase();
+
+    if (status == 403) {
+      if (raw != null && raw.contains('no branch assigned')) {
+        return 'Akun belum di-assign ke cabang.';
+      }
+      return 'Pengeluaran ini milik cabang lain.';
+    }
+
     if (raw != null) {
       if (raw.contains('photo is required')) return 'Foto bukti wajib diisi.';
       if (raw.contains('2mb') || raw.contains('≤ 2mb') || raw.contains('large')) {
@@ -75,6 +87,9 @@ class ExpenseRepository {
       if (raw.contains('invalid request')) {
         return 'Data tidak valid — periksa nominal, kategori, dan tanggal.';
       }
+    }
+    if (status != null && status >= 500) {
+      return 'Terjadi kesalahan di server, coba lagi.';
     }
     final msg = (d is Map ? (d['message'] ?? d['error']) : null)?.toString();
     return msg ?? 'Gagal menyimpan pengeluaran (${e.response?.statusCode ?? e.message})';
@@ -92,13 +107,38 @@ class ExpenseRepository {
     }
   }
 
-  Future<Map<String, dynamic>> updateExpense(int id, Map<String, dynamic> data) async {
-    final res = await api.dio.put('/expenses/$id', data: data);
-    return res.data;
+  /// Update pengeluaran — multipart/form-data, sama seperti create (BE
+  /// 2026-08-01). Partial update: hanya field di [data] yang dikirim yang
+  /// diubah. [photoPath] opsional — kalau null, foto bukti lama dipertahankan.
+  Future<Map<String, dynamic>> updateExpense(
+    int id,
+    Map<String, dynamic> data, {
+    String? photoPath,
+  }) async {
+    try {
+      final map = <String, dynamic>{...data};
+      if (photoPath != null) {
+        final filename = photoPath.split(RegExp(r'[\\/]')).last;
+        map['photo'] =
+            await MultipartFile.fromFile(photoPath, filename: filename);
+      }
+      final res = await api.dio.put(
+        '/expenses/$id',
+        data: FormData.fromMap(map),
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      return res.data;
+    } on DioException catch (e) {
+      throw _mapExpenseError(e);
+    }
   }
 
   Future<Map<String, dynamic>> deleteExpense(int id) async {
-    final res = await api.dio.delete('/expenses/$id');
-    return res.data;
+    try {
+      final res = await api.dio.delete('/expenses/$id');
+      return res.data;
+    } on DioException catch (e) {
+      throw _mapExpenseError(e);
+    }
   }
 }

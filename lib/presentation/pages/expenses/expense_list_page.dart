@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/auth/role_access.dart';
 import '../../../data/models/expense_model.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/expense_provider.dart';
 import '../../../utils/currency.dart';
 import 'expense_detail_page.dart';
@@ -110,23 +112,25 @@ class _ExpenseListPageState extends ConsumerState<ExpenseListPage> {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          final refresh = await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const ExpenseFormPage()),
-          );
-          if (refresh == true) {
-            ref.invalidate(expenseListProvider);
-          }
-        },
-        backgroundColor: theme.colorScheme.primary,
-        icon: const Icon(Icons.add_circle_outline, color: Colors.white),
-        label: const Text(
-          "Catat Pengeluaran",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-        ),
-      ),
+      floatingActionButton: !canManageExpense(ref.watch(authProvider).role)
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () async {
+                final refresh = await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ExpenseFormPage()),
+                );
+                if (refresh == true) {
+                  ref.invalidate(expenseListProvider);
+                }
+              },
+              backgroundColor: theme.colorScheme.primary,
+              icon: const Icon(Icons.add_circle_outline, color: Colors.white),
+              label: const Text(
+                "Catat Pengeluaran",
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+              ),
+            ),
     );
   }
 
