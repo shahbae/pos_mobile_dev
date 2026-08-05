@@ -107,25 +107,10 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.attendance,
       };
     case 'finance':
-      // Read-only master data + reports + expenses. TANPA POS.
+      // ABSENSI SAJA (docs/api-finance-absensi-fe.md §7). Server sebenarnya
+      // masih mengizinkan finance membaca reports/expenses/master data, tapi
+      // di app mobile finance sengaja dikunci ke absensi saja — keputusan FE.
       return {
-        AppFeature.dashboard,
-        AppFeature.transactions,
-        AppFeature.reports,
-        AppFeature.stockAlerts,
-        AppFeature.products,
-        AppFeature.purchases,
-        AppFeature.stockMaterial,
-        AppFeature.stockTopping,
-        AppFeature.stockPlastic,
-        AppFeature.stockStraw,
-        AppFeature.stockMovements,
-        AppFeature.toppingMovements,
-        AppFeature.plasticMovements,
-        AppFeature.strawMovements,
-        AppFeature.stockAudit,
-        AppFeature.expenses,
-        AppFeature.shift, // lihat saja (lihat canOperateShift)
         AppFeature.attendance,
       };
     case 'kasir':
@@ -168,8 +153,16 @@ Set<AppFeature> featuresForRole(String? role) {
 }
 
 /// Role yang diizinkan masuk ke aplikasi mobile ini (login gate).
-/// Hanya lima role ini; selain itu (mis. finance, karyawan) ditolak masuk.
-const allowedAppRoles = {'owner', 'kasir', 'supervisor', 'leader', 'produksi'};
+/// `finance` ditambahkan per docs/api-finance-absensi-fe.md — masuk hanya untuk
+/// absensi. Selain enam role ini (mis. karyawan) ditolak masuk.
+const allowedAppRoles = {
+  'owner',
+  'kasir',
+  'supervisor',
+  'leader',
+  'produksi',
+  'finance',
+};
 
 /// Boleh masuk app? Role harus ada di allowlist & punya minimal satu fitur.
 bool canAccessApp(String? role) {
@@ -178,6 +171,27 @@ bool canAccessApp(String? role) {
 }
 
 bool hasFeature(String? role, AppFeature f) => featuresForRole(role).contains(f);
+
+/// Role yang satu-satunya fiturnya absensi (mis. `finance`). App membuka
+/// halaman Absensi langsung sebagai layar utama, tanpa dashboard/menu lain.
+bool isAttendanceOnly(String? role) {
+  final f = featuresForRole(role);
+  return f.length == 1 && f.contains(AppFeature.attendance);
+}
+
+/// Boleh memilih cabang saat check-in absensi.
+/// BE hanya membaca field `branch_id` untuk owner & supervisor; untuk role lain
+/// cabang selalu diambil dari token (docs/api-finance-absensi-fe.md §2), jadi
+/// dropdown cabang tidak boleh ditampilkan — hanya bikin salah paham.
+bool canChooseAttendanceBranch(String? role) {
+  switch (role?.toLowerCase()) {
+    case 'owner':
+    case 'supervisor':
+      return true;
+    default:
+      return false;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Gating aksi tulis di dalam halaman (mencegah 403 untuk role read-only).
