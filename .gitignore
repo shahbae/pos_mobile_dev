@@ -18,20 +18,30 @@ migrate_working_dir/
 *.iws
 .idea/
 
+# VS Code
+.vscode/
+
 # The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
+# VS Code which you may wish to be included in version control, so uncomment
+# the exceptions below if you want to share them.
+#!.vscode/settings.json
+#!.vscode/launch.json
+#!.vscode/extensions.json
 
 # Flutter/Dart/Pub related
 **/doc/api/
 **/ios/Flutter/.last_build_id
 .dart_tool/
+.flutter-plugins
 .flutter-plugins-dependencies
+.packages
 .pub-cache/
 .pub/
 /build/
 /coverage/
+lcov.info
+.fvm/
+.flutter-versions
 
 # Symbolication related
 app.*.symbols
@@ -43,3 +53,37 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Android local config & signing (JANGAN pernah di-commit)
+android/local.properties
+android/key.properties
+**/*.jks
+**/*.keystore
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+
+# Build output / distribusi
+# APK & bundle hasil build tidak masuk repo; unggah ke release/drive.
+*.apk
+*.aab
+*.ipa
+*.app.zip
+/dist/
+
+# Secrets
+# CATATAN: .env sengaja TETAP di-commit karena dipakai sebagai Flutter asset
+# (pubspec.yaml -> assets: - .env) dan dimuat flutter_dotenv saat startup.
+# Isinya hanya API_BASE_URL. Jika nanti ada kredensial (mis. server key
+# Midtrans), pindahkan ke --dart-define atau file terpisah lalu ignore.
+*.pem
+*.p12
+*.mobileprovision
+secrets.json
+
+# OS / editor noise
+Thumbs.db
+*~
+*.tmp
+*.bak
+*.orig
+*.rej
