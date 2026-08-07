@@ -13,6 +13,11 @@ import 'package:pos_mobile/utils/currency.dart';
 /// Layar pembayaran QRIS dinamis: tampilkan QR, hitung mundur, dan polling
 /// status tiap ~3 detik. Pop dengan `String invoiceNo` saat lunas; pop `null`
 /// bila dibatalkan/kedaluwarsa (keranjang dibiarkan utuh untuk retry).
+///
+/// Mode `manual` (QR statis cabang, belum ada gateway): BE mengirim
+/// `manual_confirm: true` dan kasir menekan "Pembayaran Diterima" setelah dana
+/// terlihat masuk di aplikasi merchant. Polling tetap jalan supaya layar ikut
+/// ter-update bila transaksi diselesaikan dari HP lain.
 class QrisPaymentPage extends ConsumerStatefulWidget {
   final QrisCharge charge;
 
@@ -21,6 +26,9 @@ class QrisPaymentPage extends ConsumerStatefulWidget {
   @override
   ConsumerState<QrisPaymentPage> createState() => _QrisPaymentPageState();
 }
+
+/// Aksen pengingat mode manual (amber) — tidak ada di AppTheme.
+const _hintAmber = Color(0xFFB45309);
 
 enum _View { waiting, failed }
 
@@ -31,7 +39,13 @@ class _QrisPaymentPageState extends ConsumerState<QrisPaymentPage> {
   bool _closing = false; // cegah pop ganda
   _View _view = _View.waiting;
   String _failStatus = QrisStatusValue.expired;
+  String? _failMessage; // pesan dari BE bila lebih spesifik dari status
   Duration _remaining = Duration.zero;
+
+  /// Mode manual: kasir yang menyatakan dana sudah masuk. Bisa berubah jadi
+  /// false di tengah jalan (mis. cabang ternyata dikonfirmasi gateway).
+  late bool _manualConfirm = widget.charge.manualConfirm;
+  bool _confirming = false;
 
   ProductTransactionRepository get _repo =>
       ref.read(productTransactionRepositoryProvider);
@@ -67,11 +81,15 @@ class _QrisPaymentPageState extends ConsumerState<QrisPaymentPage> {
   }
 
   Future<void> _poll() async {
-    if (_checking || _closing || !mounted) return;
+    if (_checking || _closing || _confirming || !mounted) return;
     _checking = true;
     try {
       final st = await _repo.getQrisStatus(widget.charge.paymentRef);
       if (!mounted) return;
+      // Mode cabang bisa berubah (mis. Midtrans di-ACC di tengah sesi).
+      if (st.isPending && st.manualConfirm != _manualConfirm) {
+        setState(() => _manualConfirm = st.manualConfirm);
+      }
       _handleStatus(st.status, st.invoiceNo);
     } catch (_) {
       // Abaikan error jaringan sesaat; polling berikutnya coba lagi.
@@ -104,13 +122,84 @@ class _QrisPaymentPageState extends ConsumerState<QrisPaymentPage> {
     Navigator.of(context).pop(invoiceNo ?? '');
   }
 
-  void _showFailed(String status) {
+  void _showFailed(String status, {String? message}) {
     if (_closing || _view == _View.failed) return;
     _stopTimers();
     setState(() {
       _view = _View.failed;
       _failStatus = status;
+      _failMessage = message;
     });
+  }
+
+  /// Tombol "Pembayaran Diterima" — hanya muncul di mode manual. Sekali ditekan
+  /// tidak bisa dibatalkan (pembatalan setelah lunas harus lewat refund owner),
+  /// jadi selalu minta konfirmasi dulu.
+  Future<void> _onConfirmPressed() async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Dana sudah masuk?'),
+        content: Text(
+          'Pastikan dana ${formatRupiah(widget.charge.grossAmount)} sudah masuk '
+          'di aplikasi merchant. Setelah dikonfirmasi, transaksi tidak bisa '
+          'dibatalkan.',
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Belum')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Ya, sudah masuk',
+                style: TextStyle(fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+    if (yes != true || !mounted) return;
+    await _doConfirm();
+  }
+
+  Future<void> _doConfirm() async {
+    if (_confirming || _closing) return;
+    setState(() => _confirming = true);
+    try {
+      final st = await _repo.confirmQris(widget.charge.paymentRef);
+      if (!mounted) return;
+      _handleStatus(st.status, st.invoiceNo);
+    } on QrisConfirmException catch (e) {
+      if (!mounted) return;
+      switch (e.kind) {
+        case QrisConfirmFailure.gatewayAuto:
+          // Cabang ternyata sudah pakai gateway — sembunyikan tombol, lanjut polling.
+          setState(() => _manualConfirm = false);
+          _toast(e.message);
+        case QrisConfirmFailure.expired:
+          _showFailed(QrisStatusValue.expired);
+        case QrisConfirmFailure.notPending:
+          // Device lain kemungkinan sudah menyelesaikan — ambil status terbaru.
+          _toast(e.message);
+          await _poll();
+        case QrisConfirmFailure.notFound:
+          _showFailed(QrisStatusValue.cancelled, message: e.message);
+        case QrisConfirmFailure.other:
+          _toast(e.message, danger: true);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _toast('Gagal mengonfirmasi: $e', danger: true);
+    } finally {
+      if (mounted) setState(() => _confirming = false);
+    }
+  }
+
+  void _toast(String msg, {bool danger = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: danger ? AppTheme.danger : null,
+      behavior: SnackBarBehavior.floating,
+    ));
   }
 
   Future<void> _onCancelPressed() async {
@@ -263,17 +352,66 @@ class _QrisPaymentPageState extends ConsumerState<QrisPaymentPage> {
                   style: TextStyle(color: AppTheme.textSecondary)),
             ],
           ),
+          if (_manualConfirm) ...[
+            const SizedBox(height: 16),
+            _manualHint(),
+          ],
           const SizedBox(height: 20),
           _devPanel(),
           const SizedBox(height: 24),
+          if (_manualConfirm) ...[
+            FilledButton.icon(
+              onPressed: _confirming ? null : _onConfirmPressed,
+              icon: _confirming
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.check_circle_outline),
+              label: Text(_confirming ? 'Memproses…' : 'Pembayaran Diterima'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                backgroundColor: AppTheme.brandGreenDark,
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           OutlinedButton.icon(
-            onPressed: _onCancelPressed,
+            onPressed: _confirming ? null : _onCancelPressed,
             icon: const Icon(Icons.close, color: AppTheme.danger),
             label: const Text('Batalkan',
                 style: TextStyle(color: AppTheme.danger)),
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14),
               side: const BorderSide(color: AppTheme.danger),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Pengingat kasir di mode manual: tidak ada gateway yang mencocokkan nominal,
+  /// jadi dana harus dicek sendiri di aplikasi merchant sebelum menekan tombol.
+  Widget _manualHint() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _hintAmber.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _hintAmber.withOpacity(0.35)),
+      ),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline, size: 18, color: _hintAmber),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Cek dulu di aplikasi merchant apakah dana sudah masuk, baru '
+              'tekan "Pembayaran Diterima".',
+              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
             ),
           ),
         ],
@@ -357,7 +495,7 @@ class _QrisPaymentPageState extends ConsumerState<QrisPaymentPage> {
   Widget _buildFailed() {
     final isCancelled = _failStatus == QrisStatusValue.cancelled;
     final title = isCancelled ? 'Pembayaran dibatalkan' : 'Pembayaran gagal';
-    final subtitle = switch (_failStatus) {
+    final subtitle = _failMessage ?? switch (_failStatus) {
       QrisStatusValue.expired => 'QR sudah kedaluwarsa. Silakan ulangi pembayaran.',
       QrisStatusValue.cancelled => 'Transaksi dibatalkan. Keranjang masih tersimpan.',
       QrisStatusValue.denied => 'Pembayaran ditolak. Silakan coba lagi.',

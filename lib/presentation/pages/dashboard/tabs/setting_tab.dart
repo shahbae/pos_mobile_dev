@@ -7,7 +7,9 @@ import 'package:pos_mobile/presentation/widgets/branch_switch_sheet.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import '../../../pages/shifts/shift_page.dart';
 import '../../../pages/settings/printer_settings_page.dart';
+import '../../../pages/settings/qris_settings_page.dart';
 import '../../../pages/attendance/attendance_page.dart';
+import '../../../pages/kitchen/kitchen_display_page.dart';
 
 class SettingTab extends ConsumerWidget {
   const SettingTab({super.key});
@@ -19,6 +21,7 @@ class SettingTab extends ConsumerWidget {
     final role = auth.role;
     final canAttend = hasFeature(role, AppFeature.attendance);
     final canShift = hasFeature(role, AppFeature.shift);
+    final canMonitorKitchen = hasFeature(role, AppFeature.kitchenDisplay);
     final currentBranch = ref.watch(currentBranchProvider);
     final accent = theme.colorScheme.primary;
     final bottomInset = MediaQuery.of(context).padding.bottom;
@@ -72,6 +75,29 @@ class SettingTab extends ConsumerWidget {
           color: accent,
           onTap: () => showBranchSwitchSheet(context),
         ),
+        if (canMonitorKitchen) ...[
+          const SizedBox(height: 16),
+          _SettingMenuCard(
+            title: "Monitoring Pesanan",
+            subtitle: auth.branchId == null
+                ? "Pilih cabang aktif dulu"
+                : "Layar dapur: pesanan masuk realtime",
+            icon: Icons.ramen_dining_outlined,
+            color: accent,
+            onTap: () {
+              // BE mengunci stream ke satu cabang. Owner yang belum switch
+              // cabang tidak punya branch_id, jadi diarahkan memilih dulu.
+              if (auth.branchId == null) {
+                showBranchSwitchSheet(context);
+                return;
+              }
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const KitchenDisplayPage()),
+              );
+            },
+          ),
+        ],
         if (canAttend) ...[
           const SizedBox(height: 16),
           _SettingMenuCard(
@@ -98,6 +124,26 @@ class SettingTab extends ConsumerWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const ShiftPage()),
+              );
+            },
+          ),
+        ],
+        if (canManageBranchQris(role) && auth.branchId != null) ...[
+          const SizedBox(height: 16),
+          _SettingMenuCard(
+            title: "QRIS Cabang",
+            subtitle: "Mode pembayaran & QR statis cabang",
+            icon: Icons.qr_code_2,
+            color: accent,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => QrisSettingsPage(
+                    branchId: auth.branchId!,
+                    branchName: currentBranch?.name,
+                  ),
+                ),
               );
             },
           ),

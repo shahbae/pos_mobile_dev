@@ -29,6 +29,7 @@ enum AppFeature {
   expenses, // /expenses (Pengeluaran)
   shift, // /shifts (Shift Kasir)
   attendance, // /attendance/check-in|out (Absensi)
+  kitchenDisplay, // /kds/stream, /kds/orders (Monitoring Pesanan / KDS)
 }
 
 /// Set fitur yang boleh diakses tiap role.
@@ -56,6 +57,7 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.stockAudit,
         AppFeature.expenses,
         AppFeature.shift,
+        AppFeature.kitchenDisplay,
       };
     case 'supervisor':
       // Setara owner + ikut absensi.
@@ -80,6 +82,7 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.expenses,
         AppFeature.shift,
         AppFeature.attendance,
+        AppFeature.kitchenDisplay,
       };
     case 'leader':
       // Operasional cabang + POS (per arahan user 2026-07-11).
@@ -105,6 +108,7 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.expenses,
         AppFeature.shift,
         AppFeature.attendance,
+        AppFeature.kitchenDisplay,
       };
     case 'finance':
       // ABSENSI SAJA (docs/api-finance-absensi-fe.md §7). Server sebenarnya
@@ -125,6 +129,7 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.stockAudit,
         AppFeature.shift,
         AppFeature.attendance,
+        AppFeature.kitchenDisplay,
       };
     case 'karyawan':
       // POS + shift + absensi + riwayat transaksi + dashboard adaptif.
@@ -138,14 +143,17 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.stockAudit,
         AppFeature.shift,
         AppFeature.attendance,
+        AppFeature.kitchenDisplay,
       };
     case 'produksi':
       // Absensi + dashboard (revisi BE 2026-06-29: produksi dibatasi ke
       // endpoint absensi + /me, TAPI §6 mengizinkan GET /dashboard yang
       // mengembalikan section absensi). Tanpa POS / shift / lainnya.
+      // + monitoring pesanan (KDS): justru role inilah alasan layar dapur ada.
       return {
         AppFeature.dashboard,
         AppFeature.attendance,
+        AppFeature.kitchenDisplay,
       };
     default:
       return {};
@@ -258,6 +266,18 @@ bool canCreateAudit(String? role) {
 /// Boleh menyetujui (approve) audit stok. Hanya Owner & Supervisor —
 /// approve-lah yang benar-benar mengubah stok (revisi BE 2026-08-03 §4).
 bool canApproveAudit(String? role) {
+  switch (role?.toLowerCase()) {
+    case 'owner':
+    case 'supervisor':
+      return true;
+    default:
+      return false;
+  }
+}
+
+/// Boleh mengatur QRIS cabang (mode + payload QR statis).
+/// Hanya Owner & Supervisor — docs/api-qris-manual-fe.md §5.
+bool canManageBranchQris(String? role) {
   switch (role?.toLowerCase()) {
     case 'owner':
     case 'supervisor':
