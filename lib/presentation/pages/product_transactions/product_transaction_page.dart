@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
@@ -180,11 +181,14 @@ class _ProductTransactionPageState extends ConsumerState<ProductTransactionPage>
                     controller: _scrollController,
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.all(16),
+                    // Kartu sengaja dibuat lebih jangkung: sisa ruangnya jatuh
+                    // ke gambar, karena kasir mengenali produk dari fotonya
+                    // dulu, teks cuma konfirmasi.
                     gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                       maxCrossAxisExtent: 220,
                       crossAxisSpacing: 16,
                       mainAxisSpacing: 16,
-                      childAspectRatio: 0.75,
+                      childAspectRatio: 0.68,
                     ),
                     itemCount: productState.items.length,
                     itemBuilder: (context, index) {
@@ -211,7 +215,7 @@ class _ProductTransactionPageState extends ConsumerState<ProductTransactionPage>
                           borderRadius: BorderRadius.circular(20),
                           onTap: () => _onProductTap(context, ref, product),
                           child: Padding(
-                            padding: const EdgeInsets.all(12),
+                            padding: const EdgeInsets.all(10),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -221,18 +225,18 @@ class _ProductTransactionPageState extends ConsumerState<ProductTransactionPage>
                                     child: _ProductThumb(imageUrl: product.imageUrl),
                                   ),
                                 ),
-                                const SizedBox(height: 12),
+                                const SizedBox(height: 8),
                                 Text(
                                   product.name,
                                   style: const TextStyle(
                                     color: AppTheme.textPrimary,
                                     fontWeight: FontWeight.w700,
-                                    fontSize: 15,
+                                    fontSize: 13,
                                   ),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                                const SizedBox(height: 4),
+                                const SizedBox(height: 2),
                                 Text(
                                   product.hasVariants
                                       ? "mulai ${formatRupiah(product.minVariantPriceNum)}"
@@ -240,10 +244,10 @@ class _ProductTransactionPageState extends ConsumerState<ProductTransactionPage>
                                   style: const TextStyle(
                                     color: AppTheme.brandBlue,
                                     fontWeight: FontWeight.w800,
-                                    fontSize: 16,
+                                    fontSize: 14,
                                   ),
                                 ),
-                                const SizedBox(height: 8),
+                                const SizedBox(height: 6),
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
@@ -254,19 +258,19 @@ class _ProductTransactionPageState extends ConsumerState<ProductTransactionPage>
                                         soldOut ? "Habis" : "Tersedia",
                                         style: TextStyle(
                                           color: soldOut ? AppTheme.danger : Colors.green,
-                                          fontSize: 12,
+                                          fontSize: 11,
                                           fontWeight: FontWeight.w600,
                                         ),
                                       )
                                     else
                                       const SizedBox.shrink(),
                                     Container(
-                                      padding: const EdgeInsets.all(6),
+                                      padding: const EdgeInsets.all(5),
                                       decoration: BoxDecoration(
                                         color: soldOut ? AppTheme.textSecondary : AppTheme.brandBlue,
                                         shape: BoxShape.circle,
                                       ),
-                                      child: const Icon(Icons.add, color: Colors.white, size: 16),
+                                      child: const Icon(Icons.add, color: Colors.white, size: 15),
                                     ),
                                   ],
                                 ),
@@ -446,6 +450,10 @@ class _CategoryTabs extends StatelessWidget {
 }
 
 /// Gambar produk dengan fallback ikon (saat tidak ada URL / gagal dimuat).
+///
+/// Pakai [CachedNetworkImage] supaya gambar disimpan di disk: sekali diunduh,
+/// pemakaian berikutnya (scroll balik, pindah kategori, bahkan buka ulang
+/// aplikasi) langsung tampil tanpa loading dan tanpa hit jaringan.
 class _ProductThumb extends StatelessWidget {
   final String? imageUrl;
   const _ProductThumb({required this.imageUrl});
@@ -455,31 +463,29 @@ class _ProductThumb extends StatelessWidget {
     final placeholder = Container(
       color: AppTheme.bgLight,
       child: const Center(
-        child: Icon(Icons.inventory_2_outlined, color: AppTheme.brandBlue, size: 40),
+        child: Icon(Icons.inventory_2_outlined, color: AppTheme.brandBlue, size: 48),
       ),
     );
 
     if (imageUrl == null) return placeholder;
 
-    return Image.network(
-      imageUrl!,
+    // Thumbnail grid kecil; decode seukuran tampilan saja agar hemat memori
+    // dan tidak bikin frame drop saat scroll katalog panjang.
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final cacheWidth = (220 * dpr).round();
+
+    return CachedNetworkImage(
+      imageUrl: imageUrl!,
       fit: BoxFit.cover,
       width: double.infinity,
       height: double.infinity,
-      errorBuilder: (_, __, ___) => placeholder,
-      loadingBuilder: (context, child, progress) {
-        if (progress == null) return child;
-        return Container(
-          color: AppTheme.bgLight,
-          child: const Center(
-            child: SizedBox(
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          ),
-        );
-      },
+      memCacheWidth: cacheWidth,
+      maxWidthDiskCache: cacheWidth,
+      // Tanpa fade: gambar yang sudah tercache muncul instan, tidak berkedip.
+      fadeInDuration: Duration.zero,
+      fadeOutDuration: Duration.zero,
+      placeholder: (_, __) => Container(color: AppTheme.bgLight),
+      errorWidget: (_, __, ___) => placeholder,
     );
   }
 }

@@ -135,12 +135,12 @@ Set<AppFeature> featuresForRole(String? role) {
       // POS + shift + absensi + riwayat transaksi + dashboard adaptif.
       // CATATAN: matriks (baris 243) menandai GET /transactions ❌ untuk
       // karyawan, tapi per arahan user karyawan boleh akses transaksi.
-      // + audit stok (revisi BE 2026-08-03 §4), sama seperti kasir.
+      // TANPA audit stok: BE 2026-08-08 §3 mencabut seluruh akses opname
+      // karyawan (sebelumnya boleh input per revisi 2026-08-03 §4).
       return {
         AppFeature.dashboard,
         AppFeature.pos,
         AppFeature.transactions,
-        AppFeature.stockAudit,
         AppFeature.shift,
         AppFeature.attendance,
         AppFeature.kitchenDisplay,
@@ -248,15 +248,14 @@ bool canManageExpense(String? role) {
 
 /// Boleh membuat / mengubah / menghapus draft audit stok.
 /// Revisi BE 2026-08-03 §4 memisahkan input dari persetujuan: Owner,
-/// Supervisor, Leader, Kasir, dan Karyawan boleh menginput hitung fisik.
-/// Finance & Produksi tidak (read-only / tanpa akses).
+/// Supervisor, Leader, Kasir boleh menginput hitung fisik. Finance read-only;
+/// Karyawan & Produksi tanpa akses (karyawan dicabut per BE 2026-08-08 §3).
 bool canCreateAudit(String? role) {
   switch (role?.toLowerCase()) {
     case 'owner':
     case 'supervisor':
     case 'leader':
     case 'kasir':
-    case 'karyawan':
       return true;
     default:
       return false;

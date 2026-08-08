@@ -43,6 +43,12 @@ class Receipt {
     required this.store,
   });
 
+  /// Pembayaran tunai. BE bisa mengirim 'cash'/'CASH', UI lama kirim 'tunai'.
+  bool get isCashPayment {
+    final m = paymentMethod.trim().toLowerCase();
+    return m == 'cash' || m == 'tunai';
+  }
+
   factory Receipt.fromJson(Map<String, dynamic> json) {
     final data = (json['data'] is Map) ? json['data'] as Map<String, dynamic> : json;
     final List<dynamic> itemsJson = data['items'] ?? [];

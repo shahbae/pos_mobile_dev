@@ -59,9 +59,32 @@ class ThermalPrinterService {
   Future<bool> get disconnect => PrintBluetoothThermal.disconnect;
 
   /// Cetak nota ke printer yang sedang terhubung.
-  Future<bool> printReceipt(Receipt receipt, {PaperSize paperSize = PaperSize.mm58}) async {
-    final bytes = await _buildBytes(receipt, paperSize);
+  ///
+  /// [openDrawer] mengirim perintah kick laci kas (ESC p) di awal cetak.
+  /// Hanya berfungsi bila laci dicolok ke port RJ11/RJ12 printer.
+  Future<bool> printReceipt(
+    Receipt receipt, {
+    PaperSize paperSize = PaperSize.mm58,
+    bool openDrawer = false,
+    PosDrawer drawerPin = PosDrawer.pin2,
+  }) async {
+    final bytes = await _buildBytes(
+      receipt,
+      paperSize,
+      openDrawer: openDrawer,
+      drawerPin: drawerPin,
+    );
     return PrintBluetoothThermal.writeBytes(bytes);
+  }
+
+  /// Kirim perintah buka laci kas saja (tanpa mencetak apa pun).
+  ///
+  /// Laci harus terhubung ke port cash drawer (RJ11/RJ12) di printer —
+  /// printer bluetooth mini/portable umumnya tidak punya port ini.
+  Future<bool> openCashDrawer({PosDrawer pin = PosDrawer.pin2}) async {
+    final profile = await CapabilityProfile.load();
+    final g = Generator(PaperSize.mm58, profile);
+    return PrintBluetoothThermal.writeBytes(g.drawer(pin: pin));
   }
 
   /// Kirim tes cetak singkat untuk verifikasi koneksi printer.
@@ -80,10 +103,18 @@ class ThermalPrinterService {
     return PrintBluetoothThermal.writeBytes(bytes);
   }
 
-  Future<List<int>> _buildBytes(Receipt r, PaperSize paperSize) async {
+  Future<List<int>> _buildBytes(
+    Receipt r,
+    PaperSize paperSize, {
+    bool openDrawer = false,
+    PosDrawer drawerPin = PosDrawer.pin2,
+  }) async {
     final profile = await CapabilityProfile.load();
     final g = Generator(paperSize, profile);
     List<int> bytes = [];
+
+    // Kick laci kas dikirim paling awal agar laci terbuka bersamaan cetak.
+    if (openDrawer) bytes += g.drawer(pin: drawerPin);
 
     // Logo di paling atas (di-center). Dilewati bila gagal dimuat.
     // Ukuran ideal ~55% lebar cetak: tidak terlalu kecil, tak melebihi awal.

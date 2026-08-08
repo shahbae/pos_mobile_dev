@@ -65,6 +65,15 @@ class StockAuditItem {
   /// pembelian terakhir topping). 0 berarti harga belum pernah diinput.
   final double unitValue;
 
+  /// Perubahan stok yang benar-benar diterapkan saat approve (negatif = keluar).
+  /// Bisa lebih kecil dari [diff] kalau stok mentok di 0 (BE 2026-08-08 §4).
+  final double appliedDelta;
+
+  /// Bagian dari koreksi yang TIDAK bisa diterapkan karena stok mentok di 0.
+  /// > 0 berarti hitung fisik & catatan penjualan bertentangan — wajib
+  /// ditampilkan supaya cabang diperiksa, bukan dikoreksi diam-diam.
+  final double shortfallQty;
+
   StockAuditItem({
     this.id,
     this.materialId,
@@ -82,6 +91,8 @@ class StockAuditItem {
     this.incomingToday = 0,
     this.diff = 0,
     this.unitValue = 0,
+    this.appliedDelta = 0,
+    this.shortfallQty = 0,
   });
 
   /// Estimasi nilai kerugian stok: |diff| × unitValue, hanya bila stok kurang
@@ -129,6 +140,88 @@ class StockAuditItem {
       incomingToday: _toDouble(j['incoming_today']),
       diff: _toDouble(j['diff']),
       unitValue: _toDouble(j['unit_value']),
+      appliedDelta: _toDouble(j['applied_delta']),
+      shortfallQty: _toDouble(j['shortfall_qty']),
+    );
+  }
+}
+
+/// Item yang boleh diaudit di cabang aktif (GET /stock-audits/auditable-items).
+///
+/// Daftarnya ditentukan owner lewat `is_auditable` di master data dan bisa
+/// berubah kapan saja — FE TIDAK BOLEH menebak/hardcode item mana yang masuk
+/// opname (BE 2026-08-08 §1). Response ini sudah lengkap untuk membangun form,
+/// jadi tidak perlu memanggil /materials, /toppings, /plastics, /sedotans.
+class AuditableItem {
+  /// `material` | `topping` | `plastic` | `sedotan`.
+  final String type;
+  final int? materialId;
+  final int? toppingId;
+  final int? plasticId;
+  final int? sedotanId;
+  final String name;
+  final String unit;
+
+  /// Stok menurut sistem di cabang tsb.
+  final double systemQty;
+
+  /// Jumlah masuk (movement IN) hari ini — konteks buat yang menghitung.
+  final double incomingToday;
+
+  AuditableItem({
+    required this.type,
+    this.materialId,
+    this.toppingId,
+    this.plasticId,
+    this.sedotanId,
+    required this.name,
+    this.unit = '',
+    this.systemQty = 0,
+    this.incomingToday = 0,
+  });
+
+  /// Id yang terisi mengikuti [type]; null kalau BE mengirim tipe yang belum
+  /// dikenal app ini (item begitu di-skip, bukan bikin form gagal).
+  int? get id => materialId ?? toppingId ?? plasticId ?? sedotanId;
+
+  /// Kunci unik lintas tipe untuk state form (mis. "material:7").
+  String get key => '$type:$id';
+
+  /// Field id sesuai [type] — nama fieldnya sama persis dengan yang diminta
+  /// POST/PUT /stock-audits, jadi bisa diteruskan apa adanya.
+  Map<String, dynamic> get idPayload => {
+        if (materialId != null) 'material_id': materialId,
+        if (toppingId != null) 'topping_id': toppingId,
+        if (plasticId != null) 'plastic_id': plasticId,
+        if (sedotanId != null) 'sedotan_id': sedotanId,
+      };
+
+  String get typeLabel {
+    switch (type) {
+      case 'material':
+        return 'Material';
+      case 'topping':
+        return 'Topping';
+      case 'plastic':
+        return 'Plastik';
+      case 'sedotan':
+        return 'Sedotan';
+      default:
+        return type;
+    }
+  }
+
+  factory AuditableItem.fromJson(Map<String, dynamic> j) {
+    return AuditableItem(
+      type: j['type']?.toString() ?? '',
+      materialId: j['material_id'],
+      toppingId: j['topping_id'],
+      plasticId: j['plastic_id'],
+      sedotanId: j['sedotan_id'],
+      name: j['name']?.toString() ?? '',
+      unit: j['unit']?.toString() ?? '',
+      systemQty: _toDouble(j['system_qty']),
+      incomingToday: _toDouble(j['incoming_today']),
     );
   }
 }
