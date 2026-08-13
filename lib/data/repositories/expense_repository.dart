@@ -13,23 +13,21 @@ class ExpenseRepository {
     String? from,
     String? to,
   }) async {
-    try {
-      final Map<String, dynamic> queryParams = {
-        'page': page,
-        'limit': limit,
-      };
-      if (from != null && from.isNotEmpty) queryParams['from'] = from;
-      if (to != null && to.isNotEmpty) queryParams['to'] = to;
+    final Map<String, dynamic> queryParams = {
+      'page': page,
+      'limit': limit,
+    };
+    if (from != null && from.isNotEmpty) queryParams['from'] = from;
+    if (to != null && to.isNotEmpty) queryParams['to'] = to;
 
-      final res = await api.dio.get('/expenses', queryParameters: queryParams);
-      debugPrint('[ExpenseRepository] status=${res.statusCode} body=${res.data}');
+    // Sengaja tidak di-try/catch: gagal memuat harus muncul sebagai error di
+    // layar, bukan daftar kosong. Daftar kosong terbaca kasir sebagai
+    // "pengeluarannya hilang" padahal datanya aman di server.
+    final res = await api.dio.get('/expenses', queryParameters: queryParams);
+    debugPrint('[ExpenseRepository] status=${res.statusCode} body=${res.data}');
 
-      final List items = res.data['data']['items'] ?? [];
-      return items.map((e) => ExpenseModel.fromJson(e)).toList();
-    } catch (e) {
-      debugPrint('[ExpenseRepository] Error fetching expenses: $e');
-      return [];
-    }
+    final List items = res.data['data']['items'] ?? [];
+    return items.map((e) => ExpenseModel.fromJson(e)).toList();
   }
 
   /// Create pengeluaran — WAJIB foto bukti. multipart/form-data (breaking BE

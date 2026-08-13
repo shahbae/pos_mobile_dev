@@ -39,7 +39,15 @@ class _ExpenseFormEditPageState extends ConsumerState<ExpenseFormEditPage> {
     _descController = TextEditingController(text: widget.expense.description ?? '');
     _selectedCategory = widget.expense.category ?? 'operational';
     try {
-      _selectedDate = DateTime.parse(widget.expense.expenseDate ?? DateTime.now().toIso8601String());
+      // `.toLocal()` WAJIB: BE mengirim expense_date sebagai "…T00:00:00+07:00",
+      // dan DateTime.parse mengembalikan DateTime UTC begitu ada offset. Tanpa
+      // dikembalikan ke waktu lokal, DateFormat membaca komponen UTC-nya
+      // (2026-08-13 07:00 WIB → 2026-08-12 17:00 UTC) sehingga tanggal yang
+      // tersimpan mundur satu hari setiap kali pengeluaran diedit — dan
+      // pengeluarannya lenyap dari daftar hari ini.
+      _selectedDate =
+          DateTime.parse(widget.expense.expenseDate ?? DateTime.now().toIso8601String())
+              .toLocal();
     } catch (_) {
       _selectedDate = DateTime.now();
     }
