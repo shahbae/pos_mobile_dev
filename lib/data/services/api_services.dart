@@ -66,10 +66,21 @@ class ApiService {
             extra: {...req.extra, '__retried': true},
           );
 
+          // FormData hanya bisa dikirim SEKALI — stream file-nya sudah habis
+          // dibaca saat percobaan pertama. Mengirim ulang objek yang sama
+          // melempar error di sisi klien, jadi request-nya tidak pernah sampai
+          // ke server. Ini yang membuat absensi dan pengeluaran (satu-satunya
+          // yang memakai multipart) gagal tepat ketika token kebetulan
+          // kedaluwarsa saat tombol ditekan. clone() membangun ulang body-nya
+          // dari file di disk.
+          final body = req.data is FormData
+              ? (req.data as FormData).clone()
+              : req.data;
+
           try {
             final clone = await dio.request(
               req.path,
-              data: req.data,
+              data: body,
               queryParameters: req.queryParameters,
               options: opts,
             );
