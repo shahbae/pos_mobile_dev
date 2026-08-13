@@ -10,6 +10,7 @@ import 'package:pos_mobile/data/models/receipt_model.dart';
 class ThermalPrinterService {
   static final NumberFormat _money = NumberFormat.decimalPattern('id_ID');
   static final DateFormat _dateFmt = DateFormat('dd/MM/yyyy HH:mm');
+  static final DateFormat _timeFmt = DateFormat('HH:mm');
 
   static const String _logoAsset = 'lib/images/logo_estehcandi.png';
 
@@ -207,6 +208,21 @@ class ThermalPrinterService {
     bytes += _summaryRow(g, 'Kembalian', r.change);
     if (r.paymentRef != null && r.paymentRef!.isNotEmpty) {
       bytes += g.text('Ref: ${r.paymentRef}');
+    }
+
+    // Estimasi siap. Dicetak sebagai jam absolut — kertas tidak ikut berjalan,
+    // jadi hitung mundur tidak berguna. Tanpa estimasi barisnya dilewati.
+    if (r.hasEstimate) {
+      bytes += g.hr();
+      bytes += g.text(
+        'Estimasi siap : ${_timeFmt.format(r.estimatedReadyAt!.toLocal())}',
+        styles: const PosStyles(bold: true),
+      );
+      // "+/-" dan bukan "±": codepage printer (CP437) memetakan ± ke karakter
+      // blok, jadi simbolnya tercetak sebagai sampah.
+      // "tunggu", bukan "proses": angkanya sudah termasuk antrean pesanan lain
+      // di depan, bukan cuma waktu meracik pesanan ini.
+      bytes += g.text('Perkiraan tunggu +/-${r.estimatedPrepMinutes} menit');
     }
 
     // Footer

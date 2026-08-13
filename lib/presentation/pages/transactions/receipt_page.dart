@@ -319,6 +319,40 @@ class _ReceiptPreview extends StatelessWidget {
                   ],
                 ),
               ),
+              // ===== Estimasi siap =====
+              // Hanya muncul bila BE mengirim estimasi; tanpa itu jangan
+              // tampilkan apa pun (bukan berarti pesanan siap seketika).
+              if (receipt.hasEstimate) ...[
+                const _DashedDivider(),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.schedule, size: 18, color: AppTheme.brandBlue),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Estimasi siap',
+                        style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                      ),
+                      const Spacer(),
+                      Text(
+                        DateFormat('HH:mm').format(receipt.estimatedReadyAt!.toLocal()),
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                          color: AppTheme.textPrimary,
+                          fontFeatures: [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '(±${receipt.estimatedPrepMinutes} menit)',
+                        style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const _DashedDivider(),
               // ===== Footer =====
               Padding(

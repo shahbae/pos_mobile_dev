@@ -129,12 +129,25 @@ class _KitchenDisplayPageState extends ConsumerState<KitchenDisplayPage>
   }
 }
 
-/// Warna kartu berdasarkan lama menunggu: makin lama makin mendesak.
-Color _urgencyColor(Duration waiting) {
-  final minutes = waiting.inMinutes;
-  if (minutes < 3) return const Color(0xFF16A34A); // hijau
-  if (minutes < 6) return const Color(0xFFD97706); // kuning
-  return AppTheme.danger; // merah
+const _green = Color(0xFF16A34A);
+const _amber = Color(0xFFD97706);
+
+/// Warna kartu: makin dekat/lewat janji siap, makin mendesak.
+///
+/// Kalau pesanan punya `estimated_ready_at`, janji itulah acuannya. Tanpa
+/// estimasi (produk belum diisi waktu pembuatan) dipakai ambang lama menunggu
+/// seperti sebelumnya — bukan berarti pesanannya tepat waktu.
+Color _urgencyColor(KitchenOrder order) {
+  if (order.hasEstimate) {
+    final remaining = -order.lateness;
+    if (remaining.isNegative) return AppTheme.danger; // sudah lewat janji
+    if (remaining.inMinutes < 3) return _amber;
+    return _green;
+  }
+  final minutes = order.waiting.inMinutes;
+  if (minutes < 3) return _green;
+  if (minutes < 6) return _amber;
+  return AppTheme.danger;
 }
 
 String _formatWaiting(Duration d) {
@@ -144,6 +157,9 @@ String _formatWaiting(Duration d) {
   return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
 }
 
+String _formatClock(DateTime t) =>
+    '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
 class _OrderCard extends StatelessWidget {
   final KitchenOrder order;
   final VoidCallback onAdvance;
@@ -152,7 +168,7 @@ class _OrderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final urgency = _urgencyColor(order.waiting);
+    final urgency = _urgencyColor(order);
     final actionLabel = kitchenActionLabel(order.status);
 
     return Container(
@@ -200,6 +216,9 @@ class _OrderCard extends StatelessWidget {
                             color: AppTheme.textSecondary,
                           ),
                         ),
+                      // Janji siap yang tercetak di nota pelanggan. Tanpa
+                      // estimasi baris ini tidak muncul sama sekali.
+                      if (order.hasEstimate) _EstimateLine(order: order),
                     ],
                   ),
                 ),
@@ -277,6 +296,49 @@ class _OrderCard extends StatelessWidget {
                     ),
                   ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Baris "Target 17:27" di kartu; berubah jadi penanda telat begitu jam janji
+/// terlewat. Hanya dirender bila pesanan punya `estimated_ready_at`.
+class _EstimateLine extends StatelessWidget {
+  final KitchenOrder order;
+  const _EstimateLine({required this.order});
+
+  @override
+  Widget build(BuildContext context) {
+    final late = order.isLate;
+    final color = late ? AppTheme.danger : AppTheme.textSecondary;
+    final clock = _formatClock(order.estimatedReadyAt!);
+    final label = late
+        ? 'Telat ${_formatWaiting(order.lateness)} • janji $clock'
+        : 'Target $clock';
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Row(
+        children: [
+          Icon(
+            late ? Icons.warning_amber_rounded : Icons.schedule,
+            size: 12,
+            color: color,
+          ),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: late ? FontWeight.w900 : FontWeight.w700,
+                color: color,
+              ),
             ),
           ),
         ],

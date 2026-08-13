@@ -126,7 +126,9 @@ class KitchenDisplayNotifier extends StateNotifier<KitchenDisplayState> {
         _upsert(next, order);
         break;
       case _eventOrderStatusChanged:
-        if (order.status == kitchenStatusServed) {
+        // `closed` datang saat kasir menutup shift (penyapuan sistem) —
+        // perlakukan sama seperti `served`: kartunya hilang.
+        if (isKitchenTerminalStatus(order.status)) {
           next.removeWhere((o) => o.id == order.id);
         } else {
           _upsert(next, order);
@@ -151,6 +153,9 @@ class KitchenDisplayNotifier extends StateNotifier<KitchenDisplayState> {
   }
 
   Future<void> setStatus(KitchenOrder order, String status) async {
+    // `closed` hanya lahir dari tutup shift; BE menolaknya dengan 400.
+    if (status == kitchenStatusClosed) return;
+
     final before = state.orders;
 
     final optimistic = [...before];

@@ -12,6 +12,17 @@ const kitchenStatusPreparing = 'preparing';
 const kitchenStatusReady = 'ready';
 const kitchenStatusServed = 'served';
 
+/// Status kelima, **hanya dibuat sistem** saat kasir menutup shift: semua
+/// pesanan yang masih di layar disapu ke sini supaya shift berikutnya mulai
+/// bersih (docs/api-prep-time-dan-reset-kds-fe.md §2). PATCH status menolaknya
+/// dengan 400 — jangan pernah dikirim dari sini. Di layar diperlakukan sama
+/// seperti `served`: kartunya dihapus.
+const kitchenStatusClosed = 'closed';
+
+/// Status yang membuat kartu hilang dari layar.
+bool isKitchenTerminalStatus(String status) =>
+    status == kitchenStatusServed || status == kitchenStatusClosed;
+
 /// Status yang masih tampil di layar (dipakai sebagai filter snapshot).
 const kitchenActiveStatuses = [
   kitchenStatusQueued,
@@ -58,6 +69,8 @@ String kitchenStatusLabel(String status) {
       return 'Siap';
     case kitchenStatusServed:
       return 'Selesai';
+    case kitchenStatusClosed:
+      return 'Tutup Shift';
     default:
       return status;
   }
@@ -122,6 +135,15 @@ class KitchenOrder {
   final DateTime? paidAt;
   final String cashierName;
 
+  /// Estimasi waktu pembuatan (menit, sudah dibulatkan ke kelipatan 5) —
+  /// nilainya sama persis dengan yang tercetak di nota pelanggan. `0` =
+  /// produknya belum diisi waktu pembuatan, bukan berarti instan.
+  final int prepMinutes;
+
+  /// Janji siap yang dibekukan saat pembayaran. Null = tidak ada estimasi →
+  /// jangan tampilkan penanda telat sama sekali.
+  final DateTime? estimatedReadyAt;
+
   const KitchenOrder({
     required this.id,
     required this.branchId,
@@ -132,10 +154,13 @@ class KitchenOrder {
     this.items = const [],
     this.paidAt,
     this.cashierName = '',
+    this.prepMinutes = 0,
+    this.estimatedReadyAt,
   });
 
   factory KitchenOrder.fromJson(Map<String, dynamic> json) {
     final rawPaidAt = json['paid_at']?.toString();
+    final rawReadyAt = json['estimated_ready_at']?.toString();
     return KitchenOrder(
       id: _toInt(json['id']) ?? 0,
       branchId: _toInt(json['branch_id']) ?? 0,
@@ -151,6 +176,10 @@ class KitchenOrder {
           ? null
           : DateTime.tryParse(rawPaidAt)?.toLocal(),
       cashierName: json['cashier_name']?.toString() ?? '',
+      prepMinutes: _toInt(json['prep_minutes']) ?? 0,
+      estimatedReadyAt: (rawReadyAt == null || rawReadyAt.isEmpty)
+          ? null
+          : DateTime.tryParse(rawReadyAt)?.toLocal(),
     );
   }
 
@@ -165,12 +194,27 @@ class KitchenOrder {
       items: items,
       paidAt: paidAt,
       cashierName: cashierName,
+      prepMinutes: prepMinutes,
+      estimatedReadyAt: estimatedReadyAt,
     );
   }
 
   /// Sudah berapa lama pesanan ini menunggu sejak dibayar.
   Duration get waiting =>
       paidAt == null ? Duration.zero : DateTime.now().difference(paidAt!);
+
+  /// Ada janji siap yang bisa ditampilkan/dinilai.
+  bool get hasEstimate => estimatedReadyAt != null;
+
+  /// Sudah lewat janji siap. Tanpa estimasi selalu `false` — bukan berarti
+  /// tepat waktu, tapi memang tidak ada yang bisa dinilai.
+  bool get isLate =>
+      estimatedReadyAt != null && DateTime.now().isAfter(estimatedReadyAt!);
+
+  /// Selisih terhadap janji siap: positif = telat sekian, negatif = sisa waktu.
+  Duration get lateness => estimatedReadyAt == null
+      ? Duration.zero
+      : DateTime.now().difference(estimatedReadyAt!);
 
   /// Total item (bukan jumlah baris) — dipakai di header kartu.
   int get totalQty => items.fold(0, (sum, i) => sum + i.qty);
