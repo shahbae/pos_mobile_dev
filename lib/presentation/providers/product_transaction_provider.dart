@@ -79,9 +79,10 @@ class CartItem {
       );
 }
 
-/// Item gratis = item TAMBAHAN (bonus) di atas item yang dibayar. Bisa produk
-/// apa pun yang `freeable` (tidak harus ada di keranjang). Dikirim sebagai baris
-/// tambahan di items[] + didaftarkan di promo_free_items agar dipotong jadi 0.
+/// Item gratis = item TAMBAHAN (bonus) di atas item yang dibayar. Hanya boleh
+/// diambil dari isi keranjang, dan hanya yang harganya terendah di keranjang.
+/// Dikirim sebagai baris tambahan di items[] + didaftarkan di promo_free_items
+/// agar dipotong jadi 0.
 /// qty_dibayar (dasar kuota) = jumlah item yang dibayar, TIDAK termasuk bonus.
 class PromoFreeSelection {
   final Product product;
