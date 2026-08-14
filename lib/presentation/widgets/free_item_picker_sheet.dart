@@ -1,22 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/data/models/product_model.dart';
-import 'package:pos_mobile/presentation/providers/product_transaction_provider.dart';
+import 'package:pos_mobile/presentation/providers/product_pagination_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/utils/currency.dart';
+import 'package:pos_mobile/utils/xl_promo.dart';
 
-/// Bottom sheet untuk memilih produk yang digratiskan (bonus promo), diambil
-/// dari ISI KERANJANG. Mengembalikan [Product] terpilih, atau null bila
-/// dibatalkan. Variannya dipilih setelah ini oleh pemanggil — kasir tetap boleh
-/// menggratiskan varian lain dari produk yang sama (mis. pesan "XL Normal",
-/// bonusnya "XL Less sugar").
+/// Bottom sheet untuk memilih menu yang digratiskan (bonus promo).
+/// Mengembalikan [Product] terpilih, atau null bila dibatalkan. Variannya
+/// dipilih setelah ini oleh pemanggil.
 ///
-/// [items] sudah disaring pemanggil ke baris keranjang yang boleh digratiskan:
-/// kategorinya `freeable` dan harganya sama dengan item termurah di keranjang
-/// (aturan BE: item gratis tidak boleh lebih mahal dari item termurah). Baris
-/// dengan produk yang sama digabung di sini.
+/// Menunya diambil dari katalog POS yang sudah dimuat, bukan panggilan API
+/// tersendiri — katalog itu sudah memuat seluruh halaman dan sudah membawa
+/// penanda siap per cabang, jadi menu yang bahannya habis bisa disaring di
+/// sini tanpa request tambahan.
+///
+/// Yang ditawarkan: menu berkategori `freeable`, ukuran XL, siap dibuat, dan
+/// harganya ≤ [maxPrice] — batas itu adalah minuman termurah di keranjang.
+/// Tidak harus menu yang dipesan: pelanggan boleh minta teh yang tidak ada di
+/// pesanannya, asal tidak lebih mahal dari yang termurah tadi.
 Future<Product?> showFreeItemPicker(
   BuildContext context, {
-  required List<CartItem> items,
+  required num maxPrice,
 }) {
   return showModalBottomSheet<Product>(
     context: context,
@@ -25,121 +30,166 @@ Future<Product?> showFreeItemPicker(
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
-    builder: (_) => _FreeItemPickerSheet(items: items),
+    builder: (_) => _FreeItemPickerSheet(maxPrice: maxPrice),
   );
 }
 
-/// Satu produk yang bisa digratiskan, beserta jumlahnya di keranjang.
-class _FreeableProduct {
-  final Product product;
-  final num unitPrice;
-  final int qtyInCart;
-
-  const _FreeableProduct({
-    required this.product,
-    required this.unitPrice,
-    required this.qtyInCart,
-  });
+/// True bila [p] boleh dijadikan bonus dengan batas harga [maxPrice].
+/// Untuk produk bervarian, cukup ada satu varian XL yang siap dan masuk batas.
+bool _isFreeable(Product p, num maxPrice) {
+  if (!p.categoryFreeable || !p.ready) return false;
+  if (p.hasVariants) {
+    return p.variants.any(
+      (v) => nameHasXL(v.name) && v.ready && v.sellingPriceNum <= maxPrice,
+    );
+  }
+  return nameHasXL(p.name) && p.sellingPriceNum <= maxPrice;
 }
 
-class _FreeItemPickerSheet extends StatelessWidget {
-  final List<CartItem> items;
+/// Harga termurah yang bisa diambil dari [p] dalam batas [maxPrice] — dipakai
+/// untuk label, supaya kasir tahu nilai gratisannya sebelum masuk ke varian.
+num _lowestPrice(Product p, num maxPrice) {
+  if (!p.hasVariants) return p.sellingPriceNum;
+  final harga = p.variants
+      .where((v) => nameHasXL(v.name) && v.ready && v.sellingPriceNum <= maxPrice)
+      .map((v) => v.sellingPriceNum);
+  return harga.reduce((a, b) => a < b ? a : b);
+}
 
-  const _FreeItemPickerSheet({required this.items});
+class _FreeItemPickerSheet extends ConsumerStatefulWidget {
+  final num maxPrice;
 
-  /// Gabungkan baris keranjang per produk — kasir memilih produknya dulu,
-  /// variannya di langkah berikutnya.
-  List<_FreeableProduct> get _products {
-    final byProduct = <int, _FreeableProduct>{};
-    for (final item in items) {
-      final existing = byProduct[item.product.id];
-      byProduct[item.product.id] = _FreeableProduct(
-        product: item.product,
-        unitPrice: existing == null
-            ? item.unitPrice
-            : (item.unitPrice < existing.unitPrice ? item.unitPrice : existing.unitPrice),
-        qtyInCart: (existing?.qtyInCart ?? 0) + item.quantity,
-      );
-    }
-    return byProduct.values.toList();
-  }
+  const _FreeItemPickerSheet({required this.maxPrice});
+
+  @override
+  ConsumerState<_FreeItemPickerSheet> createState() => _FreeItemPickerSheetState();
+}
+
+class _FreeItemPickerSheetState extends ConsumerState<_FreeItemPickerSheet> {
+  String _search = '';
 
   @override
   Widget build(BuildContext context) {
-    final products = _products;
+    // Ditonton, bukan sekadar dibaca: kalau katalog kebetulan sudah dilepas,
+    // menontonnya membangun ulang notifier-nya yang langsung memuat sendiri.
+    final catalog = ref.watch(productPaginationProvider);
 
-    return DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: 0.5,
-      minChildSize: 0.3,
-      maxChildSize: 0.9,
-      builder: (context, scrollController) {
-        return Column(
-          children: [
-            const SizedBox(height: 12),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppTheme.borderLight,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text("Pilih Item Gratis",
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 2),
-                    const Text(
-                      "Hanya item termurah di keranjang yang bisa digratiskan.",
-                      style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-                    ),
-                  ],
+    final keyword = _search.trim().toLowerCase();
+    final products = catalog.allItems
+        .where((p) => _isFreeable(p, widget.maxPrice))
+        .where((p) => keyword.isEmpty || p.name.toLowerCase().contains(keyword))
+        .toList()
+      ..sort((a, b) => _lowestPrice(a, widget.maxPrice)
+          .compareTo(_lowestPrice(b, widget.maxPrice)));
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.7,
+        minChildSize: 0.5,
+        maxChildSize: 0.92,
+        builder: (context, scrollController) {
+          return Column(
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppTheme.borderLight,
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
-            ),
-            Expanded(
-              child: products.isEmpty
-                  ? const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(24),
-                        child: Text(
-                            "Tidak ada item di keranjang yang bisa digratiskan.",
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: AppTheme.textSecondary)),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text("Pilih Item Gratis",
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 2),
+                      Text(
+                        "Maks seharga item termurah di keranjang: "
+                        "${formatRupiah(widget.maxPrice)}",
+                        style: const TextStyle(
+                            fontSize: 12, color: AppTheme.textSecondary),
                       ),
-                    )
-                  : ListView.separated(
-                      controller: scrollController,
-                      itemCount: products.length,
-                      separatorBuilder: (_, __) =>
-                          const Divider(height: 1, color: AppTheme.borderLight),
-                      itemBuilder: (context, i) {
-                        final p = products[i];
-                        return ListTile(
-                          title: Text(p.product.name,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w600, color: AppTheme.textPrimary)),
-                          subtitle: Text(
-                            p.product.hasVariants
-                                ? "${formatRupiah(p.unitPrice)} • di keranjang: ${p.qtyInCart} • pilih varian"
-                                : "${formatRupiah(p.unitPrice)} • di keranjang: ${p.qtyInCart}",
-                            style: const TextStyle(
-                                color: AppTheme.textSecondary, fontSize: 12),
-                          ),
-                          trailing:
-                              const Icon(Icons.add_circle_outline, color: AppTheme.brandBlue),
-                          onTap: () => Navigator.pop(context, p.product),
-                        );
-                      },
-                    ),
-            ),
-          ],
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: TextField(
+                  autofocus: false,
+                  onChanged: (v) => setState(() => _search = v),
+                  decoration: InputDecoration(
+                    hintText: "Cari menu...",
+                    prefixIcon: const Icon(Icons.search, color: AppTheme.brandBlue),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    isDense: true,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: _body(products, catalog, scrollController),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _body(
+    List<Product> products,
+    ProductPaginationState catalog,
+    ScrollController scrollController,
+  ) {
+    if (catalog.loading && catalog.allItems.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (products.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            _search.trim().isNotEmpty
+                ? "Menu itu tidak bisa digratiskan, atau harganya di atas "
+                    "${formatRupiah(widget.maxPrice)}."
+                : "Tidak ada menu XL yang bisa digratiskan — semuanya di atas "
+                    "${formatRupiah(widget.maxPrice)} atau sedang habis.",
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppTheme.textSecondary),
+          ),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      controller: scrollController,
+      itemCount: products.length,
+      separatorBuilder: (_, __) =>
+          const Divider(height: 1, color: AppTheme.borderLight),
+      itemBuilder: (context, i) {
+        final p = products[i];
+        return ListTile(
+          title: Text(p.name,
+              style: const TextStyle(
+                  fontWeight: FontWeight.w600, color: AppTheme.textPrimary)),
+          subtitle: Text(
+            p.hasVariants
+                ? "${formatRupiah(_lowestPrice(p, widget.maxPrice))} • pilih varian"
+                : formatRupiah(p.sellingPriceNum),
+            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+          ),
+          trailing: const Icon(Icons.add_circle_outline, color: AppTheme.brandBlue),
+          onTap: () => Navigator.pop(context, p),
         );
       },
     );

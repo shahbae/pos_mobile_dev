@@ -10,7 +10,6 @@ import 'package:pos_mobile/data/models/qris_payment_model.dart';
 import 'package:pos_mobile/presentation/pages/product_transactions/qris_payment_page.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/presentation/providers/product_pagination_provider.dart';
-import 'package:pos_mobile/presentation/providers/product_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_transaction_provider.dart';
 import 'package:pos_mobile/presentation/providers/plastic_provider.dart';
 import 'package:pos_mobile/presentation/providers/sedotan_provider.dart';
@@ -1016,10 +1015,11 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     );
   }
 
-  /// Pilih bonus gratis dari ISI KERANJANG — produk di luar keranjang tidak
-  /// boleh, dan yang boleh hanya produk dengan harga terendah di keranjang
-  /// (aturan BE). Variannya tetap kasir yang pilih, jadi boleh menggratiskan
-  /// varian lain dari produk yang sama selama masih XL dan ≤ harga terendah.
+  /// Pilih bonus gratis dari MENU — tidak harus yang dipesan. Keranjang cuma
+  /// menentukan batas harganya: bonus tidak boleh lebih mahal dari minuman
+  /// termurah yang dibeli (aturan BE `ErrPOSFreeItemNotCheapest`). Di bawah
+  /// batas itu pelanggan bebas memilih, termasuk menu yang tidak dia pesan —
+  /// jadi pembeli kopi/milkshake pun tetap kebagian teh gratis.
   Future<void> _pickFreeItem() async {
     final items = ref.read(productTransactionProvider).items;
     if (items.isEmpty) {
@@ -1039,36 +1039,22 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     final cheapest =
         items.map((i) => i.unitPrice).reduce((a, b) => a < b ? a : b);
 
-    // Yang boleh digratiskan hanya baris keranjang yang kategorinya `freeable`
-    // DAN harganya sama dengan item termurah tadi — sama seperti yang divalidasi
-    // BE (ErrPOSFreeItemNotCheapest + kategori freeable).
-    final eligible = items
-        .where((i) => i.product.categoryFreeable && i.unitPrice <= cheapest)
-        .toList();
-    if (eligible.isEmpty) {
-      _toast("Item termurah di keranjang tidak bisa digratiskan.", Colors.orange);
-      return;
-    }
-
-    final product = await showFreeItemPicker(context, items: eligible);
+    final product = await showFreeItemPicker(context, maxPrice: cheapest);
     if (product == null || !mounted) return;
 
-    // Varian bonus tidak harus sama dengan yang dipesan — mis. pesan "XL Normal",
-    // bonusnya "XL Less sugar". Yang wajib: tetap XL dan ≤ harga terendah.
+    // Varian bonus bebas selama masih XL, siap dibuat, dan ≤ batas harga.
+    // Variannya diambil dari katalog yang sudah dimuat — di situ sudah ada
+    // penanda siap per cabang, jadi tidak perlu memanggil API varian lagi dan
+    // menu yang bahannya habis tidak ikut ditawarkan.
     ProductVariant? variant;
     if (product.hasVariants) {
-      List<ProductVariant> variants = const [];
-      try {
-        variants = await ref.read(productVariantsProvider(product.id).future);
-      } catch (_) {
-        variants = const [];
-      }
-      if (!mounted) return;
-      variants = variants
-          .where((v) => nameHasXL(v.name) && v.sellingPriceNum <= cheapest)
+      final variants = product.variants
+          .where((v) =>
+              nameHasXL(v.name) && v.ready && v.sellingPriceNum <= cheapest)
           .toList();
       if (variants.isEmpty) {
-        _toast("Tidak ada varian XL yang memenuhi batas harga item gratis.", Colors.orange);
+        _toast("Tidak ada varian XL yang siap dan memenuhi batas harga.",
+            Colors.orange);
         return;
       }
       variant = await showVariantPicker(
