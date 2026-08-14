@@ -32,6 +32,7 @@ class LeaderShiftReport {
   final int totalItems; // total item terjual
   final int transactionCount; // trafik
   final num cashSales; // cash tanpa modal awal
+  final num qrisSales; // penjualan lewat QRIS
   final num expenses; // pengeluaran saat shift buka
   final num net; // total_sales - expenses
   final num? closingCash; // kas fisik saat tutup; null selama shift buka
@@ -49,6 +50,7 @@ class LeaderShiftReport {
     required this.totalItems,
     required this.transactionCount,
     required this.cashSales,
+    required this.qrisSales,
     required this.expenses,
     required this.net,
     required this.closingCash,
@@ -70,6 +72,7 @@ class LeaderShiftReport {
       totalItems: _int(json['total_items']),
       transactionCount: _int(json['transaction_count']),
       cashSales: _num(json['cash_sales']),
+      qrisSales: _num(json['qris_sales']),
       expenses: _num(json['expenses']),
       net: _num(json['net']),
       closingCash: _numOrNull(json['closing_cash']),
@@ -87,6 +90,7 @@ class LeaderDailyTotals {
   final num expenses;
   final num net;
   final num totalCash; // Σ cash_sales (tanpa modal awal)
+  final num totalQris; // Σ qris_sales
   final num openingCash; // Σ modal awal
   final num closingCash; // Σ kas fisik — hanya shift yang sudah ditutup
   final num expectedCash; // Σ kas seharusnya
@@ -99,6 +103,7 @@ class LeaderDailyTotals {
     required this.expenses,
     required this.net,
     required this.totalCash,
+    required this.totalQris,
     required this.openingCash,
     required this.closingCash,
     required this.expectedCash,
@@ -113,6 +118,7 @@ class LeaderDailyTotals {
       expenses: _num(json['expenses']),
       net: _num(json['net']),
       totalCash: _num(json['total_cash']),
+      totalQris: _num(json['total_qris']),
       openingCash: _num(json['opening_cash']),
       closingCash: _num(json['closing_cash']),
       expectedCash: _num(json['expected_cash']),
@@ -127,6 +133,7 @@ class LeaderDailyTotals {
     expenses: 0,
     net: 0,
     totalCash: 0,
+    totalQris: 0,
     openingCash: 0,
     closingCash: 0,
     expectedCash: 0,

@@ -312,6 +312,7 @@ class _ShiftCard extends StatelessWidget {
           _line("Item Terjual", "${shift.totalItems} item"),
           _line("Modal Awal", formatRupiah(shift.openingCash)),
           _line("Penjualan Tunai", formatRupiah(shift.cashSales)),
+          _line("Penjualan QRIS", formatRupiah(shift.qrisSales)),
           _line("Pengeluaran", formatRupiah(shift.expenses)),
           const SizedBox(height: 6),
           const Divider(height: 1, color: AppTheme.borderLight),
@@ -489,6 +490,10 @@ class _TotalsCard extends StatelessWidget {
           _line(
             multiDay ? "Total Cash" : "Total Cash (2 Shift)",
             formatRupiah(totals.totalCash),
+          ),
+          _line(
+            multiDay ? "Total QRIS" : "Total QRIS (2 Shift)",
+            formatRupiah(totals.totalQris),
           ),
           _line("Total Modal Awal", formatRupiah(totals.openingCash)),
           _line("Total Kas Seharusnya", formatRupiah(totals.expectedCash)),
