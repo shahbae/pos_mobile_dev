@@ -6,8 +6,11 @@ import 'package:pos_mobile/data/services/api_services.dart';
 import 'package:flutter/foundation.dart';
 
 import 'package:pos_mobile/data/services/api_provider.dart';
+import 'package:pos_mobile/presentation/providers/branch_scope.dart';
 
 final productTransactionRepositoryProvider = Provider<ProductTransactionRepository>((ref) {
+  // Ikut lahir ulang saat pindah cabang — lihat [branchScopeProvider].
+  ref.watch(branchScopeProvider);
   final api = ref.watch(apiProvider);
   return ProductTransactionRepository(api);
 });

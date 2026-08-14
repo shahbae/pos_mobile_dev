@@ -5,8 +5,11 @@ import 'package:pos_mobile/data/models/plastic_stock_movement_model.dart';
 import 'package:pos_mobile/data/repositories/plastic_repository.dart';
 import 'package:pos_mobile/data/services/api_provider.dart';
 import 'package:pos_mobile/presentation/providers/master_data_cache.dart';
+import 'package:pos_mobile/presentation/providers/branch_scope.dart';
 
 final plasticRepositoryProvider = Provider<PlasticRepository>((ref) {
+  // Ikut lahir ulang saat pindah cabang — lihat [branchScopeProvider].
+  ref.watch(branchScopeProvider);
   return PlasticRepository(ref.watch(apiProvider));
 });
 

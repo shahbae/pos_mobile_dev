@@ -2,8 +2,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/repositories/stock_movement_repository.dart';
 import '../../data/services/api_provider.dart';
 import '../../data/models/stock_movement_model.dart';
+import 'package:pos_mobile/presentation/providers/branch_scope.dart';
 
 final stockMovementRepositoryProvider = Provider<StockMovementRepository>((ref) {
+  // Ikut lahir ulang saat pindah cabang — lihat [branchScopeProvider].
+  ref.watch(branchScopeProvider);
   final api = ref.watch(apiProvider);
   return StockMovementRepository(api);
 });

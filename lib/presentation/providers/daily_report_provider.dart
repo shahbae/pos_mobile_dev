@@ -6,8 +6,11 @@ import 'package:pos_mobile/data/models/payments_report_model.dart';
 import 'package:pos_mobile/data/models/stock_alerts_report_model.dart';
 import 'package:pos_mobile/data/repositories/report_repository.dart';
 import 'package:pos_mobile/data/services/api_provider.dart';
+import 'package:pos_mobile/presentation/providers/branch_scope.dart';
 
 final reportRepositoryProvider = Provider<ReportRepository>((ref) {
+  // Ikut lahir ulang saat pindah cabang — lihat [branchScopeProvider].
+  ref.watch(branchScopeProvider);
   final api = ref.watch(apiProvider);
   return ReportRepository(api);
 });

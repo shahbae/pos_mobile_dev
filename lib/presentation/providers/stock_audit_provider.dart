@@ -3,8 +3,11 @@ import 'package:pos_mobile/data/models/stock_audit_model.dart';
 import 'package:pos_mobile/data/repositories/stock_audit_repository.dart';
 import 'package:pos_mobile/data/services/api_provider.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
+import 'package:pos_mobile/presentation/providers/branch_scope.dart';
 
 final stockAuditRepositoryProvider = Provider<StockAuditRepository>((ref) {
+  // Ikut lahir ulang saat pindah cabang — lihat [branchScopeProvider].
+  ref.watch(branchScopeProvider);
   return StockAuditRepository(ref.watch(apiProvider));
 });
 

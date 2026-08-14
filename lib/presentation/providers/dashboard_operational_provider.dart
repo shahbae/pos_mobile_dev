@@ -3,8 +3,11 @@ import 'package:pos_mobile/data/models/dashboard_model.dart';
 import 'package:pos_mobile/data/models/dashboard_operational_model.dart';
 import 'package:pos_mobile/data/repositories/dashboard_repository.dart';
 import 'package:pos_mobile/data/services/api_provider.dart';
+import 'package:pos_mobile/presentation/providers/branch_scope.dart';
 
 final dashboardRepositoryProvider = Provider<DashboardRepository>((ref) {
+  // Ikut lahir ulang saat pindah cabang — lihat [branchScopeProvider].
+  ref.watch(branchScopeProvider);
   final api = ref.watch(apiProvider);
   return DashboardRepository(api);
 });
