@@ -137,6 +137,27 @@ class ThermalPrinterService {
     }
     bytes += g.hr(ch: '=');
 
+    // Nomor antrean — dicetak paling atas dan besar, karena inilah satu-satunya
+    // angka yang dibaca pelanggan dari jauh saat namanya dipanggil. Dilewati
+    // untuk transaksi yang belum punya nomor (QRIS belum lunas, atau nota lama
+    // sebelum fitur ini ada).
+    if (r.hasQueueNo) {
+      bytes += g.text(
+        'ANTRIAN',
+        styles: const PosStyles(align: PosAlign.center),
+      );
+      bytes += g.text(
+        '${r.queueNo}',
+        styles: const PosStyles(
+          align: PosAlign.center,
+          bold: true,
+          height: PosTextSize.size2,
+          width: PosTextSize.size2,
+        ),
+      );
+      bytes += g.hr(ch: '=');
+    }
+
     // Info transaksi
     bytes += g.text('No    : ${r.invoiceNo}');
     if (r.createdAt != null) {

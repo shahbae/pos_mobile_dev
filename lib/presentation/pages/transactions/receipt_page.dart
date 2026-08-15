@@ -174,6 +174,8 @@ class _ReceiptPreview extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 child: Column(
                   children: [
+                    if (receipt.hasQueueNo)
+                      _InfoLine(label: 'Antrian', value: '${receipt.queueNo}'),
                     _InfoLine(label: 'No. Invoice', value: receipt.invoiceNo),
                     if (receipt.createdAt != null)
                       _InfoLine(label: 'Tanggal', value: dateFmt.format(receipt.createdAt!.toLocal())),

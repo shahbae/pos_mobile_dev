@@ -140,6 +140,9 @@ class KitchenOrder {
   /// produknya belum diisi waktu pembuatan, bukan berarti instan.
   final int prepMinutes;
 
+  /// Nomor antrean yang dipanggil — sama dengan yang tercetak di nota.
+  final int queueNo;
+
   /// Janji siap yang dibekukan saat pembayaran. Null = tidak ada estimasi →
   /// jangan tampilkan penanda telat sama sekali.
   final DateTime? estimatedReadyAt;
@@ -155,6 +158,7 @@ class KitchenOrder {
     this.paidAt,
     this.cashierName = '',
     this.prepMinutes = 0,
+    this.queueNo = 0,
     this.estimatedReadyAt,
   });
 
@@ -177,6 +181,7 @@ class KitchenOrder {
           : DateTime.tryParse(rawPaidAt)?.toLocal(),
       cashierName: json['cashier_name']?.toString() ?? '',
       prepMinutes: _toInt(json['prep_minutes']) ?? 0,
+      queueNo: _toInt(json['queue_no']) ?? 0,
       estimatedReadyAt: (rawReadyAt == null || rawReadyAt.isEmpty)
           ? null
           : DateTime.tryParse(rawReadyAt)?.toLocal(),
@@ -195,6 +200,7 @@ class KitchenOrder {
       paidAt: paidAt,
       cashierName: cashierName,
       prepMinutes: prepMinutes,
+      queueNo: queueNo,
       estimatedReadyAt: estimatedReadyAt,
     );
   }
@@ -220,7 +226,14 @@ class KitchenOrder {
   int get totalQty => items.fold(0, (sum, i) => sum + i.qty);
 
   /// Judul kartu: nomor invoice, atau nomor transaksi bila invoice kosong.
-  String get displayNumber => invoiceNo.isNotEmpty ? invoiceNo : '#$id';
+  /// Judul kartu. Nomor antrean didahulukan karena itulah angka yang
+  /// dipanggil ke pelanggan dan yang tercetak besar di notanya — dapur dan
+  /// kasir jadi menyebut angka yang sama. Nomor nota dipakai sebagai cadangan
+  /// untuk pesanan lama yang belum punya nomor antrean.
+  String get displayNumber {
+    if (queueNo > 0) return 'Antrian $queueNo';
+    return invoiceNo.isNotEmpty ? invoiceNo : '#$id';
+  }
 }
 
 int? _toInt(dynamic v) {
