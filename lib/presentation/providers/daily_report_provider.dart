@@ -6,8 +6,11 @@ import 'package:pos_mobile/data/models/payments_report_model.dart';
 import 'package:pos_mobile/data/models/stock_alerts_report_model.dart';
 import 'package:pos_mobile/data/repositories/report_repository.dart';
 import 'package:pos_mobile/data/services/api_provider.dart';
+import 'package:pos_mobile/presentation/providers/branch_scope.dart';
 
 final reportRepositoryProvider = Provider<ReportRepository>((ref) {
+  // Ikut lahir ulang saat pindah cabang — lihat [branchScopeProvider].
+  ref.watch(branchScopeProvider);
   final api = ref.watch(apiProvider);
   return ReportRepository(api);
 });
@@ -23,15 +26,18 @@ final dailyReportProvider = FutureProvider<DailyReportData>((ref) async {
   return repo.getDailyReport(date: date);
 });
 
-final leaderDailyReportDateProvider = StateProvider<DateTime>((ref) {
+/// Rentang tanggal laporan leader (BE 2026-08-03 §2b: `from`/`to` inklusif).
+/// Default: hari ini saja.
+final leaderDailyReportRangeProvider = StateProvider<DateTimeRange>((ref) {
   final now = DateTime.now();
-  return DateTime(now.year, now.month, now.day);
+  final day = DateTime(now.year, now.month, now.day);
+  return DateTimeRange(start: day, end: day);
 });
 
 final leaderDailyReportProvider = FutureProvider<LeaderDailyReport>((ref) async {
-  final date = ref.watch(leaderDailyReportDateProvider);
+  final range = ref.watch(leaderDailyReportRangeProvider);
   final repo = ref.watch(reportRepositoryProvider);
-  return repo.getLeaderDailyReport(date: date);
+  return repo.getLeaderDailyReport(from: range.start, to: range.end);
 });
 
 final stockAlertsReportProvider = FutureProvider<StockAlertsData>((ref) async {

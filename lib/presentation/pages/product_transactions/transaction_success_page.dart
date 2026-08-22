@@ -54,6 +54,17 @@ class _TransactionSuccessPageState extends ConsumerState<TransactionSuccessPage>
     }
   }
 
+  /// Kembali ke daftar produk untuk melayani pelanggan berikutnya — bukan ke
+  /// Beranda, supaya kasir tidak perlu menekan FAB lagi tiap transaksi.
+  ///
+  /// Halaman POS di bawah sini tidak pernah dibuang, jadi kebersihannya
+  /// diurus lewat `posResetSignalProvider` (pencarian, kategori, scroll) dan
+  /// `invalidateAfterTransaction` (katalog + penanda stok) yang sudah dipicu
+  /// dari checkout saat transaksi tercatat.
+  void _finish() {
+    Navigator.of(context).pop();
+  }
+
   void _openManualPrint() {
     Navigator.push(
       context,
@@ -219,7 +230,7 @@ class _TransactionSuccessPageState extends ConsumerState<TransactionSuccessPage>
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: _finish,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppTheme.brandBlue,
                         padding: const EdgeInsets.symmetric(vertical: 20),
@@ -228,7 +239,7 @@ class _TransactionSuccessPageState extends ConsumerState<TransactionSuccessPage>
                         shadowColor: AppTheme.brandBlue.withOpacity(0.4),
                       ),
                       child: const Text(
-                        "Selesai & Ke Beranda",
+                        "Selesai & Transaksi Baru",
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
                       ),
                     ),

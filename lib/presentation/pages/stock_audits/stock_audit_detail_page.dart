@@ -93,15 +93,19 @@ class _StockAuditDetailPageState extends ConsumerState<StockAuditDetailPage> {
 
     setState(() => _approving = true);
     try {
-      await ref.read(stockAuditRepositoryProvider).approveAudit(widget.auditId);
+      final approved = await ref.read(stockAuditRepositoryProvider).approveAudit(widget.auditId);
       ref.invalidate(stockAuditDetailProvider(widget.auditId));
       ref.invalidate(stockAuditListProvider);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Audit disetujui'),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-        ));
+      if (!mounted) return;
+      // Approve tidak pernah gagal karena stok kurang (BE §4), tapi kalau ada
+      // yang mentok di 0 itu harus dilaporkan sekarang juga — bukan cuma
+      // terkubur di daftar item.
+      final short = approved.items.where((it) => it.shortfallQty > 0).length;
+      if (short > 0) {
+        _snack('Audit disetujui. $short item stoknya mentok di 0 — cek rincian di bawah.',
+            Colors.orange);
+      } else {
+        _snack('Audit disetujui', Colors.green);
       }
     } catch (e) {
       if (mounted) {
@@ -206,6 +210,7 @@ class _StockAuditDetailPageState extends ConsumerState<StockAuditDetailPage> {
                   ],
                 ),
               ),
+              _shortfallSummary(audit),
               _lossSummary(audit),
             ],
           ),
@@ -263,6 +268,7 @@ class _StockAuditDetailPageState extends ConsumerState<StockAuditDetailPage> {
                 if (it.lossValue > 0)
                   Text('Rugi ${formatRupiah(it.lossValue)}',
                       style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppTheme.danger)),
+                if (it.shortfallQty > 0) _shortfallNote(it),
               ],
             ),
           ),
@@ -278,6 +284,69 @@ class _StockAuditDetailPageState extends ConsumerState<StockAuditDetailPage> {
       ),
     );
   }
+
+  /// Catatan per item saat koreksi tidak bisa diterapkan penuh (BE §4):
+  /// stok berhenti di 0, sisanya tercatat di `shortfall_qty`. Wajib terlihat —
+  /// kalau disembunyikan, koreksinya jalan diam-diam dan tidak ada yang
+  /// menyelidiki kenapa hitung fisik & catatan penjualan bertentangan.
+  Widget _shortfallNote(StockAuditItem it) => Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.warning_amber_rounded, size: 12, color: Colors.orange),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                'Diminta ${_fmtSigned(it.diff)}, diterapkan '
+                '${_fmtSigned(it.appliedDelta)} — stok berhenti di 0 '
+                '(kurang ${_fmtQty(it.shortfallQty)}).',
+                style: const TextStyle(
+                    fontSize: 10, fontWeight: FontWeight.w700, color: Colors.orange),
+              ),
+            ),
+          ],
+        ),
+      );
+
+  /// Ringkasan bila ada item yang koreksinya tidak terpakai penuh.
+  Widget _shortfallSummary(StockAudit audit) {
+    final affected = audit.items.where((it) => it.shortfallQty > 0).toList();
+    if (affected.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.orange.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.orange.withOpacity(0.35)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
+                const SizedBox(width: 8),
+                Text('${affected.length} item perlu diperiksa',
+                    style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.orange)),
+              ],
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Stok yang harus dikurangi lebih besar dari stok yang tersedia, '
+              'jadi berhenti di 0. Hasil hitung fisik dan catatan penjualan '
+              'saling bertentangan — cek pemakaian di cabang ini.',
+              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _fmtSigned(double v) => v > 0 ? '+${_fmtQty(v)}' : _fmtQty(v);
 
   /// Total estimasi kerugian dari semua item yang stoknya kurang.
   Widget _lossSummary(StockAudit audit) {

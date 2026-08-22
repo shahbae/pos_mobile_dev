@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
+import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/core/utils/location_helper.dart';
 import 'package:pos_mobile/data/models/attendance_model.dart';
 import 'package:pos_mobile/data/models/branch_model.dart';
+import 'package:pos_mobile/data/repositories/attendance_repository.dart';
 import 'package:pos_mobile/presentation/providers/attendance_provider.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/branch_provider.dart';
@@ -15,7 +17,8 @@ import 'package:pos_mobile/theme/app_theme.dart';
 /// Status hari ini menentukan tombol mana yang tampil.
 ///
 /// [isRoot] true bila halaman ini dipakai sebagai layar utama (tanpa tombol
-/// kembali + ada aksi logout). Saat ini selalu dibuka dari menu Pengaturan.
+/// kembali + ada aksi logout) — dipakai role absensi-saja seperti `finance`.
+/// Role lain membukanya dari menu Pengaturan.
 class AttendancePage extends ConsumerStatefulWidget {
   final bool isRoot;
   const AttendancePage({super.key, this.isRoot = false});
@@ -80,11 +83,25 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
   }
 
   Future<void> _checkIn(AttendanceModel? att) async {
-    // Default cabang = cabang aktif user, kecuali user memilih lain.
-    final branchId = _selectedBranchId ?? ref.read(authProvider).branchId;
-    if (branchId == null) {
-      _snack('Pilih cabang terlebih dahulu.', error: true);
-      return;
+    final auth = ref.read(authProvider);
+    final canChooseBranch = canChooseAttendanceBranch(auth.role);
+
+    // Untuk role selain owner/supervisor, BE mengabaikan `branch_id` dan
+    // memakai cabang dari token — kirim null, tapi pastikan user memang punya
+    // cabang supaya tidak kena `403 no branch assigned`.
+    final int? branchId;
+    if (canChooseBranch) {
+      branchId = _selectedBranchId ?? auth.branchId;
+      if (branchId == null) {
+        _snack('Pilih cabang terlebih dahulu.', error: true);
+        return;
+      }
+    } else {
+      if (auth.branchId == null) {
+        _snack(kNoBranchAssignedMsg, error: true);
+        return;
+      }
+      branchId = null;
     }
 
     await _run(() async {
@@ -193,6 +210,11 @@ class _Content extends ConsumerWidget {
     final bottomInset = MediaQuery.of(context).padding.bottom;
     final today = DateFormat('EEEE, d MMMM yyyy', 'id_ID').format(DateTime.now());
 
+    final auth = ref.watch(authProvider);
+    final canChooseBranch = canChooseAttendanceBranch(auth.role);
+    // Cabang wajib ada untuk role yang cabangnya diambil dari token.
+    final noBranch = !canChooseBranch && auth.branchId == null;
+
     final children = <Widget>[
       _DateHeader(dateLabel: today),
       const SizedBox(height: 16),
@@ -201,22 +223,31 @@ class _Content extends ConsumerWidget {
     if (att == null) {
       // Belum check-in hari ini.
       children.addAll([
-        const _InfoBanner(
-          icon: Icons.fingerprint,
-          text: 'Anda belum absen hari ini. Tekan tombol di bawah untuk absen masuk.',
-        ),
+        if (noBranch)
+          const _InfoBanner(
+            icon: Icons.store_mall_directory_outlined,
+            text: kNoBranchAssignedMsg,
+            warning: true,
+          )
+        else
+          const _InfoBanner(
+            icon: Icons.fingerprint,
+            text: 'Anda belum absen hari ini. Tekan tombol di bawah untuk absen masuk.',
+          ),
         const SizedBox(height: 16),
-        _BranchPicker(
-          selected: selectedBranchId ?? ref.watch(authProvider).branchId,
-          onChanged: onBranchChanged,
-        ),
-        const SizedBox(height: 16),
+        if (canChooseBranch) ...[
+          _BranchPicker(
+            selected: selectedBranchId ?? auth.branchId,
+            onChanged: onBranchChanged,
+          ),
+          const SizedBox(height: 16),
+        ],
         _ShiftPicker(selected: selectedShift, onChanged: onShiftChanged),
         const SizedBox(height: 16),
         _ActionButton(
           label: 'Absen Masuk',
           icon: Icons.login,
-          onPressed: onCheckIn,
+          onPressed: noBranch ? null : onCheckIn,
         ),
       ]);
     } else {
@@ -551,12 +582,21 @@ class _InfoBanner extends StatelessWidget {
   final IconData icon;
   final String text;
   final bool success;
-  const _InfoBanner(
-      {required this.icon, required this.text, this.success = false});
+  final bool warning;
+  const _InfoBanner({
+    required this.icon,
+    required this.text,
+    this.success = false,
+    this.warning = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final color = success ? AppTheme.brandBlue : AppTheme.textSecondary;
+    final color = warning
+        ? const Color(0xFFD97706)
+        : success
+            ? AppTheme.brandBlue
+            : AppTheme.textSecondary;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(

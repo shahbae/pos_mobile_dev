@@ -4,8 +4,10 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
 
+import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
+import 'package:pos_mobile/presentation/pages/attendance/attendance_page.dart';
 import 'package:pos_mobile/presentation/pages/dashboard/dashboard_page.dart';
 import 'package:pos_mobile/presentation/pages/login_page.dart';
 
@@ -30,7 +32,11 @@ class MyApp extends ConsumerWidget {
 
     switch (auth.status) {
       case AuthStatus.authenticated:
-        page = const DashboardPage();
+        // Role absensi-saja (finance) langsung mendarat di halaman Absensi;
+        // tidak ada dashboard/menu lain untuknya.
+        page = isAttendanceOnly(auth.role)
+            ? const AttendancePage(isRoot: true)
+            : const DashboardPage();
         break;
 
       case AuthStatus.unauthenticated:

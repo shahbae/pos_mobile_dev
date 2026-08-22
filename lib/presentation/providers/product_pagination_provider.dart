@@ -21,12 +21,34 @@ class ProductPaginationState {
   /// null = tab "Semua".
   final int? categoryId;
 
+  /// Pesan error muat katalog; null bila muat terakhir berhasil.
+  final String? error;
+
   ProductPaginationState({
     this.allItems = const [],
     this.loading = false,
     this.search = "",
     this.categoryId,
+    this.error,
   });
+
+  ProductPaginationState copyWith({
+    List<Product>? allItems,
+    bool? loading,
+    String? search,
+    int? categoryId,
+    bool clearCategory = false,
+    String? error,
+    bool clearError = false,
+  }) {
+    return ProductPaginationState(
+      allItems: allItems ?? this.allItems,
+      loading: loading ?? this.loading,
+      search: search ?? this.search,
+      categoryId: clearCategory ? null : (categoryId ?? this.categoryId),
+      error: clearError ? null : (error ?? this.error),
+    );
+  }
 
   /// Produk setelah difilter kategori + pencarian nama.
   List<Product> get items {
@@ -69,52 +91,47 @@ class ProductPaginationNotifier extends StateNotifier<ProductPaginationState> {
 
   /// Muat seluruh katalog (looping semua halaman). Menu POS biasanya kecil,
   /// jadi cukup sekali muat lalu filter kategori/search di klien.
+  ///
+  /// `loading` WAJIB dikembalikan ke false di jalur gagal juga: kalau satu
+  /// halaman error (jaringan goyang saat ramai) dan flag-nya tertinggal `true`,
+  /// semua panggilan berikutnya ikut ter-skip oleh guard di bawah dan katalog
+  /// beku permanen — kasir cuma lihat stok lama tanpa cara memulihkan.
   Future<void> loadAll() async {
     if (state.loading) return;
-    state = ProductPaginationState(
-      allItems: state.allItems,
-      loading: true,
-      search: state.search,
-      categoryId: state.categoryId,
-    );
+    state = state.copyWith(loading: true, clearError: true);
 
     const pageSize = 50;
     final all = <Product>[];
     var page = 1;
-    while (page <= 100) {
-      final res = await repo.getProducts(page: page, limit: pageSize);
-      all.addAll(res);
-      if (res.length < pageSize) break;
-      page++;
+    try {
+      while (page <= 100) {
+        final res = await repo.getProducts(page: page, limit: pageSize);
+        all.addAll(res);
+        if (res.length < pageSize) break;
+        page++;
+      }
+      // Notifier bisa sudah di-dispose saat request selesai (kasir pindah halaman).
+      if (!mounted) return;
+      state = state.copyWith(allItems: all, loading: false, clearError: true);
+    } catch (e) {
+      if (!mounted) return;
+      // Katalog lama dipertahankan supaya kasir tetap bisa jualan; error
+      // ditampilkan agar jelas datanya belum tentu terbaru.
+      state = state.copyWith(loading: false, error: e.toString());
     }
-
-    state = ProductPaginationState(
-      allItems: all,
-      loading: false,
-      search: state.search,
-      categoryId: state.categoryId,
-    );
   }
 
   void search(String value) {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 250), () {
-      state = ProductPaginationState(
-        allItems: state.allItems,
-        loading: state.loading,
-        search: value,
-        categoryId: state.categoryId,
-      );
+      if (!mounted) return;
+      state = state.copyWith(search: value);
     });
   }
 
+  /// id null = tab "Semua".
   void selectCategory(int? id) {
-    state = ProductPaginationState(
-      allItems: state.allItems,
-      loading: state.loading,
-      search: state.search,
-      categoryId: id,
-    );
+    state = state.copyWith(categoryId: id, clearCategory: id == null);
   }
 
   @override

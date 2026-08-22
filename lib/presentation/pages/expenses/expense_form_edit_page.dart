@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../../../data/models/expense_model.dart';
@@ -24,6 +27,11 @@ class _ExpenseFormEditPageState extends ConsumerState<ExpenseFormEditPage> {
 
   final List<String> _categories = ['operational', 'marketing', 'salary', 'other'];
 
+  /// Foto pengganti. `null` = pertahankan foto bukti lama di server.
+  XFile? _newPhoto;
+  static const _allowedExt = {'jpg', 'jpeg', 'png', 'webp'};
+  static const _maxBytes = 2 * 1024 * 1024; // 2 MB
+
   @override
   void initState() {
     super.initState();
@@ -31,7 +39,15 @@ class _ExpenseFormEditPageState extends ConsumerState<ExpenseFormEditPage> {
     _descController = TextEditingController(text: widget.expense.description ?? '');
     _selectedCategory = widget.expense.category ?? 'operational';
     try {
-      _selectedDate = DateTime.parse(widget.expense.expenseDate ?? DateTime.now().toIso8601String());
+      // `.toLocal()` WAJIB: BE mengirim expense_date sebagai "…T00:00:00+07:00",
+      // dan DateTime.parse mengembalikan DateTime UTC begitu ada offset. Tanpa
+      // dikembalikan ke waktu lokal, DateFormat membaca komponen UTC-nya
+      // (2026-08-13 07:00 WIB → 2026-08-12 17:00 UTC) sehingga tanggal yang
+      // tersimpan mundur satu hari setiap kali pengeluaran diedit — dan
+      // pengeluarannya lenyap dari daftar hari ini.
+      _selectedDate =
+          DateTime.parse(widget.expense.expenseDate ?? DateTime.now().toIso8601String())
+              .toLocal();
     } catch (_) {
       _selectedDate = DateTime.now();
     }
@@ -42,6 +58,63 @@ class _ExpenseFormEditPageState extends ConsumerState<ExpenseFormEditPage> {
     _amountController.dispose();
     _descController.dispose();
     super.dispose();
+  }
+
+  void _snack(String msg, {bool error = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: error ? const Color(0xFFEF4444) : null,
+      ),
+    );
+  }
+
+  Future<void> _pickPhoto(ImageSource source) async {
+    final picked = await ImagePicker().pickImage(
+      source: source,
+      imageQuality: 80, // jaga tetap di bawah 2 MB + konversi HEIC → JPEG (iOS)
+      maxWidth: 1600,
+    );
+    if (picked == null) return;
+
+    final ext = picked.name.split('.').last.toLowerCase();
+    if (!_allowedExt.contains(ext)) {
+      if (!mounted) return;
+      _snack('Format foto harus JPG, PNG, atau WEBP.', error: true);
+      return;
+    }
+    final size = await picked.length();
+    if (size > _maxBytes) {
+      if (!mounted) return;
+      _snack('Ukuran foto maksimal 2 MB.', error: true);
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _newPhoto = picked);
+  }
+
+  Future<void> _choosePhotoSource() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Ambil dari Kamera'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Pilih dari Galeri'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source != null) await _pickPhoto(source);
   }
 
   Future<void> _submit() async {
@@ -58,18 +131,65 @@ class _ExpenseFormEditPageState extends ConsumerState<ExpenseFormEditPage> {
     };
 
     try {
-      await repo.updateExpense(widget.expense.id!, payload);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Berhasil mengupdate pengeluaran')),
+      await repo.updateExpense(
+        widget.expense.id!,
+        payload,
+        photoPath: _newPhoto?.path, // null = foto bukti lama dipertahankan
       );
+      if (!mounted) return;
+      _snack('Berhasil mengupdate pengeluaran');
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal: $e')));
+      _snack('$e', error: true);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  /// Preview: file lokal kalau user sudah memilih foto baru, kalau tidak foto
+  /// bukti lama dari server. Data lama bisa saja belum punya foto.
+  Widget _buildPhotoPreview() {
+    if (_newPhoto != null) {
+      return Image.file(
+        File(_newPhoto!.path),
+        width: double.infinity,
+        height: 180,
+        fit: BoxFit.cover,
+      );
+    }
+    final url = widget.expense.photoUrl;
+    if (url == null) return _photoPlaceholder('Belum ada foto bukti');
+    return Image.network(
+      url,
+      width: double.infinity,
+      height: 180,
+      fit: BoxFit.cover,
+      loadingBuilder: (ctx, child, progress) => progress == null
+          ? child
+          : Container(
+              height: 180,
+              color: Colors.grey.shade100,
+              child: const Center(child: CircularProgressIndicator()),
+            ),
+      errorBuilder: (ctx, _, __) => _photoPlaceholder('Foto gagal dimuat'),
+    );
+  }
+
+  Widget _photoPlaceholder(String label) {
+    return Container(
+      width: double.infinity,
+      height: 180,
+      color: const Color(0xFFF9FAFB),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.image_outlined, color: Colors.grey.shade400, size: 32),
+          const SizedBox(height: 8),
+          Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+        ],
+      ),
+    );
   }
 
   Future<void> _pickDate() async {
@@ -197,6 +317,44 @@ class _ExpenseFormEditPageState extends ConsumerState<ExpenseFormEditPage> {
                           focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: cs.primary, width: 1.6)),
                         ),
                       ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // ── FOTO BUKTI (ganti, tidak bisa dihapus) ──
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE5E7EB))),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Foto Bukti', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
+                      const SizedBox(height: 4),
+                      Text(
+                        _newPhoto != null
+                            ? 'Foto baru akan menggantikan bukti lama.'
+                            : 'Biarkan kosong untuk mempertahankan foto lama.',
+                        style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                      ),
+                      const SizedBox(height: 12),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: _buildPhotoPreview(),
+                      ),
+                      const SizedBox(height: 10),
+                      TextButton.icon(
+                        onPressed: _loading ? null : _choosePhotoSource,
+                        icon: const Icon(Icons.swap_horiz, size: 18),
+                        label: Text(_newPhoto == null ? 'Ganti Foto' : 'Pilih Foto Lain'),
+                      ),
+                      if (_newPhoto != null)
+                        TextButton.icon(
+                          onPressed: _loading ? null : () => setState(() => _newPhoto = null),
+                          icon: const Icon(Icons.undo, size: 18),
+                          label: const Text('Batal ganti, pakai foto lama'),
+                        ),
                     ],
                   ),
                 ),

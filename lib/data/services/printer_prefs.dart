@@ -8,6 +8,8 @@ class PrinterPrefs {
   static const _macKey = 'PRINTER_MAC';
   static const _nameKey = 'PRINTER_NAME';
   static const _autoKey = 'PRINTER_AUTOPRINT';
+  static const _drawerKey = 'PRINTER_OPEN_DRAWER';
+  static const _drawerPinKey = 'PRINTER_DRAWER_PIN';
 
   static Future<void> saveDefault({required String mac, required String name}) async {
     await _storage.write(key: _macKey, value: mac);
@@ -29,5 +31,23 @@ class PrinterPrefs {
   static Future<bool> getAutoPrint() async {
     final v = await _storage.read(key: _autoKey);
     return v == null ? true : v.toLowerCase() == 'true';
+  }
+
+  static Future<void> setOpenDrawer(bool value) =>
+      _storage.write(key: _drawerKey, value: value.toString());
+
+  /// Default OFF — hanya dinyalakan bila laci kas memang terpasang.
+  static Future<bool> getOpenDrawer() async {
+    final v = await _storage.read(key: _drawerKey);
+    return v?.toLowerCase() == 'true';
+  }
+
+  /// Pin kick laci: 2 (umum) atau 5.
+  static Future<void> setDrawerPin(int pin) =>
+      _storage.write(key: _drawerPinKey, value: pin.toString());
+
+  static Future<int> getDrawerPin() async {
+    final v = await _storage.read(key: _drawerPinKey);
+    return v == '5' ? 5 : 2;
   }
 }

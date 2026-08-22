@@ -20,6 +20,20 @@ class Receipt {
   final num change;
   final String paymentMethod;
   final String? paymentRef;
+
+  /// Estimasi waktu pembuatan dalam menit, sudah dibulatkan ke kelipatan 5 oleh
+  /// BE. `0` = produknya belum diisi waktu pembuatan → jangan cetak apa pun.
+  final int estimatedPrepMinutes;
+
+  /// Nomor antrean yang dipanggil ke pelanggan, mulai dari 1 tiap shift.
+  /// 0 = belum punya nomor (QRIS belum lunas) atau transaksi lama sebelum
+  /// fitur ini ada — barisnya tidak dicetak.
+  final int queueNo;
+
+  /// Jam janji siap, dibekukan saat pembayaran (tidak dihitung ulang saat cetak
+  /// ulang). Null = tidak ada estimasi.
+  final DateTime? estimatedReadyAt;
+
   final ReceiptStore store;
 
   Receipt({
@@ -40,8 +54,24 @@ class Receipt {
     required this.change,
     required this.paymentMethod,
     required this.paymentRef,
+    this.estimatedPrepMinutes = 0,
+    this.queueNo = 0,
+    this.estimatedReadyAt,
     required this.store,
   });
+
+  /// Pembayaran tunai. BE bisa mengirim 'cash'/'CASH', UI lama kirim 'tunai'.
+  bool get isCashPayment {
+    final m = paymentMethod.trim().toLowerCase();
+    return m == 'cash' || m == 'tunai';
+  }
+
+  /// Baris estimasi hanya dicetak bila kedua nilainya terisi. Jangan pernah
+  /// menampilkan "0 menit" / "siap sekarang" — itu artinya produknya memang
+  /// belum diisi waktu pembuatan, bukan pesanannya instan.
+  bool get hasEstimate => estimatedReadyAt != null && estimatedPrepMinutes > 0;
+
+  bool get hasQueueNo => queueNo > 0;
 
   factory Receipt.fromJson(Map<String, dynamic> json) {
     final data = (json['data'] is Map) ? json['data'] as Map<String, dynamic> : json;
@@ -70,6 +100,10 @@ class Receipt {
       change: _num(data['change']),
       paymentMethod: data['payment_method']?.toString() ?? '-',
       paymentRef: data['payment_ref']?.toString(),
+      estimatedPrepMinutes: _num(data['estimated_prep_minutes']).toInt(),
+      queueNo: _num(data['queue_no']).toInt(),
+      estimatedReadyAt:
+          DateTime.tryParse(data['estimated_ready_at']?.toString() ?? ''),
       store: ReceiptStore.fromJson((data['store'] as Map<String, dynamic>?) ?? const {}),
     );
   }

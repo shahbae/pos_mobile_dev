@@ -100,6 +100,12 @@ class ProductDetailPage extends ConsumerWidget {
                         product.freeToppingSlots > 0
                             ? "${product.freeToppingSlots} topping"
                             : "Tidak ada"),
+                    // Dipakai BE untuk menghitung estimasi siap di nota.
+                    // Pengisiannya lewat web admin, di sini hanya info.
+                    _row("Waktu Pembuatan",
+                        product.prepMinutes > 0
+                            ? "${product.prepMinutes} menit"
+                            : "Belum diatur"),
                     _row("Dibuat", _formatDate(product.createdAt)),
                   ],
                 ),
@@ -111,7 +117,10 @@ class ProductDetailPage extends ConsumerWidget {
             // =====================
             // VARIASI / UKURAN
             // =====================
-            _VariantsSection(productId: product.id),
+            _VariantsSection(
+              productId: product.id,
+              productPrepMinutes: product.prepMinutes,
+            ),
 
                   ],
                 ),
@@ -173,7 +182,14 @@ class ProductDetailPage extends ConsumerWidget {
 /// Bagian daftar variasi/ukuran produk (read-only) di halaman detail.
 class _VariantsSection extends ConsumerWidget {
   final int productId;
-  const _VariantsSection({required this.productId});
+
+  /// Nilai produk induk — dipakai bila varian tidak punya override.
+  final int productPrepMinutes;
+
+  const _VariantsSection({
+    required this.productId,
+    required this.productPrepMinutes,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -231,13 +247,28 @@ class _VariantsSection extends ConsumerWidget {
                               size: 18, color: theme.colorScheme.primary),
                           const SizedBox(width: 12),
                           Expanded(
-                            child: Text(
-                              variants[i].name,
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.grey.shade900,
-                              ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  variants[i].name,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey.shade900,
+                                  ),
+                                ),
+                                if (variants[i]
+                                        .effectivePrepFor(productPrepMinutes) >
+                                    0)
+                                  Text(
+                                    '${variants[i].effectivePrepFor(productPrepMinutes)} menit',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
                           Text(

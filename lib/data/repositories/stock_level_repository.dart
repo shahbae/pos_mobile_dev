@@ -9,11 +9,45 @@ class StockLevelRepository {
 
   /// Daftar stok level per material (BE sudah material-level).
   Future<List<StockLevelModel>> getMaterialStockLevels() async {
-    final res = await api.dio.get('/stock-levels');
-    debugPrint('[StockLevelRepo] levels status=${res.statusCode} body=${res.data}');
-    final data = res.data['data'];
-    if (data == null || data is! List) return [];
-    return data.map((e) => StockLevelModel.fromJson(e)).toList();
+    try {
+      final res = await api.dio.get('/stock-levels');
+      debugPrint('[StockLevelRepo] levels status=${res.statusCode} body=${res.data}');
+      final data = res.data['data'];
+      if (data == null || data is! List) return [];
+      return data.map((e) => StockLevelModel.fromJson(e)).toList();
+    } on DioException catch (e) {
+      debugPrint('[StockLevelRepo] levels FAILED type=${e.type} '
+          'status=${e.response?.statusCode} body=${e.response?.data} err=${e.error}');
+      throw _mapError(e, 'stok material');
+    }
+  }
+
+  /// DioException → pesan siap tampil (+ kode status supaya mudah dilacak).
+  static String _mapError(DioException e, String what) {
+    switch (e.type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.receiveTimeout:
+      case DioExceptionType.sendTimeout:
+        return 'Koneksi timeout saat memuat $what. Periksa jaringan lalu coba lagi.';
+      case DioExceptionType.connectionError:
+      case DioExceptionType.unknown:
+        return 'Tidak bisa terhubung ke server. Periksa jaringan lalu coba lagi.';
+      default:
+        break;
+    }
+    final status = e.response?.statusCode;
+    final d = e.response?.data;
+    final msg = (d is Map ? (d['message'] ?? d['error']) : null)?.toString();
+    if (status == 401) return 'Sesi berakhir. Silakan login ulang.';
+    if (status == 403) {
+      return msg != null && msg.toLowerCase().contains('branch')
+          ? 'Akun belum di-assign ke cabang.'
+          : 'Akun ini tidak punya akses ke $what.';
+    }
+    if (status != null && status >= 500) {
+      return 'Server bermasalah saat memuat $what (500). Coba lagi sebentar lagi.';
+    }
+    return msg ?? 'Gagal memuat $what (${status ?? e.message}).';
   }
 
   /// Set stok material ke nilai absolut. POST /stock/adjust

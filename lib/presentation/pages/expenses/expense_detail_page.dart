@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/auth/role_access.dart';
 import '../../../data/models/expense_model.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/expense_provider.dart';
 import '../../../utils/currency.dart';
 import 'expense_form_edit_page.dart';
@@ -15,6 +17,7 @@ class ExpenseDetailPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final expenseAsync = ref.watch(expenseDetailProvider(expenseId));
+    final canManage = canManageExpense(ref.watch(authProvider).role);
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
@@ -24,7 +27,7 @@ class ExpenseDetailPage extends ConsumerWidget {
         elevation: 0,
         actions: [
           expenseAsync.maybeWhen(
-            data: (exp) => exp != null
+            data: (exp) => exp != null && canManage
                 ? Row(
                     children: [
                       IconButton(
@@ -278,7 +281,9 @@ class ExpenseDetailPage extends ConsumerWidget {
         Navigator.pop(context, true);
       } catch (e) {
         if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal hapus: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e'), backgroundColor: const Color(0xFFEF4444)),
+        );
       }
     }
   }

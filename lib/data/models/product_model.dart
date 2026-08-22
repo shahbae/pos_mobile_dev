@@ -23,6 +23,10 @@ class Product {
   /// `null` diperlakukan "boleh dijual".
   final bool? productReady;
 
+  /// Waktu pembuatan per unit (menit, 0–240). `0` = tidak ikut estimasi siap.
+  /// Diisi dari web admin — POS mobile hanya menampilkannya.
+  final int prepMinutes;
+
   final String? createdAt;
 
   Product({
@@ -42,6 +46,7 @@ class Product {
     this.hasVariants = false,
     this.variants = const [],
     this.productReady,
+    this.prepMinutes = 0,
     this.createdAt,
   });
 
@@ -80,6 +85,7 @@ class Product {
       hasVariants: j['has_variants'] as bool? ?? variants.isNotEmpty,
       variants: variants,
       productReady: j['product_ready'] as bool?,
+      prepMinutes: (j['prep_minutes'] as num?)?.toInt() ?? 0,
       createdAt: j['created_at'],
     );
   }

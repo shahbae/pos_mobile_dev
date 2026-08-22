@@ -6,8 +6,11 @@ import 'package:pos_mobile/data/services/api_services.dart';
 import 'package:flutter/foundation.dart';
 
 import 'package:pos_mobile/data/services/api_provider.dart';
+import 'package:pos_mobile/presentation/providers/branch_scope.dart';
 
 final productTransactionRepositoryProvider = Provider<ProductTransactionRepository>((ref) {
+  // Ikut lahir ulang saat pindah cabang — lihat [branchScopeProvider].
+  ref.watch(branchScopeProvider);
   final api = ref.watch(apiProvider);
   return ProductTransactionRepository(api);
 });
@@ -75,6 +78,45 @@ class ProductTransactionRepository {
       final raw = (data is Map) ? (data['message'] ?? data['error']) : null;
       throw _mapError(raw?.toString(), e.response?.statusCode, e.message);
     }
+  }
+
+  /// Konfirmasi manual oleh kasir (mode `manual`, saat `manual_confirm == true`).
+  /// Sukses → status `paid` beserta receipt. Gagal → [QrisConfirmException]
+  /// dengan sebab yang sudah dipetakan (docs/api-qris-manual-fe.md §2).
+  Future<QrisStatus> confirmQris(String paymentRef) async {
+    try {
+      final res = await api.dio.post('/qris-payments/$paymentRef/confirm');
+      final data = res.data['data'];
+      if (data is! Map) throw 'Data konfirmasi tidak ditemukan';
+      return QrisStatus.fromJson(Map<String, dynamic>.from(data));
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      final raw = (data is Map) ? (data['message'] ?? data['error']) : null;
+      throw _mapConfirmError(raw?.toString(), e.response?.statusCode);
+    }
+  }
+
+  QrisConfirmException _mapConfirmError(String? raw, int? status) {
+    final msg = raw?.trim() ?? '';
+    final key = msg.toLowerCase();
+    if (status == 404) {
+      return QrisConfirmException(
+          QrisConfirmFailure.notFound, 'Pembayaran tidak ditemukan');
+    }
+    if (key.contains('otomatis')) {
+      return QrisConfirmException(QrisConfirmFailure.gatewayAuto,
+          msg.isEmpty ? 'Pembayaran dikonfirmasi otomatis oleh gateway' : msg);
+    }
+    if (key.contains('kedaluwarsa') || key.contains('expired')) {
+      return QrisConfirmException(QrisConfirmFailure.expired,
+          msg.isEmpty ? 'QR sudah kedaluwarsa' : msg);
+    }
+    if (key.contains('menunggu konfirmasi')) {
+      return QrisConfirmException(QrisConfirmFailure.notPending,
+          msg.isEmpty ? 'Pembayaran sudah tidak menunggu konfirmasi' : msg);
+    }
+    return QrisConfirmException(QrisConfirmFailure.other,
+        msg.isEmpty ? 'Gagal mengonfirmasi pembayaran ($status)' : msg);
   }
 
   /// Batalkan QRIS yang masih pending. Return status akhir dari BE

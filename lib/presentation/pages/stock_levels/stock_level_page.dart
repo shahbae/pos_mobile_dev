@@ -31,7 +31,22 @@ class StockLevelPage extends ConsumerWidget {
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => ListView(children: [
             const SizedBox(height: 120),
-            Center(child: Text('Gagal memuat stok:\n$e', textAlign: TextAlign.center)),
+            const Icon(Icons.cloud_off_rounded, size: 48, color: AppTheme.textSecondary),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Text('$e',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AppTheme.textSecondary)),
+            ),
+            const SizedBox(height: 16),
+            Center(
+              child: OutlinedButton.icon(
+                onPressed: () => ref.invalidate(materialStockLevelsProvider),
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Coba lagi'),
+              ),
+            ),
           ]),
           data: (levels) {
             // Fallback nama/unit bila response lama belum meng-enrich name/unit.

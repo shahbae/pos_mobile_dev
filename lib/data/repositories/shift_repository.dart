@@ -4,8 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/data/models/shift_model.dart';
 import 'package:pos_mobile/data/services/api_provider.dart';
 import 'package:pos_mobile/data/services/api_services.dart';
+import 'package:pos_mobile/presentation/providers/branch_scope.dart';
 
 final shiftRepositoryProvider = Provider<ShiftRepository>((ref) {
+  // Ikut lahir ulang saat pindah cabang — lihat [branchScopeProvider].
+  ref.watch(branchScopeProvider);
   return ShiftRepository(ref.watch(apiProvider));
 });
 

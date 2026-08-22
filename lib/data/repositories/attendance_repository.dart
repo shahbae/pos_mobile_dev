@@ -4,6 +4,11 @@ import 'package:flutter/foundation.dart';
 import '../models/attendance_model.dart';
 import '../services/api_services.dart';
 
+/// Pesan untuk `403 no branch assigned` — user belum ditugaskan ke cabang.
+/// Sengaja bukan "akses ditolak": ini soal assignment, bukan role.
+const kNoBranchAssignedMsg =
+    'Akun Anda belum ditugaskan ke cabang. Hubungi owner untuk assign cabang.';
+
 class AttendanceRepository {
   final ApiService api;
   AttendanceRepository(this.api);
@@ -17,17 +22,21 @@ class AttendanceRepository {
     return AttendanceModel.fromJson(Map<String, dynamic>.from(data));
   }
 
-  /// Check-in: kirim selfie + GPS + cabang aktif + shift. multipart/form-data.
+  /// Check-in: kirim selfie + GPS + shift. multipart/form-data.
+  ///
+  /// [branchId] hanya dikirim untuk owner & supervisor — untuk role lain BE
+  /// mengabaikannya dan selalu memakai cabang dari token
+  /// (docs/api-finance-absensi-fe.md §2), jadi kirim `null` saja.
   Future<AttendanceModel> checkIn({
     required String photoPath,
-    required int branchId,
+    int? branchId,
     required String shift,
     required double latitude,
     required double longitude,
   }) async {
     final form = FormData.fromMap({
       'photo': await _photoPart(photoPath),
-      'branch_id': branchId,
+      if (branchId != null) 'branch_id': branchId,
       'shift': shift,
       'latitude': latitude,
       'longitude': longitude,
@@ -84,6 +93,8 @@ class AttendanceRepository {
       if (raw.contains('already checked out')) return 'Anda sudah absen pulang hari ini.';
       if (raw.contains('not checked in')) return 'Anda belum absen masuk hari ini.';
       if (raw.contains('branch is not active')) return 'Cabang sedang tidak aktif.';
+      // Bukan masalah role: user belum di-assign cabang oleh owner.
+      if (raw.contains('no branch assigned')) return kNoBranchAssignedMsg;
       if (raw.contains('branch')) return 'Cabang tidak valid.';
       if (raw.contains('size') || raw.contains('5mb') || raw.contains('large')) {
         return 'Ukuran foto maksimal 5 MB.';

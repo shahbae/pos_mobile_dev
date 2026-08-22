@@ -1,32 +1,15 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:pos_mobile/data/models/product_model.dart';
 import 'package:pos_mobile/data/models/product_variant_model.dart';
 import 'package:pos_mobile/data/repositories/product_repository.dart';
 import 'package:pos_mobile/data/services/api_provider.dart';
+import 'package:pos_mobile/presentation/providers/branch_scope.dart';
 
 /// Repository Provider
 final productRepositoryProvider = Provider<ProductRepository>((ref) {
+  // Ikut lahir ulang saat pindah cabang — lihat [branchScopeProvider].
+  ref.watch(branchScopeProvider);
   final api = ref.watch(apiProvider);
   return ProductRepository(api);
-});
-
-/// Provider list produk (support search param)
-final productListProvider = FutureProvider.family<List<Product>, String?>((
-  ref,
-  search,
-) async {
-  final repo = ref.watch(productRepositoryProvider);
-
-  return repo.getProducts(page: 1, limit: 10, search: search ?? "");
-});
-
-/// Daftar produk `freeable` (untuk picker item gratis promo), bisa dicari.
-/// Hanya produk dari kategori freeable yang dikembalikan.
-final freeableProductsProvider =
-    FutureProvider.autoDispose.family<List<Product>, String?>((ref, search) async {
-  final repo = ref.watch(productRepositoryProvider);
-  final list = await repo.getProducts(page: 1, limit: 50, search: search ?? "");
-  return list.where((p) => p.categoryFreeable).toList();
 });
 
 /// Daftar variant aktif sebuah produk (dipakai POS saat produk ditekan).

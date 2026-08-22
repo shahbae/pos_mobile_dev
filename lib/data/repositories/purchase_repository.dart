@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:intl/intl.dart';
 import '../services/api_services.dart';
 import '../models/purchase_model.dart';
 
@@ -7,10 +8,19 @@ class PurchaseRepository {
   final ApiService api;
   PurchaseRepository(this.api);
 
+  static final _dayFmt = DateFormat('yyyy-MM-dd');
+
+  static String _day(DateTime d) => _dayFmt.format(DateTime(d.year, d.month, d.day));
+
+  /// [from]/[to] adalah tanggal kalender di timezone app (Asia/Jakarta) dan
+  /// **inklusif** di kedua ujung — BE 2026-08-03 §1 memperbaiki parsing yang
+  /// dulu memakai UTC sehingga jendela filternya bergeser 7 jam.
   Future<List<PurchaseModel>> getPurchases({
     int page = 1,
     int limit = 10,
     String? search,
+    DateTime? from,
+    DateTime? to,
   }) async {
     final res = await api.dio.get(
       '/purchases',
@@ -18,6 +28,8 @@ class PurchaseRepository {
         'page': page,
         'limit': limit,
         if (search != null && search.isNotEmpty) 'search': search,
+        if (from != null) 'from': _day(from),
+        if (to != null) 'to': _day(to),
       },
     );
 

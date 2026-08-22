@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pos_mobile/data/models/branch_model.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/branch_provider.dart';
-import 'package:pos_mobile/presentation/providers/dashboard_operational_provider.dart';
+import 'package:pos_mobile/presentation/providers/dashboard_index_provider.dart';
+import 'package:pos_mobile/presentation/providers/product_transaction_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
 class BranchSwitchSheet extends ConsumerStatefulWidget {
@@ -16,6 +18,10 @@ class _BranchSwitchSheetState extends ConsumerState<BranchSwitchSheet> {
   bool _switching = false;
   String? _error;
 
+  /// Cabang yang sedang dituju — dipakai supaya spinner muncul di baris yang
+  /// ditekan, bukan di cabang yang masih aktif.
+  int? _targetBranchId;
+
   Future<void> _onSelect(int branchId) async {
     final currentBranchId = ref.read(authProvider).branchId;
     if (branchId == currentBranchId) {
@@ -23,23 +29,66 @@ class _BranchSwitchSheetState extends ConsumerState<BranchSwitchSheet> {
       return;
     }
 
+    // Keranjang milik cabang lama: produk, harga, dan stoknya tidak berlaku di
+    // cabang baru. Dibuang, tapi kasir dikasih tahu dulu supaya tidak kaget
+    // kehilangan pesanan yang sedang disusun.
+    final cart = ref.read(productTransactionProvider);
+    if (cart.items.isNotEmpty) {
+      final lanjut = await _confirmDiscardCart(cart.items.length);
+      if (lanjut != true || !mounted) return;
+    }
+
     setState(() {
       _switching = true;
+      _targetBranchId = branchId;
       _error = null;
     });
 
     try {
+      ref.read(productTransactionProvider.notifier).clearCart();
+      // switchBranch menaikkan branchScopeProvider, yang merontokkan seluruh
+      // data cabang lama sekaligus — lihat providers/branch_scope.dart.
       await ref.read(branchSwitchProvider.notifier).switchBranch(branchId);
-      ref.invalidate(dashboardOperationalProvider);
-      if (mounted) Navigator.pop(context);
+      if (!mounted) return;
+
+      // Pulang ke Beranda: halaman yang sedang terbuka bisa saja menampilkan
+      // detail milik cabang lama, dan menutupnya lebih aman daripada
+      // membiarkannya memuat ulang dengan id yang sudah tidak relevan.
+      ref.read(dashboardIndexProvider.notifier).state = 0;
+      Navigator.of(context).popUntil((route) => route.isFirst);
     } catch (e) {
       if (mounted) {
         setState(() {
           _switching = false;
+          _targetBranchId = null;
           _error = e.toString();
         });
       }
     }
+  }
+
+  Future<bool?> _confirmDiscardCart(int itemCount) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Keranjang akan dikosongkan'),
+        content: Text(
+          'Ada $itemCount item di keranjang yang belum dibayar. Item itu milik '
+          'cabang saat ini dan akan dibuang kalau Anda pindah cabang.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: AppTheme.danger),
+            child: const Text('Pindah & Kosongkan'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -49,6 +98,63 @@ class _BranchSwitchSheetState extends ConsumerState<BranchSwitchSheet> {
     final accent = Theme.of(context).colorScheme.primary;
     final bottomInset = MediaQuery.of(context).padding.bottom;
 
+    // Tombol kembali dimatikan selama pindah: membatalkan di tengah jalan
+    // meninggalkan token cabang baru dengan data cabang lama di layar.
+    return PopScope(
+      canPop: !_switching,
+      child: Stack(
+        children: [
+          _sheetBody(branchAsync, currentBranchId, accent, bottomInset),
+          if (_switching) _switchingOverlay(accent),
+        ],
+      ),
+    );
+  }
+
+  /// Menutup seluruh sheet selama data cabang lama dibuang dan cabang baru
+  /// dimuat, supaya kasir tidak menekan cabang lain di tengah proses.
+  Widget _switchingOverlay(Color accent) {
+    return Positioned.fill(
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        child: Container(
+          color: Colors.white.withOpacity(0.92),
+          alignment: Alignment.center,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(strokeWidth: 2.5, color: accent),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Menyiapkan data cabang…',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Data cabang sebelumnya sedang dibersihkan.',
+                style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sheetBody(
+    AsyncValue<List<BranchModel>> branchAsync,
+    int? currentBranchId,
+    Color accent,
+    double bottomInset,
+  ) {
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -198,7 +304,7 @@ class _BranchSwitchSheetState extends ConsumerState<BranchSwitchSheet> {
                                 ),
                               ),
                             ),
-                            if (_switching && isActive)
+                            if (_switching && branch.id == _targetBranchId)
                               SizedBox(
                                 width: 20,
                                 height: 20,

@@ -39,15 +39,24 @@ final transactionHistoryProvider =
 class TransactionHistoryNotifier extends StateNotifier<TransactionHistoryState> {
   final TransactionRepository repo;
 
+  /// Penanda permintaan aktif. Setiap `load` menaikkannya; respons dari
+  /// permintaan lama yang datang belakangan dibuang supaya tidak menimpa
+  /// hasil refresh yang lebih baru.
+  int _reqId = 0;
+
   TransactionHistoryNotifier(this.repo) : super(TransactionHistoryState());
 
   String _formatDate(DateTime date) {
     return "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
   }
 
+  /// `reset: true` (tarik-refresh) selalu dijalankan, bahkan saat masih ada
+  /// permintaan berjalan — kalau ditolak diam-diam, kasir menarik refresh dan
+  /// tidak terjadi apa-apa, persis keluhan "datanya masih yang lama".
   Future<void> load({bool reset = false}) async {
-    if (state.loading || (!state.hasMore && !reset)) return;
+    if (!reset && (state.loading || !state.hasMore)) return;
 
+    final req = ++_reqId;
     final page = reset ? 1 : state.page;
     state = state.copyWith(loading: true);
 
@@ -65,20 +74,30 @@ class TransactionHistoryNotifier extends StateNotifier<TransactionHistoryState> 
 
       // Provider autoDispose bisa sudah di-dispose saat request async selesai
       // (mis. user pindah halaman) — jangan sentuh state kalau sudah mati.
-      if (!mounted) return;
+      // Respons usang (sudah ada load lebih baru) juga diabaikan.
+      if (!mounted || req != _reqId) return;
 
       // Pengaman: pastikan hanya POS yang tampil walau server mengabaikan
-      // filter `type`. hasMore tetap dihitung dari jumlah baris mentah/halaman.
+      // filter `type`. hasMore dihitung dari jumlah baris mentah/halaman
+      // (itu yang menentukan ada-tidaknya halaman berikutnya di server).
       final posItems = result.items.where((t) => t.isPos).toList();
+      final hasMore = result.items.length == 20;
 
       state = state.copyWith(
         items: reset ? posItems : [...state.items, ...posItems],
         loading: false,
-        hasMore: result.items.length == 20,
+        hasMore: hasMore,
         page: page + 1,
       );
+
+      // Halaman ini habis tersaring non-POS tapi server masih punya halaman
+      // lain: lanjut ambil sendiri, jangan biarkan list kosong dengan spinner
+      // yang menunggu scroll yang tidak akan pernah terjadi.
+      if (posItems.isEmpty && hasMore) {
+        await load();
+      }
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || req != _reqId) return;
       state = state.copyWith(loading: false);
       // Handle error if needed
     }

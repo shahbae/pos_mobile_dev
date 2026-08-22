@@ -1,3 +1,4 @@
+import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart' show PosDrawer;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 
@@ -14,17 +15,42 @@ class PrinterConfig {
   final String? mac;
   final String? name;
   final bool autoPrint;
+
+  /// Kirim perintah buka laci kas saat mencetak nota.
+  final bool openDrawer;
+
+  /// Pin kick laci kas: 2 (umum) atau 5.
+  final int drawerPin;
+
   final bool loaded;
 
-  const PrinterConfig({this.mac, this.name, this.autoPrint = true, this.loaded = false});
+  const PrinterConfig({
+    this.mac,
+    this.name,
+    this.autoPrint = true,
+    this.openDrawer = false,
+    this.drawerPin = 2,
+    this.loaded = false,
+  });
 
   bool get hasPrinter => mac != null && mac!.isNotEmpty;
 
-  PrinterConfig copyWith({String? mac, String? name, bool? autoPrint, bool clearPrinter = false}) {
+  PosDrawer get posDrawerPin => drawerPin == 5 ? PosDrawer.pin5 : PosDrawer.pin2;
+
+  PrinterConfig copyWith({
+    String? mac,
+    String? name,
+    bool? autoPrint,
+    bool? openDrawer,
+    int? drawerPin,
+    bool clearPrinter = false,
+  }) {
     return PrinterConfig(
       mac: clearPrinter ? null : (mac ?? this.mac),
       name: clearPrinter ? null : (name ?? this.name),
       autoPrint: autoPrint ?? this.autoPrint,
+      openDrawer: openDrawer ?? this.openDrawer,
+      drawerPin: drawerPin ?? this.drawerPin,
       loaded: true,
     );
   }
@@ -42,7 +68,16 @@ class PrinterConfigNotifier extends StateNotifier<PrinterConfig> {
     final mac = await PrinterPrefs.getMac();
     final name = await PrinterPrefs.getName();
     final auto = await PrinterPrefs.getAutoPrint();
-    state = PrinterConfig(mac: mac, name: name, autoPrint: auto, loaded: true);
+    final drawer = await PrinterPrefs.getOpenDrawer();
+    final drawerPin = await PrinterPrefs.getDrawerPin();
+    state = PrinterConfig(
+      mac: mac,
+      name: name,
+      autoPrint: auto,
+      openDrawer: drawer,
+      drawerPin: drawerPin,
+      loaded: true,
+    );
   }
 
   Future<void> setDefaultPrinter(String mac, String name) async {
@@ -58,6 +93,16 @@ class PrinterConfigNotifier extends StateNotifier<PrinterConfig> {
   Future<void> setAutoPrint(bool value) async {
     await PrinterPrefs.setAutoPrint(value);
     state = state.copyWith(autoPrint: value);
+  }
+
+  Future<void> setOpenDrawer(bool value) async {
+    await PrinterPrefs.setOpenDrawer(value);
+    state = state.copyWith(openDrawer: value);
+  }
+
+  Future<void> setDrawerPin(int pin) async {
+    await PrinterPrefs.setDrawerPin(pin);
+    state = state.copyWith(drawerPin: pin);
   }
 }
 
@@ -99,13 +144,14 @@ class PrinterState {
 
 final printerProvider =
     StateNotifierProvider<PrinterNotifier, PrinterState>((ref) {
-  return PrinterNotifier(ref.watch(thermalPrinterServiceProvider));
+  return PrinterNotifier(ref.watch(thermalPrinterServiceProvider), ref);
 });
 
 class PrinterNotifier extends StateNotifier<PrinterState> {
   final ThermalPrinterService service;
+  final Ref _ref;
 
-  PrinterNotifier(this.service) : super(const PrinterState());
+  PrinterNotifier(this.service, this._ref) : super(const PrinterState());
 
   /// Muat daftar printer yang sudah dipasangkan.
   Future<void> loadDevices() async {
@@ -177,7 +223,14 @@ class PrinterNotifier extends StateNotifier<PrinterState> {
       if (!await _ensureConnected(mac, name)) return false;
 
       state = state.copyWith(phase: PrinterPhase.printing, error: null, message: null);
-      final printed = await service.printReceipt(receipt);
+      final config = _ref.read(printerConfigProvider);
+      final printed = await service.printReceipt(
+        receipt,
+        // Laci hanya dibuka untuk pembayaran tunai — non-tunai tidak ada
+        // uang fisik yang masuk/keluar laci.
+        openDrawer: config.openDrawer && receipt.isCashPayment,
+        drawerPin: config.posDrawerPin,
+      );
       state = state.copyWith(
         phase: PrinterPhase.idle,
         message: printed ? 'Nota berhasil dicetak.' : null,
@@ -205,6 +258,31 @@ class PrinterNotifier extends StateNotifier<PrinterState> {
       return ok;
     } catch (e) {
       state = state.copyWith(phase: PrinterPhase.idle, error: 'Gagal tes cetak: $e');
+      return false;
+    }
+  }
+
+  /// Hubungkan ke printer lalu kirim perintah buka laci kas saja.
+  ///
+  /// Printer selalu menerima perintah ini walau laci tidak terpasang — jadi
+  /// hasil `true` berarti perintah terkirim, bukan jaminan laci terbuka.
+  Future<bool> connectAndOpenDrawer({required String mac, required String name}) async {
+    try {
+      if (!await _ensureConnected(mac, name)) return false;
+
+      state = state.copyWith(phase: PrinterPhase.printing, error: null, message: null);
+      final pin = _ref.read(printerConfigProvider).posDrawerPin;
+      final ok = await service.openCashDrawer(pin: pin);
+      state = state.copyWith(
+        phase: PrinterPhase.idle,
+        message: ok
+            ? 'Perintah buka laci terkirim. Bila laci tetap tertutup, coba pin lain.'
+            : null,
+        error: ok ? null : 'Gagal mengirim perintah buka laci.',
+      );
+      return ok;
+    } catch (e) {
+      state = state.copyWith(phase: PrinterPhase.idle, error: 'Gagal buka laci: $e');
       return false;
     }
   }

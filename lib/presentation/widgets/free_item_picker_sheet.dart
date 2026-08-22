@@ -1,19 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/data/models/product_model.dart';
-import 'package:pos_mobile/presentation/providers/product_provider.dart';
+import 'package:pos_mobile/presentation/providers/product_pagination_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/utils/currency.dart';
 import 'package:pos_mobile/utils/xl_promo.dart';
 
-/// Bottom sheet untuk memilih produk `freeable` sebagai item gratis (bonus).
-/// Mengembalikan [Product] terpilih, atau null bila dibatalkan. Pemilihan
-/// varian dilakukan setelahnya oleh pemanggil (bila produk punya varian).
+/// Bottom sheet untuk memilih menu yang digratiskan (bonus promo).
+/// Mengembalikan [Product] terpilih, atau null bila dibatalkan. Variannya
+/// dipilih setelah ini oleh pemanggil.
 ///
-/// [maxPrice] membatasi opsi ke produk yang harga dasarnya ≤ item termurah di
-/// keranjang (aturan BE: item gratis tidak boleh lebih mahal dari item termurah).
-/// Untuk produk bervarian, ditampilkan bila ada minimal satu varian yang memenuhi.
-Future<Product?> showFreeItemPicker(BuildContext context, {required num maxPrice}) {
+/// Menunya diambil dari katalog POS yang sudah dimuat, bukan panggilan API
+/// tersendiri — katalog itu sudah memuat seluruh halaman dan sudah membawa
+/// penanda siap per cabang, jadi menu yang bahannya habis bisa disaring di
+/// sini tanpa request tambahan.
+///
+/// Yang ditawarkan: menu berkategori `freeable`, ukuran XL, siap dibuat, dan
+/// harganya ≤ [maxPrice] — batas itu adalah minuman termurah di keranjang.
+/// Tidak harus menu yang dipesan: pelanggan boleh minta teh yang tidak ada di
+/// pesanannya, asal tidak lebih mahal dari yang termurah tadi.
+Future<Product?> showFreeItemPicker(
+  BuildContext context, {
+  required num maxPrice,
+}) {
   return showModalBottomSheet<Product>(
     context: context,
     isScrollControlled: true,
@@ -23,6 +32,28 @@ Future<Product?> showFreeItemPicker(BuildContext context, {required num maxPrice
     ),
     builder: (_) => _FreeItemPickerSheet(maxPrice: maxPrice),
   );
+}
+
+/// True bila [p] boleh dijadikan bonus dengan batas harga [maxPrice].
+/// Untuk produk bervarian, cukup ada satu varian XL yang siap dan masuk batas.
+bool _isFreeable(Product p, num maxPrice) {
+  if (!p.categoryFreeable || !p.ready) return false;
+  if (p.hasVariants) {
+    return p.variants.any(
+      (v) => nameHasXL(v.name) && v.ready && v.sellingPriceNum <= maxPrice,
+    );
+  }
+  return nameHasXL(p.name) && p.sellingPriceNum <= maxPrice;
+}
+
+/// Harga termurah yang bisa diambil dari [p] dalam batas [maxPrice] — dipakai
+/// untuk label, supaya kasir tahu nilai gratisannya sebelum masuk ke varian.
+num _lowestPrice(Product p, num maxPrice) {
+  if (!p.hasVariants) return p.sellingPriceNum;
+  final harga = p.variants
+      .where((v) => nameHasXL(v.name) && v.ready && v.sellingPriceNum <= maxPrice)
+      .map((v) => v.sellingPriceNum);
+  return harga.reduce((a, b) => a < b ? a : b);
 }
 
 class _FreeItemPickerSheet extends ConsumerStatefulWidget {
@@ -39,7 +70,17 @@ class _FreeItemPickerSheetState extends ConsumerState<_FreeItemPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final productsAsync = ref.watch(freeableProductsProvider(_search.isEmpty ? null : _search));
+    // Ditonton, bukan sekadar dibaca: kalau katalog kebetulan sudah dilepas,
+    // menontonnya membangun ulang notifier-nya yang langsung memuat sendiri.
+    final catalog = ref.watch(productPaginationProvider);
+
+    final keyword = _search.trim().toLowerCase();
+    final products = catalog.allItems
+        .where((p) => _isFreeable(p, widget.maxPrice))
+        .where((p) => keyword.isEmpty || p.name.toLowerCase().contains(keyword))
+        .toList()
+      ..sort((a, b) => _lowestPrice(a, widget.maxPrice)
+          .compareTo(_lowestPrice(b, widget.maxPrice)));
 
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
@@ -71,8 +112,10 @@ class _FreeItemPickerSheetState extends ConsumerState<_FreeItemPickerSheet> {
                           style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
                       const SizedBox(height: 2),
                       Text(
-                        "Maks seharga item termurah: ${formatRupiah(widget.maxPrice)}",
-                        style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                        "Maks seharga item termurah di keranjang: "
+                        "${formatRupiah(widget.maxPrice)}",
+                        style: const TextStyle(
+                            fontSize: 12, color: AppTheme.textSecondary),
                       ),
                     ],
                   ),
@@ -94,69 +137,61 @@ class _FreeItemPickerSheetState extends ConsumerState<_FreeItemPickerSheet> {
               ),
               const SizedBox(height: 8),
               Expanded(
-                child: productsAsync.when(
-                  data: (all) {
-                    // Item gratis hanya ukuran XL, dan harganya ≤ item termurah
-                    // di keranjang. Untuk produk bervarian, ditampilkan bila ada
-                    // minimal satu varian XL yang memenuhi batas harga.
-                    final products = all.where((p) {
-                      if (p.hasVariants) {
-                        return p.variants.any((v) =>
-                            nameHasXL(v.name) &&
-                            v.sellingPriceNum <= widget.maxPrice);
-                      }
-                      return nameHasXL(p.name) &&
-                          p.sellingPriceNum <= widget.maxPrice;
-                    }).toList();
-                    if (products.isEmpty) {
-                      return const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(24),
-                          child: Text(
-                              "Tidak ada menu XL yang bisa digratiskan "
-                              "(harus ≤ item termurah di keranjang).",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: AppTheme.textSecondary)),
-                        ),
-                      );
-                    }
-                    return ListView.separated(
-                      controller: scrollController,
-                      itemCount: products.length,
-                      separatorBuilder: (_, __) =>
-                          const Divider(height: 1, color: AppTheme.borderLight),
-                      itemBuilder: (context, i) {
-                        final p = products[i];
-                        return ListTile(
-                          title: Text(p.name,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w600, color: AppTheme.textPrimary)),
-                          subtitle: Text(
-                            p.hasVariants ? "Pilih varian" : formatRupiah(p.sellingPriceNum),
-                            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
-                          ),
-                          trailing:
-                              const Icon(Icons.add_circle_outline, color: AppTheme.brandBlue),
-                          onTap: () => Navigator.pop(context, p),
-                        );
-                      },
-                    );
-                  },
-                  loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (e, _) => Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Text("Gagal memuat menu: $e",
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: AppTheme.danger)),
-                    ),
-                  ),
-                ),
+                child: _body(products, catalog, scrollController),
               ),
             ],
           );
         },
       ),
+    );
+  }
+
+  Widget _body(
+    List<Product> products,
+    ProductPaginationState catalog,
+    ScrollController scrollController,
+  ) {
+    if (catalog.loading && catalog.allItems.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (products.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            _search.trim().isNotEmpty
+                ? "Menu itu tidak bisa digratiskan, atau harganya di atas "
+                    "${formatRupiah(widget.maxPrice)}."
+                : "Tidak ada menu XL yang bisa digratiskan — semuanya di atas "
+                    "${formatRupiah(widget.maxPrice)} atau sedang habis.",
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppTheme.textSecondary),
+          ),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      controller: scrollController,
+      itemCount: products.length,
+      separatorBuilder: (_, __) =>
+          const Divider(height: 1, color: AppTheme.borderLight),
+      itemBuilder: (context, i) {
+        final p = products[i];
+        return ListTile(
+          title: Text(p.name,
+              style: const TextStyle(
+                  fontWeight: FontWeight.w600, color: AppTheme.textPrimary)),
+          subtitle: Text(
+            p.hasVariants
+                ? "${formatRupiah(_lowestPrice(p, widget.maxPrice))} • pilih varian"
+                : formatRupiah(p.sellingPriceNum),
+            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+          ),
+          trailing: const Icon(Icons.add_circle_outline, color: AppTheme.brandBlue),
+          onTap: () => Navigator.pop(context, p),
+        );
+      },
     );
   }
 }

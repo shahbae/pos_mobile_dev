@@ -79,6 +79,12 @@ class _PrinterSettingsPageState extends ConsumerState<PrinterSettingsPage> {
           ),
           const SizedBox(height: 24),
 
+          // ── Laci kas ──
+          _sectionLabel('Laci Kas (Cash Drawer)'),
+          const SizedBox(height: 8),
+          _drawerCard(config, state),
+          const SizedBox(height: 24),
+
           // ── Daftar printer ter-pair ──
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -107,6 +113,77 @@ class _PrinterSettingsPageState extends ConsumerState<PrinterSettingsPage> {
           ),
           const SizedBox(height: 12),
           _deviceList(config, state),
+        ],
+      ),
+    );
+  }
+
+  Widget _drawerCard(PrinterConfig config, PrinterState state) {
+    final notifier = ref.read(printerConfigProvider.notifier);
+    return Container(
+      decoration: _boxDeco(),
+      child: Column(
+        children: [
+          SwitchListTile(
+            value: config.openDrawer,
+            activeColor: AppTheme.brandBlue,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+            title: const Text('Buka laci otomatis saat bayar tunai',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+            subtitle: const Text(
+              'Laci hanya terbuka untuk pembayaran tunai. Laci kas harus dicolok '
+              'ke port RJ11/RJ12 di printer — printer bluetooth mini umumnya '
+              'tidak punya port ini.',
+              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+            ),
+            onChanged: (v) => notifier.setOpenDrawer(v),
+          ),
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Pin kick laci',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                const Text('Kebanyakan laci pakai Pin 2. Ganti ke Pin 5 bila laci tidak merespons.',
+                    style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                const SizedBox(height: 10),
+                SegmentedButton<int>(
+                  segments: const [
+                    ButtonSegment(value: 2, label: Text('Pin 2')),
+                    ButtonSegment(value: 5, label: Text('Pin 5')),
+                  ],
+                  selected: {config.drawerPin},
+                  onSelectionChanged: (s) => notifier.setDrawerPin(s.first),
+                  showSelectedIcon: false,
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: (state.isBusy || !config.hasPrinter)
+                        ? null
+                        : () => ref.read(printerProvider.notifier).connectAndOpenDrawer(
+                              mac: config.mac!,
+                              name: config.name ?? 'Printer',
+                            ),
+                    icon: const Icon(Icons.point_of_sale_outlined, size: 18),
+                    label: Text(config.hasPrinter
+                        ? 'Tes Buka Laci'
+                        : 'Pilih printer default dulu'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.brandBlue,
+                      side: const BorderSide(color: AppTheme.brandBlue),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

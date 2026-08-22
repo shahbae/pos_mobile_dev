@@ -29,6 +29,7 @@ enum AppFeature {
   expenses, // /expenses (Pengeluaran)
   shift, // /shifts (Shift Kasir)
   attendance, // /attendance/check-in|out (Absensi)
+  kitchenDisplay, // /kds/stream, /kds/orders (Monitoring Pesanan / KDS)
 }
 
 /// Set fitur yang boleh diakses tiap role.
@@ -56,6 +57,7 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.stockAudit,
         AppFeature.expenses,
         AppFeature.shift,
+        AppFeature.kitchenDisplay,
       };
     case 'supervisor':
       // Setara owner + ikut absensi.
@@ -80,10 +82,12 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.expenses,
         AppFeature.shift,
         AppFeature.attendance,
+        AppFeature.kitchenDisplay,
       };
     case 'leader':
       // Operasional cabang + POS (per arahan user 2026-07-11).
-      // TANPA reports & audit stok (per arahan user 2026-06-20).
+      // TANPA reports (per arahan user 2026-06-20). Audit stok dibuka lagi
+      // per revisi BE 2026-08-03 §4 (input boleh, approve tidak).
       return {
         AppFeature.pos,
         AppFeature.dashboard,
@@ -100,60 +104,56 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.toppingMovements,
         AppFeature.plasticMovements,
         AppFeature.strawMovements,
+        AppFeature.stockAudit,
         AppFeature.expenses,
         AppFeature.shift,
         AppFeature.attendance,
+        AppFeature.kitchenDisplay,
       };
     case 'finance':
-      // Read-only master data + reports + expenses. TANPA POS.
+      // ABSENSI SAJA (docs/api-finance-absensi-fe.md §7). Server sebenarnya
+      // masih mengizinkan finance membaca reports/expenses/master data, tapi
+      // di app mobile finance sengaja dikunci ke absensi saja — keputusan FE.
       return {
-        AppFeature.dashboard,
-        AppFeature.transactions,
-        AppFeature.reports,
-        AppFeature.stockAlerts,
-        AppFeature.products,
-        AppFeature.purchases,
-        AppFeature.stockMaterial,
-        AppFeature.stockTopping,
-        AppFeature.stockPlastic,
-        AppFeature.stockStraw,
-        AppFeature.stockMovements,
-        AppFeature.toppingMovements,
-        AppFeature.plasticMovements,
-        AppFeature.strawMovements,
-        AppFeature.stockAudit,
-        AppFeature.expenses,
-        AppFeature.shift, // lihat saja (lihat canOperateShift)
         AppFeature.attendance,
       };
     case 'kasir':
       // Fokus POS, shift, transaksi, absensi. + dashboard (GET /dashboard
       // adaptif: section current_shift + recent_transactions).
+      // + audit stok (revisi BE 2026-08-03 §4): kasir input hitung fisik,
+      //   approve tetap milik owner/supervisor.
       return {
         AppFeature.dashboard,
         AppFeature.pos,
         AppFeature.transactions,
+        AppFeature.stockAudit,
         AppFeature.shift,
         AppFeature.attendance,
+        AppFeature.kitchenDisplay,
       };
     case 'karyawan':
       // POS + shift + absensi + riwayat transaksi + dashboard adaptif.
       // CATATAN: matriks (baris 243) menandai GET /transactions ❌ untuk
       // karyawan, tapi per arahan user karyawan boleh akses transaksi.
+      // TANPA audit stok: BE 2026-08-08 §3 mencabut seluruh akses opname
+      // karyawan (sebelumnya boleh input per revisi 2026-08-03 §4).
       return {
         AppFeature.dashboard,
         AppFeature.pos,
         AppFeature.transactions,
         AppFeature.shift,
         AppFeature.attendance,
+        AppFeature.kitchenDisplay,
       };
     case 'produksi':
       // Absensi + dashboard (revisi BE 2026-06-29: produksi dibatasi ke
       // endpoint absensi + /me, TAPI §6 mengizinkan GET /dashboard yang
       // mengembalikan section absensi). Tanpa POS / shift / lainnya.
+      // + monitoring pesanan (KDS): justru role inilah alasan layar dapur ada.
       return {
         AppFeature.dashboard,
         AppFeature.attendance,
+        AppFeature.kitchenDisplay,
       };
     default:
       return {};
@@ -161,8 +161,16 @@ Set<AppFeature> featuresForRole(String? role) {
 }
 
 /// Role yang diizinkan masuk ke aplikasi mobile ini (login gate).
-/// Hanya lima role ini; selain itu (mis. finance, karyawan) ditolak masuk.
-const allowedAppRoles = {'owner', 'kasir', 'supervisor', 'leader', 'produksi'};
+/// `finance` ditambahkan per docs/api-finance-absensi-fe.md — masuk hanya untuk
+/// absensi. Selain enam role ini (mis. karyawan) ditolak masuk.
+const allowedAppRoles = {
+  'owner',
+  'kasir',
+  'supervisor',
+  'leader',
+  'produksi',
+  'finance',
+};
 
 /// Boleh masuk app? Role harus ada di allowlist & punya minimal satu fitur.
 bool canAccessApp(String? role) {
@@ -171,6 +179,27 @@ bool canAccessApp(String? role) {
 }
 
 bool hasFeature(String? role, AppFeature f) => featuresForRole(role).contains(f);
+
+/// Role yang satu-satunya fiturnya absensi (mis. `finance`). App membuka
+/// halaman Absensi langsung sebagai layar utama, tanpa dashboard/menu lain.
+bool isAttendanceOnly(String? role) {
+  final f = featuresForRole(role);
+  return f.length == 1 && f.contains(AppFeature.attendance);
+}
+
+/// Boleh memilih cabang saat check-in absensi.
+/// BE hanya membaca field `branch_id` untuk owner & supervisor; untuk role lain
+/// cabang selalu diambil dari token (docs/api-finance-absensi-fe.md §2), jadi
+/// dropdown cabang tidak boleh ditampilkan — hanya bikin salah paham.
+bool canChooseAttendanceBranch(String? role) {
+  switch (role?.toLowerCase()) {
+    case 'owner':
+    case 'supervisor':
+      return true;
+    default:
+      return false;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Gating aksi tulis di dalam halaman (mencegah 403 untuk role read-only).
@@ -202,11 +231,52 @@ bool canCreatePurchase(String? role) {
   }
 }
 
-/// Boleh membuat audit stok. Hanya Owner & Supervisor (leader tak akses audit).
-bool canCreateAudit(String? role) => canAdjustStock(role);
+/// Boleh mencatat / mengubah / menghapus pengeluaran.
+/// Owner, Supervisor, Finance, Leader (BE 2026-08-01: gate create == edit ==
+/// delete). Role lain hanya melihat daftar.
+bool canManageExpense(String? role) {
+  switch (role?.toLowerCase()) {
+    case 'owner':
+    case 'supervisor':
+    case 'finance':
+    case 'leader':
+      return true;
+    default:
+      return false;
+  }
+}
 
-/// Boleh menyetujui (approve) audit stok. Hanya Owner & Supervisor.
+/// Boleh membuat / mengubah / menghapus draft audit stok.
+/// Revisi BE 2026-08-03 §4 memisahkan input dari persetujuan: Owner,
+/// Supervisor, Leader, Kasir boleh menginput hitung fisik. Finance read-only;
+/// Karyawan & Produksi tanpa akses (karyawan dicabut per BE 2026-08-08 §3).
+bool canCreateAudit(String? role) {
+  switch (role?.toLowerCase()) {
+    case 'owner':
+    case 'supervisor':
+    case 'leader':
+    case 'kasir':
+      return true;
+    default:
+      return false;
+  }
+}
+
+/// Boleh menyetujui (approve) audit stok. Hanya Owner & Supervisor —
+/// approve-lah yang benar-benar mengubah stok (revisi BE 2026-08-03 §4).
 bool canApproveAudit(String? role) {
+  switch (role?.toLowerCase()) {
+    case 'owner':
+    case 'supervisor':
+      return true;
+    default:
+      return false;
+  }
+}
+
+/// Boleh mengatur QRIS cabang (mode + payload QR statis).
+/// Hanya Owner & Supervisor — docs/api-qris-manual-fe.md §5.
+bool canManageBranchQris(String? role) {
   switch (role?.toLowerCase()) {
     case 'owner':
     case 'supervisor':

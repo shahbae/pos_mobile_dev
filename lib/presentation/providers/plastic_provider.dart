@@ -4,13 +4,20 @@ import 'package:pos_mobile/data/models/plastic_stock_model.dart';
 import 'package:pos_mobile/data/models/plastic_stock_movement_model.dart';
 import 'package:pos_mobile/data/repositories/plastic_repository.dart';
 import 'package:pos_mobile/data/services/api_provider.dart';
+import 'package:pos_mobile/presentation/providers/master_data_cache.dart';
+import 'package:pos_mobile/presentation/providers/branch_scope.dart';
 
 final plasticRepositoryProvider = Provider<PlasticRepository>((ref) {
+  // Ikut lahir ulang saat pindah cabang — lihat [branchScopeProvider].
+  ref.watch(branchScopeProvider);
   return PlasticRepository(ref.watch(apiProvider));
 });
 
 /// Daftar plastik aktif untuk dipakai di POS (picker kemasan) & audit/pembelian.
-final plasticListProvider = FutureProvider<List<Plastic>>((ref) async {
+/// Di-cache ber-TTL: plastik baru dari admin tetap muncul tanpa restart app,
+/// tanpa menembak request tiap kali halaman checkout dibuka.
+final plasticListProvider = FutureProvider.autoDispose<List<Plastic>>((ref) async {
+  cacheFor(ref);
   return ref.watch(plasticRepositoryProvider).getPlastics(activeOnly: true);
 });
 

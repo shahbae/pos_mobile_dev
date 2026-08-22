@@ -4,8 +4,11 @@ import 'package:pos_mobile/data/models/topping_stock_model.dart';
 import 'package:pos_mobile/data/models/topping_stock_movement_model.dart';
 import 'package:pos_mobile/data/repositories/topping_repository.dart';
 import 'package:pos_mobile/data/services/api_provider.dart';
+import 'package:pos_mobile/presentation/providers/branch_scope.dart';
 
 final toppingRepositoryProvider = Provider<ToppingRepository>((ref) {
+  // Ikut lahir ulang saat pindah cabang — lihat [branchScopeProvider].
+  ref.watch(branchScopeProvider);
   return ToppingRepository(ref.watch(apiProvider));
 });
 

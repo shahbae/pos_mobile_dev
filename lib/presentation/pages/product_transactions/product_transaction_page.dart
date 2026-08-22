@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
@@ -6,13 +7,42 @@ import 'package:pos_mobile/data/models/product_variant_model.dart';
 import 'package:pos_mobile/presentation/providers/product_pagination_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_transaction_provider.dart';
+import 'package:pos_mobile/presentation/providers/transaction_refresh.dart';
 import 'package:pos_mobile/presentation/pages/product_transactions/checkout_page.dart';
 import 'package:pos_mobile/presentation/widgets/topping_picker_sheet.dart';
 import 'package:pos_mobile/presentation/widgets/variant_picker_sheet.dart';
 import 'package:pos_mobile/utils/currency.dart';
 
-class ProductTransactionPage extends ConsumerWidget {
+class ProductTransactionPage extends ConsumerStatefulWidget {
   const ProductTransactionPage({super.key});
+
+  @override
+  ConsumerState<ProductTransactionPage> createState() => _ProductTransactionPageState();
+}
+
+class _ProductTransactionPageState extends ConsumerState<ProductTransactionPage> {
+  final _searchController = TextEditingController();
+  final _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  /// Kembalikan layar ke kondisi awal setelah sebuah transaksi selesai: kotak
+  /// pencarian kosong, tab kategori kembali ke "Semua", scroll ke atas, keyboard
+  /// tertutup. Halaman ini tidak pernah dibuang dari stack selama alur checkout,
+  /// jadi tanpa ini sisa transaksi pelanggan sebelumnya ikut terbawa.
+  void _resetView() {
+    final notifier = ref.read(productPaginationProvider.notifier);
+    _searchController.clear();
+    notifier.search('');
+    notifier.selectCategory(null);
+    if (_scrollController.hasClients) _scrollController.jumpTo(0);
+    FocusScope.of(context).unfocus();
+  }
 
   /// Alur tap produk: cek variant → (pilih variant) → (pilih topping) → masuk cart.
   Future<void> _onProductTap(BuildContext context, WidgetRef ref, Product product) async {
@@ -71,7 +101,10 @@ class ProductTransactionPage extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    // Transaksi baru saja selesai → bersihkan sisa layar transaksi sebelumnya.
+    ref.listen(posResetSignalProvider, (_, __) => _resetView());
+
     final productState = ref.watch(productPaginationProvider);
     final cartState = ref.watch(productTransactionProvider);
 
@@ -87,6 +120,7 @@ class ProductTransactionPage extends ConsumerWidget {
             padding: const EdgeInsets.all(16.0),
             color: Colors.white,
             child: TextField(
+              controller: _searchController,
               onChanged: (value) => ref.read(productPaginationProvider.notifier).search(value),
               decoration: InputDecoration(
                 hintText: "Cari produk...",
@@ -112,26 +146,49 @@ class ProductTransactionPage extends ConsumerWidget {
               onSelect: (id) =>
                   ref.read(productPaginationProvider.notifier).selectCategory(id),
             ),
+          // Banner saat muat ulang katalog gagal — katalog lama tetap dipakai,
+          // tapi kasir perlu tahu stoknya belum tentu terbaru.
+          if (productState.error != null && productState.allItems.isNotEmpty)
+            _StaleBanner(
+              onRetry: () => ref.read(productPaginationProvider.notifier).loadAll(),
+            ),
           Expanded(
-            child: productState.loading && productState.allItems.isEmpty
+            child: RefreshIndicator(
+              onRefresh: () => ref.read(productPaginationProvider.notifier).loadAll(),
+              child: productState.loading && productState.allItems.isEmpty
                 ? const Center(child: CircularProgressIndicator())
                 : productState.items.isEmpty
-                    ? const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(24),
-                          child: Text(
-                            "Produk tidak ditemukan",
-                            style: TextStyle(color: AppTheme.textSecondary),
+                    ? ListView(
+                        // Harus scrollable walau kosong supaya tarik-refresh jalan.
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: [
+                          const SizedBox(height: 80),
+                          Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Text(
+                                productState.error != null
+                                    ? "Gagal memuat produk. Tarik ke bawah untuk coba lagi."
+                                    : "Produk tidak ditemukan",
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(color: AppTheme.textSecondary),
+                              ),
+                            ),
                           ),
-                        ),
+                        ],
                       )
                     : GridView.builder(
+                    controller: _scrollController,
+                    physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.all(16),
+                    // Kartu sengaja dibuat lebih jangkung: sisa ruangnya jatuh
+                    // ke gambar, karena kasir mengenali produk dari fotonya
+                    // dulu, teks cuma konfirmasi.
                     gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                       maxCrossAxisExtent: 220,
                       crossAxisSpacing: 16,
                       mainAxisSpacing: 16,
-                      childAspectRatio: 0.75,
+                      childAspectRatio: 0.68,
                     ),
                     itemCount: productState.items.length,
                     itemBuilder: (context, index) {
@@ -158,7 +215,7 @@ class ProductTransactionPage extends ConsumerWidget {
                           borderRadius: BorderRadius.circular(20),
                           onTap: () => _onProductTap(context, ref, product),
                           child: Padding(
-                            padding: const EdgeInsets.all(12),
+                            padding: const EdgeInsets.all(10),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -168,18 +225,18 @@ class ProductTransactionPage extends ConsumerWidget {
                                     child: _ProductThumb(imageUrl: product.imageUrl),
                                   ),
                                 ),
-                                const SizedBox(height: 12),
+                                const SizedBox(height: 8),
                                 Text(
                                   product.name,
                                   style: const TextStyle(
                                     color: AppTheme.textPrimary,
                                     fontWeight: FontWeight.w700,
-                                    fontSize: 15,
+                                    fontSize: 13,
                                   ),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                                const SizedBox(height: 4),
+                                const SizedBox(height: 2),
                                 Text(
                                   product.hasVariants
                                       ? "mulai ${formatRupiah(product.minVariantPriceNum)}"
@@ -187,10 +244,10 @@ class ProductTransactionPage extends ConsumerWidget {
                                   style: const TextStyle(
                                     color: AppTheme.brandBlue,
                                     fontWeight: FontWeight.w800,
-                                    fontSize: 16,
+                                    fontSize: 14,
                                   ),
                                 ),
-                                const SizedBox(height: 8),
+                                const SizedBox(height: 6),
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
@@ -201,19 +258,19 @@ class ProductTransactionPage extends ConsumerWidget {
                                         soldOut ? "Habis" : "Tersedia",
                                         style: TextStyle(
                                           color: soldOut ? AppTheme.danger : Colors.green,
-                                          fontSize: 12,
+                                          fontSize: 11,
                                           fontWeight: FontWeight.w600,
                                         ),
                                       )
                                     else
                                       const SizedBox.shrink(),
                                     Container(
-                                      padding: const EdgeInsets.all(6),
+                                      padding: const EdgeInsets.all(5),
                                       decoration: BoxDecoration(
                                         color: soldOut ? AppTheme.textSecondary : AppTheme.brandBlue,
                                         shape: BoxShape.circle,
                                       ),
-                                      child: const Icon(Icons.add, color: Colors.white, size: 16),
+                                      child: const Icon(Icons.add, color: Colors.white, size: 15),
                                     ),
                                   ],
                                 ),
@@ -225,6 +282,7 @@ class ProductTransactionPage extends ConsumerWidget {
                       );
                     },
                   ),
+            ),
           ),
         ],
       ),
@@ -294,6 +352,43 @@ class ProductTransactionPage extends ConsumerWidget {
   }
 }
 
+/// Peringatan bahwa katalog yang tampil berasal dari muat sebelumnya karena
+/// refresh terakhir gagal — penanda "Tersedia/Habis" bisa sudah tidak akurat.
+class _StaleBanner extends StatelessWidget {
+  final VoidCallback onRetry;
+  const _StaleBanner({required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      color: Colors.orange.withOpacity(0.12),
+      padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+      child: Row(
+        children: [
+          const Icon(Icons.wifi_off_outlined, size: 16, color: Colors.orange),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text(
+              "Gagal memuat ulang. Stok yang tampil mungkin belum terbaru.",
+              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+            ),
+          ),
+          TextButton(
+            onPressed: onRetry,
+            style: TextButton.styleFrom(
+              minimumSize: const Size(0, 32),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text("Coba lagi",
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Baris tab kategori yang bisa di-scroll horizontal. "Semua" (id null) selalu
 /// paling depan, diikuti tiap kategori dari katalog.
 class _CategoryTabs extends StatelessWidget {
@@ -355,6 +450,10 @@ class _CategoryTabs extends StatelessWidget {
 }
 
 /// Gambar produk dengan fallback ikon (saat tidak ada URL / gagal dimuat).
+///
+/// Pakai [CachedNetworkImage] supaya gambar disimpan di disk: sekali diunduh,
+/// pemakaian berikutnya (scroll balik, pindah kategori, bahkan buka ulang
+/// aplikasi) langsung tampil tanpa loading dan tanpa hit jaringan.
 class _ProductThumb extends StatelessWidget {
   final String? imageUrl;
   const _ProductThumb({required this.imageUrl});
@@ -364,31 +463,29 @@ class _ProductThumb extends StatelessWidget {
     final placeholder = Container(
       color: AppTheme.bgLight,
       child: const Center(
-        child: Icon(Icons.inventory_2_outlined, color: AppTheme.brandBlue, size: 40),
+        child: Icon(Icons.inventory_2_outlined, color: AppTheme.brandBlue, size: 48),
       ),
     );
 
     if (imageUrl == null) return placeholder;
 
-    return Image.network(
-      imageUrl!,
+    // Thumbnail grid kecil; decode seukuran tampilan saja agar hemat memori
+    // dan tidak bikin frame drop saat scroll katalog panjang.
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final cacheWidth = (220 * dpr).round();
+
+    return CachedNetworkImage(
+      imageUrl: imageUrl!,
       fit: BoxFit.cover,
       width: double.infinity,
       height: double.infinity,
-      errorBuilder: (_, __, ___) => placeholder,
-      loadingBuilder: (context, child, progress) {
-        if (progress == null) return child;
-        return Container(
-          color: AppTheme.bgLight,
-          child: const Center(
-            child: SizedBox(
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          ),
-        );
-      },
+      memCacheWidth: cacheWidth,
+      maxWidthDiskCache: cacheWidth,
+      // Tanpa fade: gambar yang sudah tercache muncul instan, tidak berkedip.
+      fadeInDuration: Duration.zero,
+      fadeOutDuration: Duration.zero,
+      placeholder: (_, __) => Container(color: AppTheme.bgLight),
+      errorWidget: (_, __, ___) => placeholder,
     );
   }
 }

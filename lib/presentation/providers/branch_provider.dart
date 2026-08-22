@@ -3,6 +3,7 @@ import 'package:pos_mobile/data/models/branch_model.dart';
 import 'package:pos_mobile/data/repositories/branch_repository.dart';
 import 'package:pos_mobile/data/services/api_provider.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
+import 'package:pos_mobile/presentation/providers/branch_scope.dart';
 
 final branchRepositoryProvider = Provider<BranchRepository>((ref) {
   return BranchRepository(ref.watch(apiProvider));
@@ -33,6 +34,10 @@ class BranchSwitchNotifier extends AsyncNotifier<void> {
     try {
       await ref.read(branchRepositoryProvider).switchBranch(branchId);
       await ref.read(authProvider.notifier).reloadFromToken();
+      // Baru sesudah token cabang baru terpasang: rontokkan semua data cabang
+      // lama sekaligus. Kalau dinaikkan lebih dulu, provider yang langsung
+      // memuat ulang masih memakai token cabang lama dan hasilnya sama basinya.
+      ref.read(branchScopeProvider.notifier).state++;
       state = const AsyncData(null);
     } catch (e, st) {
       state = AsyncError(e, st);

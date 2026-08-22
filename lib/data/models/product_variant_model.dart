@@ -20,6 +20,14 @@ class ProductVariant {
   /// cabang / endpoint tanpa konteks cabang). `null` diperlakukan "boleh dijual".
   final bool? isReady;
 
+  /// Override waktu pembuatan milik varian ini (menit, 0–240).
+  /// `null` = ikut produk induk — bedakan dari angka yang kebetulan sama.
+  final int? prepMinutes;
+
+  /// Hasil akhir yang dipakai BE untuk estimasi: override varian bila ada,
+  /// kalau tidak nilai produk. Null bila BE tidak mengirimnya (endpoint lama).
+  final int? effectivePrepMinutes;
+
   final String? createdAt;
 
   ProductVariant({
@@ -30,6 +38,8 @@ class ProductVariant {
     this.freeToppingSlots = 0,
     this.isActive = true,
     this.isReady,
+    this.prepMinutes,
+    this.effectivePrepMinutes,
     this.createdAt,
   });
 
@@ -42,6 +52,8 @@ class ProductVariant {
       freeToppingSlots: (j['free_topping_slots'] as num?)?.toInt() ?? 0,
       isActive: j['is_active'] as bool? ?? true,
       isReady: j['is_ready'] as bool?,
+      prepMinutes: (j['prep_minutes'] as num?)?.toInt(),
+      effectivePrepMinutes: (j['effective_prep_minutes'] as num?)?.toInt(),
       createdAt: j['created_at']?.toString(),
     );
   }
@@ -50,6 +62,11 @@ class ProductVariant {
   bool get ready => isReady != false;
 
   num get sellingPriceNum => num.tryParse(sellingPrice) ?? 0;
+
+  /// Waktu pembuatan yang berlaku untuk varian ini: `effective_prep_minutes`
+  /// dari BE bila dikirim, kalau tidak override varian, terakhir nilai produk.
+  int effectivePrepFor(int productPrepMinutes) =>
+      effectivePrepMinutes ?? prepMinutes ?? productPrepMinutes;
 
   /// Variant mengizinkan topping gratis bila punya slot > 0.
   bool get hasFreeToppings => freeToppingSlots > 0;
