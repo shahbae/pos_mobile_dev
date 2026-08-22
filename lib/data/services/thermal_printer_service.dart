@@ -43,6 +43,27 @@ class ThermalPrinterService {
   /// Lebar area cetak (px) per ukuran kertas.
   int _printWidth(PaperSize size) => size == PaperSize.mm80 ? 512 : 384;
 
+  /// Ekor nota: ruang sobek + perintah potong (opsional).
+  ///
+  /// JANGAN pakai `Generator.cut()` di sini. Selain mengirim perintah potong,
+  /// method itu diam-diam menyelipkan 5 baris kosong (lihat generator.dart:414
+  /// pada esc_pos_utils_plus 2.0.4) sehingga ekornya jadi ~18 mm tanpa terlihat
+  /// dari kode pemanggil.
+  ///
+  /// Perintah potong (GS V) hanya dikirim bila printer memang punya pemotong.
+  /// Pada printer tanpa pemotong — mayoritas printer bluetooth mini yang dipakai
+  /// kasir — firmware umumnya menafsirkan GS V sebagai "majukan kertas ke posisi
+  /// pemotong". Jarak majunya konstanta firmware dan bisa jauh lebih panjang
+  /// dari nota itu sendiri, yang muncul sebagai kertas kosong panjang di bawah
+  /// nota. Ini penyebab keluhan "cetakan bawahnya panjang banget"; besarnya
+  /// berbeda-beda per model, jadi hanya sebagian kasir yang mengalaminya.
+  List<int> _tail(Generator g, {required bool hasCutter}) {
+    // 2 baris cukup untuk menyisakan ruang sobek di atas tear bar.
+    List<int> bytes = g.feed(2);
+    if (hasCutter) bytes += g.cut();
+    return bytes;
+  }
+
   /// Cek izin Bluetooth (akan meminta izin runtime di Android 12+).
   Future<bool> get permissionGranted => PrintBluetoothThermal.isPermissionBluetoothGranted;
 
@@ -68,12 +89,14 @@ class ThermalPrinterService {
     PaperSize paperSize = PaperSize.mm58,
     bool openDrawer = false,
     PosDrawer drawerPin = PosDrawer.pin2,
+    bool hasCutter = false,
   }) async {
     final bytes = await _buildBytes(
       receipt,
       paperSize,
       openDrawer: openDrawer,
       drawerPin: drawerPin,
+      hasCutter: hasCutter,
     );
     return PrintBluetoothThermal.writeBytes(bytes);
   }
@@ -89,7 +112,10 @@ class ThermalPrinterService {
   }
 
   /// Kirim tes cetak singkat untuk verifikasi koneksi printer.
-  Future<bool> printTest({PaperSize paperSize = PaperSize.mm58}) async {
+  Future<bool> printTest({
+    PaperSize paperSize = PaperSize.mm58,
+    bool hasCutter = false,
+  }) async {
     final profile = await CapabilityProfile.load();
     final g = Generator(paperSize, profile);
     List<int> bytes = [];
@@ -99,8 +125,7 @@ class ThermalPrinterService {
     bytes += g.hr();
     bytes += g.text('Printer berhasil terhubung', styles: const PosStyles(align: PosAlign.center));
     bytes += g.text(_dateFmt.format(DateTime.now()), styles: const PosStyles(align: PosAlign.center));
-    bytes += g.feed(2);
-    bytes += g.cut();
+    bytes += _tail(g, hasCutter: hasCutter);
     return PrintBluetoothThermal.writeBytes(bytes);
   }
 
@@ -109,6 +134,7 @@ class ThermalPrinterService {
     PaperSize paperSize, {
     bool openDrawer = false,
     PosDrawer drawerPin = PosDrawer.pin2,
+    bool hasCutter = false,
   }) async {
     final profile = await CapabilityProfile.load();
     final g = Generator(paperSize, profile);
@@ -256,8 +282,7 @@ class ThermalPrinterService {
       bytes += g.text(r.store.complaintNote,
           styles: const PosStyles(align: PosAlign.center));
     }
-    bytes += g.feed(1);
-    bytes += g.cut();
+    bytes += _tail(g, hasCutter: hasCutter);
 
     return bytes;
   }

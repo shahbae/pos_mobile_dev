@@ -10,6 +10,7 @@ class PrinterPrefs {
   static const _autoKey = 'PRINTER_AUTOPRINT';
   static const _drawerKey = 'PRINTER_OPEN_DRAWER';
   static const _drawerPinKey = 'PRINTER_DRAWER_PIN';
+  static const _cutterKey = 'PRINTER_HAS_CUTTER';
 
   static Future<void> saveDefault({required String mac, required String name}) async {
     await _storage.write(key: _macKey, value: mac);
@@ -49,5 +50,17 @@ class PrinterPrefs {
   static Future<int> getDrawerPin() async {
     final v = await _storage.read(key: _drawerPinKey);
     return v == '5' ? 5 : 2;
+  }
+
+  static Future<void> setHasCutter(bool value) =>
+      _storage.write(key: _cutterKey, value: value.toString());
+
+  /// Default OFF. Printer bluetooth mini/portable hampir semuanya tidak punya
+  /// pemotong kertas, dan firmware-nya sering menerjemahkan perintah potong
+  /// (GS V) sebagai "majukan kertas ke posisi pemotong" — kertas keluar panjang
+  /// tanpa terpotong. Jadi perintah potong hanya dikirim bila dinyalakan manual.
+  static Future<bool> getHasCutter() async {
+    final v = await _storage.read(key: _cutterKey);
+    return v?.toLowerCase() == 'true';
   }
 }
