@@ -21,7 +21,10 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.pos_mobile"
+        // PROYEK DEV: applicationId sengaja diberi akhiran ".dev" supaya APK dev
+        // dan APK produksi bisa terpasang BERDAMPINGAN di HP yang sama. Tanpa ini,
+        // memasang APK dev akan menimpa aplikasi kasir yang sedang dipakai.
+        applicationId = "com.example.pos_mobile.dev"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
