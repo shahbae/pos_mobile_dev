@@ -22,6 +22,10 @@ class PrinterConfig {
   /// Pin kick laci kas: 2 (umum) atau 5.
   final int drawerPin;
 
+  /// Printer punya pemotong kertas otomatis. Bila false, perintah potong
+  /// (GS V) tidak dikirim sama sekali — lihat [ThermalPrinterService].
+  final bool hasCutter;
+
   final bool loaded;
 
   const PrinterConfig({
@@ -30,6 +34,7 @@ class PrinterConfig {
     this.autoPrint = true,
     this.openDrawer = false,
     this.drawerPin = 2,
+    this.hasCutter = false,
     this.loaded = false,
   });
 
@@ -43,6 +48,7 @@ class PrinterConfig {
     bool? autoPrint,
     bool? openDrawer,
     int? drawerPin,
+    bool? hasCutter,
     bool clearPrinter = false,
   }) {
     return PrinterConfig(
@@ -51,6 +57,7 @@ class PrinterConfig {
       autoPrint: autoPrint ?? this.autoPrint,
       openDrawer: openDrawer ?? this.openDrawer,
       drawerPin: drawerPin ?? this.drawerPin,
+      hasCutter: hasCutter ?? this.hasCutter,
       loaded: true,
     );
   }
@@ -70,12 +77,14 @@ class PrinterConfigNotifier extends StateNotifier<PrinterConfig> {
     final auto = await PrinterPrefs.getAutoPrint();
     final drawer = await PrinterPrefs.getOpenDrawer();
     final drawerPin = await PrinterPrefs.getDrawerPin();
+    final cutter = await PrinterPrefs.getHasCutter();
     state = PrinterConfig(
       mac: mac,
       name: name,
       autoPrint: auto,
       openDrawer: drawer,
       drawerPin: drawerPin,
+      hasCutter: cutter,
       loaded: true,
     );
   }
@@ -103,6 +112,11 @@ class PrinterConfigNotifier extends StateNotifier<PrinterConfig> {
   Future<void> setDrawerPin(int pin) async {
     await PrinterPrefs.setDrawerPin(pin);
     state = state.copyWith(drawerPin: pin);
+  }
+
+  Future<void> setHasCutter(bool value) async {
+    await PrinterPrefs.setHasCutter(value);
+    state = state.copyWith(hasCutter: value);
   }
 }
 
@@ -230,6 +244,7 @@ class PrinterNotifier extends StateNotifier<PrinterState> {
         // uang fisik yang masuk/keluar laci.
         openDrawer: config.openDrawer && receipt.isCashPayment,
         drawerPin: config.posDrawerPin,
+        hasCutter: config.hasCutter,
       );
       state = state.copyWith(
         phase: PrinterPhase.idle,
@@ -249,7 +264,9 @@ class PrinterNotifier extends StateNotifier<PrinterState> {
       if (!await _ensureConnected(mac, name)) return false;
 
       state = state.copyWith(phase: PrinterPhase.printing, error: null, message: null);
-      final ok = await service.printTest();
+      final ok = await service.printTest(
+        hasCutter: _ref.read(printerConfigProvider).hasCutter,
+      );
       state = state.copyWith(
         phase: PrinterPhase.idle,
         message: ok ? 'Tes cetak terkirim.' : null,

@@ -226,10 +226,27 @@ class ReceiptStore {
     return ReceiptStore(
       name: json['name']?.toString() ?? '',
       address: json['address']?.toString() ?? '',
-      footerNote: json['footer_note']?.toString() ?? '',
-      complaintNote: json['complaint_note']?.toString() ?? '',
+      footerNote: _cleanNote(json['footer_note']),
+      complaintNote: _cleanNote(json['complaint_note']),
     );
   }
+}
+
+/// Rapikan teks bebas yang diketik admin di web sebelum dicetak.
+///
+/// Printer termal mencetak newline apa adanya, jadi Enter berlebih di kolom
+/// catatan langsung jadi kertas kosong (~3,3 mm per baris). CR juga dibuang
+/// karena sebagian printer memperlakukannya sebagai line feed tersendiri —
+/// teks ber-CRLF akan menghasilkan baris kosong dobel.
+String _cleanNote(dynamic v) {
+  if (v == null) return '';
+  return v
+      .toString()
+      .replaceAll('\r\n', '\n')
+      .replaceAll('\r', '\n')
+      .replaceAll(RegExp(r'[ \t]+\n'), '\n')
+      .replaceAll(RegExp(r'\n{2,}'), '\n')
+      .trim();
 }
 
 num _num(dynamic v) {
