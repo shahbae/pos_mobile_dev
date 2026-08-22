@@ -79,6 +79,28 @@ class _PrinterSettingsPageState extends ConsumerState<PrinterSettingsPage> {
           ),
           const SizedBox(height: 24),
 
+          // ── Pemotong kertas ──
+          _sectionLabel('Pemotong Kertas'),
+          const SizedBox(height: 8),
+          Container(
+            decoration: _boxDeco(),
+            child: SwitchListTile(
+              value: config.hasCutter,
+              activeColor: AppTheme.brandBlue,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+              title: const Text('Printer punya pemotong kertas otomatis',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+              subtitle: const Text(
+                'Biarkan mati bila printer tidak memotong kertas sendiri. '
+                'Menyalakannya pada printer tanpa pemotong membuat kertas '
+                'keluar panjang dan kosong di bawah nota.',
+                style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+              ),
+              onChanged: (v) => ref.read(printerConfigProvider.notifier).setHasCutter(v),
+            ),
+          ),
+          const SizedBox(height: 24),
+
           // ── Laci kas ──
           _sectionLabel('Laci Kas (Cash Drawer)'),
           const SizedBox(height: 8),
