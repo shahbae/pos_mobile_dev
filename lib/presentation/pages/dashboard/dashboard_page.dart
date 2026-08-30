@@ -36,6 +36,7 @@ class DashboardPage extends ConsumerWidget {
       AppFeature.toppingMovements,
       AppFeature.stockAudit,
       AppFeature.stockRequest,
+      AppFeature.shipment,
       AppFeature.expenses,
     };
     return featuresForRole(role).any(stockish.contains);

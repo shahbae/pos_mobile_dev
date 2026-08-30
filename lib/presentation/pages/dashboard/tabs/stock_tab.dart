@@ -4,6 +4,7 @@ import 'package:pos_mobile/presentation/pages/products/product_list_page.dart';
 import 'package:pos_mobile/presentation/pages/stock_movements/stock_movement_list_page.dart';
 import 'package:pos_mobile/presentation/pages/stock_audits/stock_audit_list_page.dart';
 import 'package:pos_mobile/presentation/pages/stock_requests/stock_request_list_page.dart';
+import 'package:pos_mobile/presentation/pages/shipments/shipment_list_page.dart';
 import 'package:pos_mobile/presentation/pages/stock_levels/stock_level_page.dart';
 import 'package:pos_mobile/presentation/pages/topping_stock/topping_stock_page.dart';
 import 'package:pos_mobile/presentation/pages/topping_stock/topping_stock_movement_page.dart';
@@ -95,6 +96,21 @@ class StockTab extends ConsumerWidget {
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const StockRequestListPage()),
+              ),
+            ),
+          ],
+          // Tepat di bawah Permintaan Stok: kiriman adalah kelanjutannya, dan
+          // urutan menunya mengikuti urutan kerjanya.
+          if (features.contains(AppFeature.shipment)) ...[
+            const SizedBox(height: 16),
+            _menuItem(
+              context,
+              icon: Icons.inbox_outlined,
+              title: "Kiriman Gudang",
+              subtitle: "Terima barang yang dikirim gudang",
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ShipmentListPage()),
               ),
             ),
           ],

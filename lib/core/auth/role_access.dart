@@ -26,6 +26,7 @@ enum AppFeature {
   strawMovements, // /sedotan-stock/movements (Riwayat Stok Sedotan)
   stockAudit, // /stock-audits
   stockRequest, // /stock-requests (Permintaan Stok ke gudang)
+  shipment, // /shipments (Kiriman Gudang — terima / tolak)
   expenses, // /expenses (Pengeluaran)
   shift, // /shifts (Shift Kasir)
   attendance, // /attendance/check-in|out (Absensi)
@@ -55,6 +56,7 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.strawMovements,
         AppFeature.stockAudit,
         AppFeature.stockRequest,
+        AppFeature.shipment,
         AppFeature.expenses,
         AppFeature.shift,
         AppFeature.kitchenDisplay,
@@ -79,6 +81,7 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.strawMovements,
         AppFeature.stockAudit,
         AppFeature.stockRequest,
+        AppFeature.shipment,
         AppFeature.expenses,
         AppFeature.shift,
         AppFeature.attendance,
@@ -105,6 +108,7 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.strawMovements,
         AppFeature.stockAudit,
         AppFeature.stockRequest,
+        AppFeature.shipment,
         AppFeature.expenses,
         AppFeature.shift,
         AppFeature.attendance,
@@ -244,6 +248,21 @@ bool canCreateAudit(String? role) {
     case 'supervisor':
     case 'leader':
     case 'kasir':
+      return true;
+    default:
+      return false;
+  }
+}
+
+/// Boleh menerima atau menolak kiriman dari gudang.
+/// Owner, Supervisor, Leader (BE Stasiun 4) — sama dengan yang boleh
+/// mengajukan permintaan. Yang menerima barang harus orang yang benar-benar
+/// melihatnya turun, dan bertanggung jawab atas cabangnya.
+bool canReceiveShipment(String? role) {
+  switch (role?.toLowerCase()) {
+    case 'owner':
+    case 'supervisor':
+    case 'leader':
       return true;
     default:
       return false;
