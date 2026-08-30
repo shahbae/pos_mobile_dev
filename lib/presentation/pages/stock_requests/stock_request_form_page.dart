@@ -21,6 +21,17 @@ class StockRequestFormPage extends ConsumerStatefulWidget {
       _StockRequestFormPageState();
 }
 
+/// Urutan kategori di daftar. Bahan setengah jadi di atas karena itu yang
+/// paling sering diminta; kemasan menyusul karena biasanya diisi belakangan.
+const _categoryOrder = ['material', 'topping', 'plastic', 'sedotan'];
+
+const _categoryLabels = {
+  'material': 'Bahan',
+  'topping': 'Topping',
+  'plastic': 'Plastik',
+  'sedotan': 'Sedotan',
+};
+
 class _StockRequestFormPageState extends ConsumerState<StockRequestFormPage> {
   final _noteCtrl = TextEditingController();
   final _searchCtrl = TextEditingController();
@@ -34,6 +45,12 @@ class _StockRequestFormPageState extends ConsumerState<StockRequestFormPage> {
   final Map<String, int> _templateIds = {};
 
   String _search = '';
+
+  /// Saring ke kategori tertentu, atau ke yang sudah diisi saja. Daftar barang
+  /// bisa puluhan; tanpa penyaring, memeriksa ulang sebelum mengajukan berarti
+  /// menggulir seluruh katalog.
+  String _filter = 'all';
+
   bool _saving = false;
   bool _prefilled = false;
 
@@ -72,6 +89,14 @@ class _StockRequestFormPageState extends ConsumerState<StockRequestFormPage> {
       _templateIds[key] = line.templateId;
     }
   }
+
+  double _packQtyOf(String key) {
+    final raw = _qtyCtrls[key]?.text.trim().replaceAll(',', '.') ?? '';
+    if (raw.isEmpty) return 0;
+    return double.tryParse(raw) ?? 0;
+  }
+
+  bool _isFilled(RequestableItem item) => _packQtyOf(item.key) > 0;
 
   List<Map<String, dynamic>> _buildItems(List<RequestableItem> catalogue) {
     final items = <Map<String, dynamic>>[];
@@ -149,53 +174,64 @@ class _StockRequestFormPageState extends ConsumerState<StockRequestFormPage> {
           if (catalogue.isEmpty) return const _CatalogueEmptyView();
           _prefill(catalogue);
 
-          final visible = _search.isEmpty
-              ? catalogue
-              : catalogue
-                  .where((c) => c.name.toLowerCase().contains(_search))
-                  .toList();
+          final filledCount = catalogue.where(_isFilled).length;
+          final visible = catalogue.where((c) {
+            if (_search.isNotEmpty && !c.name.toLowerCase().contains(_search)) {
+              return false;
+            }
+            if (_filter == 'filled') return _isFilled(c);
+            if (_filter != 'all' && c.itemType != _filter) return false;
+            return true;
+          }).toList();
+
+          // Kategori yang benar-benar punya isi saja — jangan tampilkan judul
+          // "Sedotan" lalu kosong di bawahnya.
+          final grouped = <String, List<RequestableItem>>{};
+          for (final item in visible) {
+            grouped.putIfAbsent(item.itemType, () => []).add(item);
+          }
+          final sections = _categoryOrder
+              .where((c) => grouped[c]?.isNotEmpty ?? false)
+              .toList();
+          // Tipe yang belum dikenal app ini tetap ditampilkan di paling bawah,
+          // daripada hilang diam-diam.
+          for (final key in grouped.keys) {
+            if (!_categoryOrder.contains(key)) sections.add(key);
+          }
 
           return Column(
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: TextField(
-                  controller: _searchCtrl,
-                  decoration: InputDecoration(
-                    hintText: 'Cari barang',
-                    prefixIcon: const Icon(Icons.search),
-                    filled: true,
-                    fillColor: Colors.white,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 4),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: AppTheme.borderLight),
-                    ),
-                  ),
-                ),
-              ),
+              _toolbar(catalogue, filledCount),
               Expanded(
-                child: ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                  itemCount: visible.length + 1,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, i) {
-                    if (i == visible.length) return _noteField();
-                    final item = visible[i];
-                    return _ItemCard(
-                      item: item,
-                      qtyCtrl: _qtyCtrls.putIfAbsent(
-                          item.key, () => TextEditingController()),
-                      templateId:
-                          _templateIds[item.key] ?? item.templates.first.id,
-                      onTemplateChanged: (id) =>
-                          setState(() => _templateIds[item.key] = id),
-                      onQtyChanged: () => setState(() {}),
-                    );
-                  },
-                ),
+                child: visible.isEmpty
+                    ? _noMatchView()
+                    : ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                        children: [
+                          for (final section in sections) ...[
+                            _sectionHeader(
+                                _categoryLabels[section] ?? section,
+                                grouped[section]!.length),
+                            for (final item in grouped[section]!) ...[
+                              _ItemCard(
+                                item: item,
+                                qtyCtrl: _qtyCtrls.putIfAbsent(
+                                    item.key, () => TextEditingController()),
+                                templateId: _templateIds[item.key] ??
+                                    item.templates.first.id,
+                                onTemplateChanged: (id) =>
+                                    setState(() => _templateIds[item.key] = id),
+                                onQtyChanged: () => setState(() {}),
+                              ),
+                              const SizedBox(height: 10),
+                            ],
+                          ],
+                          const SizedBox(height: 8),
+                          _noteField(),
+                        ],
+                      ),
               ),
-              _saveBar(catalogue),
+              _saveBar(catalogue, filledCount),
             ],
           );
         },
@@ -203,28 +239,183 @@ class _StockRequestFormPageState extends ConsumerState<StockRequestFormPage> {
     );
   }
 
-  Widget _noteField() {
+  Widget _toolbar(List<RequestableItem> catalogue, int filledCount) {
+    // Kategori yang tidak ada barangnya tidak perlu jadi tombol saring.
+    final present = _categoryOrder
+        .where((c) => catalogue.any((i) => i.itemType == c))
+        .toList();
+
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+      child: Column(
+        children: [
+          TextField(
+            controller: _searchCtrl,
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              hintText: 'Cari barang',
+              prefixIcon: const Icon(Icons.search, size: 20),
+              suffixIcon: _search.isEmpty
+                  ? null
+                  : IconButton(
+                      icon: const Icon(Icons.close, size: 18),
+                      onPressed: () => _searchCtrl.clear(),
+                    ),
+              isDense: true,
+              filled: true,
+              fillColor: AppTheme.bgLight,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppTheme.borderLight),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppTheme.borderLight),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 32,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                _filterChip('all', 'Semua'),
+                // Pintasan memeriksa ulang sebelum mengajukan, tanpa menggulir
+                // seluruh katalog.
+                if (filledCount > 0)
+                  _filterChip('filled', 'Diisi ($filledCount)',
+                      accent: true),
+                for (final c in present)
+                  _filterChip(c, _categoryLabels[c] ?? c),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _filterChip(String value, String label, {bool accent = false}) {
+    final selected = _filter == value;
+    final color = accent ? Colors.green.shade700 : AppTheme.brandBlue;
     return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: TextField(
-        controller: _noteCtrl,
-        maxLines: 2,
-        decoration: InputDecoration(
-          labelText: 'Catatan (opsional)',
-          hintText: 'mis. kebutuhan minggu depan',
-          filled: true,
-          fillColor: Colors.white,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: AppTheme.borderLight),
+      padding: const EdgeInsets.only(right: 8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: () => setState(() => _filter = value),
+        child: Container(
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: selected ? color : Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+                color: selected ? color : AppTheme.borderLight),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: selected ? Colors.white : AppTheme.textSecondary,
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _saveBar(List<RequestableItem> catalogue) {
-    final count = _buildItems(catalogue).length;
+  Widget _sectionHeader(String label, int count) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 14, 2, 8),
+      child: Row(
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.8,
+              color: AppTheme.textSecondary,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text('$count',
+              style: const TextStyle(
+                  fontSize: 11, color: AppTheme.textSecondary)),
+          const SizedBox(width: 10),
+          const Expanded(child: Divider(height: 1, color: AppTheme.borderLight)),
+        ],
+      ),
+    );
+  }
+
+  Widget _noMatchView() {
+    return ListView(
+      children: [
+        const SizedBox(height: 100),
+        const Icon(Icons.search_off, size: 48, color: AppTheme.textSecondary),
+        const SizedBox(height: 10),
+        Center(
+          child: Text(
+            _filter == 'filled'
+                ? 'Belum ada barang yang diisi'
+                : 'Tidak ada barang yang cocok',
+            style: const TextStyle(color: AppTheme.textSecondary),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _noteField() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.borderLight),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Catatan untuk gudang',
+              style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                  color: AppTheme.textPrimary)),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _noteCtrl,
+            maxLines: 2,
+            decoration: InputDecoration(
+              hintText: 'mis. kebutuhan minggu depan (opsional)',
+              hintStyle: const TextStyle(fontSize: 13),
+              isDense: true,
+              filled: true,
+              fillColor: AppTheme.bgLight,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppTheme.borderLight),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppTheme.borderLight),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _saveBar(List<RequestableItem> catalogue, int filledCount) {
     return SafeArea(
       top: false,
       child: Container(
@@ -236,21 +427,41 @@ class _StockRequestFormPageState extends ConsumerState<StockRequestFormPage> {
         child: Row(
           children: [
             Expanded(
-              child: Text(
-                count == 0
-                    ? 'Belum ada barang yang diisi'
-                    : '$count barang akan diminta',
-                style: const TextStyle(
-                    fontSize: 13, color: AppTheme.textSecondary),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    filledCount == 0
+                        ? 'Belum ada barang diisi'
+                        : '$filledCount barang',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: filledCount == 0
+                          ? AppTheme.textSecondary
+                          : AppTheme.textPrimary,
+                    ),
+                  ),
+                  const Text(
+                    'Gudang bisa menyetujui lebih sedikit',
+                    style:
+                        TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                  ),
+                ],
               ),
             ),
+            const SizedBox(width: 12),
             ElevatedButton(
-              onPressed: _saving || count == 0 ? null : () => _save(catalogue),
+              onPressed:
+                  _saving || filledCount == 0 ? null : () => _save(catalogue),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.brandBlue,
                 foregroundColor: Colors.white,
+                disabledBackgroundColor: AppTheme.borderLight,
                 elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
               ),
@@ -260,7 +471,7 @@ class _StockRequestFormPageState extends ConsumerState<StockRequestFormPage> {
                       height: 18,
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white))
-                  : Text(_isEdit ? 'Simpan Perubahan' : 'Ajukan'),
+                  : Text(_isEdit ? 'Simpan' : 'Ajukan'),
             ),
           ],
         ),
@@ -326,45 +537,49 @@ class _ItemCard extends StatelessWidget {
     );
     final packQty =
         double.tryParse(qtyCtrl.text.trim().replaceAll(',', '.')) ?? 0;
+    final filled = packQty > 0;
     final baseTotal = packQty * template.baseQty;
 
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 120),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: packQty > 0 ? AppTheme.brandBlue : AppTheme.borderLight,
-          width: packQty > 0 ? 1.5 : 1,
+          color: filled ? AppTheme.brandBlue : AppTheme.borderLight,
+          width: filled ? 1.5 : 1,
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Baris nama berdiri sendiri supaya nama panjang boleh turun ke baris
+          // kedua tanpa mendorong kotak jumlah keluar layar.
+          Text(
+            item.name,
+            style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 15,
+                color: AppTheme.textPrimary),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Stok gudang ${_trimNum(item.warehouseQty)} ${item.unit}',
+            style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+          ),
+          const SizedBox(height: 12),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(item.name,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 15,
-                            color: AppTheme.textPrimary)),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${item.typeLabel} • stok gudang '
-                      '${_trimNum(item.warehouseQty)} ${item.unit}',
-                      style: const TextStyle(
-                          fontSize: 12, color: AppTheme.textSecondary),
-                    ),
-                  ],
-                ),
+                child: item.templates.length > 1
+                    ? _templateDropdown()
+                    : _templateLabel(template),
               ),
+              const SizedBox(width: 10),
               SizedBox(
-                width: 88,
+                width: 76,
                 child: TextField(
                   controller: qtyCtrl,
                   textAlign: TextAlign.center,
@@ -374,76 +589,106 @@ class _ItemCard extends StatelessWidget {
                     FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
                   ],
                   onChanged: (_) => onQtyChanged(),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w800, fontSize: 15),
                   decoration: InputDecoration(
                     hintText: '0',
                     isDense: true,
+                    filled: true,
+                    fillColor: filled ? Colors.white : AppTheme.bgLight,
                     contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 10),
+                        horizontal: 8, vertical: 12),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                       borderSide: const BorderSide(color: AppTheme.borderLight),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(
+                          color: filled
+                              ? AppTheme.brandBlue
+                              : AppTheme.borderLight),
                     ),
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              if (item.templates.length > 1)
-                Expanded(
-                  child: DropdownButtonFormField<int>(
-                    initialValue: templateId,
-                    isDense: true,
-                    decoration: InputDecoration(
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 8),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide:
-                            const BorderSide(color: AppTheme.borderLight),
-                      ),
-                    ),
-                    items: item.templates
-                        .map((t) => DropdownMenuItem(
-                              value: t.id,
-                              child: Text(
-                                '${t.name} (${_trimNum(t.baseQty)} ${item.unit})',
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                            ))
-                        .toList(),
-                    onChanged: (v) {
-                      if (v != null) onTemplateChanged(v);
-                    },
-                  ),
-                )
-              else
-                Expanded(
-                  child: Text(
-                    'Satuan: ${template.name} '
-                    '(${_trimNum(template.baseQty)} ${item.unit})',
-                    style: const TextStyle(
-                        fontSize: 12, color: AppTheme.textSecondary),
-                  ),
-                ),
-              if (packQty > 0) ...[
-                const SizedBox(width: 8),
-                // Terjemahan ke satuan dasar. Ditampilkan supaya orang tahu
-                // "2 pack" itu sebenarnya berapa, tanpa harus mengetiknya.
-                Text(
-                  '= ${_trimNum(baseTotal)} ${item.unit}',
-                  style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.brandBlue),
-                ),
-              ],
-            ],
-          ),
+          // Terjemahan ke satuan dasar. Muncul hanya setelah diisi, supaya
+          // kartu yang kosong tetap ringkas.
+          if (filled) ...[
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: AppTheme.brandBlue.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                'Diminta ${_trimNum(baseTotal)} ${item.unit}',
+                style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.brandBlue),
+              ),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+
+  Widget _templateDropdown() {
+    return DropdownButtonFormField<int>(
+      initialValue: templateId,
+      isDense: true,
+      isExpanded: true,
+      style: const TextStyle(fontSize: 13, color: AppTheme.textPrimary),
+      decoration: InputDecoration(
+        isDense: true,
+        filled: true,
+        fillColor: AppTheme.bgLight,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppTheme.borderLight),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppTheme.borderLight),
+        ),
+      ),
+      items: item.templates
+          .map((t) => DropdownMenuItem(
+                value: t.id,
+                child: Text(
+                  '${t.name} · ${_trimNum(t.baseQty)} ${item.unit}',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 13),
+                ),
+              ))
+          .toList(),
+      onChanged: (v) {
+        if (v != null) onTemplateChanged(v);
+      },
+    );
+  }
+
+  Widget _templateLabel(RequestableTemplate template) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.bgLight,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppTheme.borderLight),
+      ),
+      child: Text(
+        '${template.name} · ${_trimNum(template.baseQty)} ${item.unit}',
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontSize: 13, color: AppTheme.textPrimary),
       ),
     );
   }
