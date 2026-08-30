@@ -26,6 +26,7 @@ enum AppFeature {
   plasticMovements, // /plastic-stock/movements (Riwayat Stok Plastik)
   strawMovements, // /sedotan-stock/movements (Riwayat Stok Sedotan)
   stockAudit, // /stock-audits
+  stockRequest, // /stock-requests (Permintaan Stok ke gudang)
   expenses, // /expenses (Pengeluaran)
   shift, // /shifts (Shift Kasir)
   attendance, // /attendance/check-in|out (Absensi)
@@ -55,6 +56,7 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.plasticMovements,
         AppFeature.strawMovements,
         AppFeature.stockAudit,
+        AppFeature.stockRequest,
         AppFeature.expenses,
         AppFeature.shift,
         AppFeature.kitchenDisplay,
@@ -79,6 +81,7 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.plasticMovements,
         AppFeature.strawMovements,
         AppFeature.stockAudit,
+        AppFeature.stockRequest,
         AppFeature.expenses,
         AppFeature.shift,
         AppFeature.attendance,
@@ -105,6 +108,7 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.plasticMovements,
         AppFeature.strawMovements,
         AppFeature.stockAudit,
+        AppFeature.stockRequest,
         AppFeature.expenses,
         AppFeature.shift,
         AppFeature.attendance,
@@ -256,6 +260,26 @@ bool canCreateAudit(String? role) {
     case 'supervisor':
     case 'leader':
     case 'kasir':
+      return true;
+    default:
+      return false;
+  }
+}
+
+/// Boleh mengajukan / mengubah / membatalkan permintaan stok ke gudang.
+/// Owner, Supervisor, Leader (BE Stasiun 3). Kasir & karyawan tidak: permintaan
+/// punya konsekuensi biaya dan harus jelas siapa yang bertanggung jawab per
+/// outlet.
+///
+/// Mengubah & membatalkan sebenarnya lebih sempit lagi — hanya PEMBUATNYA, dan
+/// itu tidak bisa dipastikan dari sini karena id user tidak ikut di AuthState.
+/// Tombolnya tetap ditampilkan; kalau bukan miliknya, BE membalas 403 dan
+/// repository menerjemahkannya jadi kalimat yang jelas.
+bool canCreateStockRequest(String? role) {
+  switch (role?.toLowerCase()) {
+    case 'owner':
+    case 'supervisor':
+    case 'leader':
       return true;
     default:
       return false;
