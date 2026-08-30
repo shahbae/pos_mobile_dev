@@ -278,17 +278,17 @@ class _StockRequestFormPageState extends ConsumerState<StockRequestFormPage> {
             ),
           ),
           const SizedBox(height: 10),
-          SizedBox(
-            height: 32,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
+          // Row di dalam scroll horizontal, bukan ListView: chip-nya menentukan
+          // lebarnya sendiri dari isi teks, dan tingginya ikut yang tertinggi.
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
               children: [
                 _filterChip('all', 'Semua'),
                 // Pintasan memeriksa ulang sebelum mengajukan, tanpa menggulir
                 // seluruh katalog.
                 if (filledCount > 0)
-                  _filterChip('filled', 'Diisi ($filledCount)',
-                      accent: true),
+                  _filterChip('filled', 'Diisi ($filledCount)', accent: true),
                 for (final c in present)
                   _filterChip(c, _categoryLabels[c] ?? c),
               ],
@@ -307,9 +307,13 @@ class _StockRequestFormPageState extends ConsumerState<StockRequestFormPage> {
       child: InkWell(
         borderRadius: BorderRadius.circular(999),
         onTap: () => setState(() => _filter = value),
+        // JANGAN pakai `alignment` di sini. Chip ini hidup di dalam scroll
+        // horizontal, jadi lebarnya tak terbatas — dan Container ber-alignment
+        // dengan lebar tak terbatas akan memuai sampai tak hingga, yang
+        // meruntuhkan layout seluruh halaman, bukan cuma chip-nya. Biarkan
+        // padding + teks yang menentukan ukurannya.
         child: Container(
-          alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
           decoration: BoxDecoration(
             color: selected ? color : Colors.transparent,
             borderRadius: BorderRadius.circular(999),
@@ -424,34 +428,44 @@ class _StockRequestFormPageState extends ConsumerState<StockRequestFormPage> {
           color: Colors.white,
           border: Border(top: BorderSide(color: AppTheme.borderLight)),
         ),
-        child: Row(
+        // Tombolnya memenuhi lebar, bukan berdampingan dengan teks.
+        //
+        // Itu bukan sekadar selera: AppTheme menyetel minimumSize tombol ke
+        // `Size.fromHeight(44)`, yang berarti lebar minimumnya TAK HINGGA
+        // supaya tombol form membentang penuh. Menaruh tombol seperti itu
+        // sebagai anak non-flex di dalam Row memberinya lebar tak terbatas,
+        // dan tuntutan lebar tak hingga itu menggagalkan layout seluruh
+        // halaman — bukan cuma tombolnya. Bentuk bertumpuk ini justru yang
+        // sejalan dengan temanya.
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
                     filledCount == 0
                         ? 'Belum ada barang diisi'
-                        : '$filledCount barang',
+                        : '$filledCount barang akan diminta',
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 13,
                       fontWeight: FontWeight.w800,
                       color: filledCount == 0
                           ? AppTheme.textSecondary
                           : AppTheme.textPrimary,
                     ),
                   ),
+                ),
+                if (filledCount > 0)
                   const Text(
-                    'Gudang bisa menyetujui lebih sedikit',
+                    'gudang bisa menyetujui lebih sedikit',
                     style:
                         TextStyle(fontSize: 11, color: AppTheme.textSecondary),
                   ),
-                ],
-              ),
+              ],
             ),
-            const SizedBox(width: 12),
+            const SizedBox(height: 10),
             ElevatedButton(
               onPressed:
                   _saving || filledCount == 0 ? null : () => _save(catalogue),
@@ -459,9 +473,9 @@ class _StockRequestFormPageState extends ConsumerState<StockRequestFormPage> {
                 backgroundColor: AppTheme.brandBlue,
                 foregroundColor: Colors.white,
                 disabledBackgroundColor: AppTheme.borderLight,
+                disabledForegroundColor: AppTheme.textSecondary,
                 elevation: 0,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
               ),
@@ -471,7 +485,7 @@ class _StockRequestFormPageState extends ConsumerState<StockRequestFormPage> {
                       height: 18,
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white))
-                  : Text(_isEdit ? 'Simpan' : 'Ajukan'),
+                  : Text(_isEdit ? 'Simpan Perubahan' : 'Ajukan'),
             ),
           ],
         ),
