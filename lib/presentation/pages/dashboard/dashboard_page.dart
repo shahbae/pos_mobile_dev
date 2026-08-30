@@ -30,12 +30,12 @@ class DashboardPage extends ConsumerWidget {
   static bool _showStockTab(String? role) {
     const stockish = {
       AppFeature.products,
-      AppFeature.purchases,
       AppFeature.stockMaterial,
       AppFeature.stockTopping,
       AppFeature.stockMovements,
       AppFeature.toppingMovements,
       AppFeature.stockAudit,
+      AppFeature.stockRequest,
       AppFeature.expenses,
     };
     return featuresForRole(role).any(stockish.contains);

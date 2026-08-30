@@ -16,7 +16,6 @@ enum AppFeature {
   leaderReport, // GET /reports/leader/daily (Laporan Harian Leader per shift)
   stockAlerts, // GET /reports/stock-alerts (Stok Menipis) — gate terpisah
   products, // GET /products (katalog baca di tab Stok)
-  purchases, // /purchases (Pembelian)
   stockMaterial, // /stock-levels (+ adjust)
   stockTopping, // /topping-stock (+ adjust)
   stockPlastic, // /plastic-stock (+ adjust)
@@ -46,7 +45,6 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.leaderReport,
         AppFeature.stockAlerts,
         AppFeature.products,
-        AppFeature.purchases,
         AppFeature.stockMaterial,
         AppFeature.stockTopping,
         AppFeature.stockPlastic,
@@ -71,7 +69,6 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.leaderReport,
         AppFeature.stockAlerts,
         AppFeature.products,
-        AppFeature.purchases,
         AppFeature.stockMaterial,
         AppFeature.stockTopping,
         AppFeature.stockPlastic,
@@ -98,7 +95,6 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.leaderReport, // laporan harian per shift (GET /reports/leader/daily)
         AppFeature.stockAlerts, // peringatan stok (per arahan user 2026-06-20)
         AppFeature.products,
-        AppFeature.purchases,
         AppFeature.stockMaterial,
         AppFeature.stockTopping,
         AppFeature.stockPlastic,
@@ -217,18 +213,6 @@ bool canAdjustStock(String? role) {
   switch (role?.toLowerCase()) {
     case 'owner':
     case 'supervisor':
-      return true;
-    default:
-      return false;
-  }
-}
-
-/// Boleh membuat pembelian. Owner/Supervisor/Leader. Finance hanya lihat.
-bool canCreatePurchase(String? role) {
-  switch (role?.toLowerCase()) {
-    case 'owner':
-    case 'supervisor':
-    case 'leader':
       return true;
     default:
       return false;

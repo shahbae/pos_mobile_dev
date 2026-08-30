@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/presentation/pages/products/product_list_page.dart';
-import 'package:pos_mobile/presentation/pages/purchases/purchase_list_page.dart';
 import 'package:pos_mobile/presentation/pages/stock_movements/stock_movement_list_page.dart';
 import 'package:pos_mobile/presentation/pages/stock_audits/stock_audit_list_page.dart';
 import 'package:pos_mobile/presentation/pages/stock_requests/stock_request_list_page.dart';
@@ -84,21 +83,8 @@ class StockTab extends ConsumerWidget {
               ),
             ),
           ],
-          if (features.contains(AppFeature.purchases)) ...[
-            const SizedBox(height: 16),
-            _menuItem(
-              context,
-              icon: Icons.shopping_cart_checkout_outlined,
-              title: "Pembelian",
-              subtitle: "Catat transaksi pembelian ke supplier",
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const PurchaseListPage()),
-              ),
-            ),
-          ],
-          // Ditaruh tepat di bawah Pembelian, karena inilah penggantinya:
-          // outlet tidak belanja sendiri lagi, semua lewat gudang.
+          // Menggantikan menu Pembelian, yang dibuang bersama seluruh fiturnya:
+          // outlet tidak belanja sendiri lagi, semua barang datang dari gudang.
           if (features.contains(AppFeature.stockRequest)) ...[
             const SizedBox(height: 16),
             _menuItem(
