@@ -356,7 +356,7 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
                   width: 120,
                   child: _numField(key, _physical, 'qty fisik', unit: item.unit)),
               IconButton(
-                tooltip: open ? 'Batalkan dikembalikan' : 'Barang dikembalikan',
+                tooltip: open ? 'Batalkan dikembalikan' : 'Barang dikembalikan ke gudang',
                 visualDensity: VisualDensity.compact,
                 icon: Icon(
                   open ? Icons.remove_circle_outline : Icons.assignment_return_outlined,
@@ -381,7 +381,7 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
                 children: [
                   const Icon(Icons.assignment_return_outlined, size: 16, color: AppTheme.textSecondary),
                   const SizedBox(width: 6),
-                  const Text('Dikembalikan',
+                  const Text('Dikembalikan ke gudang',
                       style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
                   const Spacer(),
                   SizedBox(
