@@ -216,18 +216,25 @@ class _ShipmentCard extends StatelessWidget {
                           fontWeight: FontWeight.w800,
                           fontSize: 15,
                           color: AppTheme.textPrimary)),
-                  const SizedBox(height: 4),
-                  Text(
-                    shipment.courierName.isNotEmpty
-                        ? 'Kurir ${shipment.courierName}'
-                        : 'Kurir tidak dicatat',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 13, color: AppTheme.textSecondary),
-                  ),
+                  // Kurir tidak lagi diisi saat gudang menekan kirim, jadi
+                  // barisnya hanya muncul untuk kiriman lama yang terlanjur
+                  // mencatatnya. Menuliskan "tidak dicatat" di tiap baris cuma
+                  // memberi tahu pembaca bahwa ada isian yang memang sudah
+                  // ditiadakan.
+                  if (shipment.courierName.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Kurir ${shipment.courierName}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 13, color: AppTheme.textSecondary),
+                    ),
+                  ],
                   if (shipment.shippedAt != null) ...[
-                    const SizedBox(height: 2),
+                    // Rapat ke baris kurir, longgar ke judul: jaraknya
+                    // mengikuti apa yang benar-benar ada di atasnya.
+                    SizedBox(height: shipment.courierName.isEmpty ? 4 : 2),
                     Text(fmtShipmentDate(shipment.shippedAt!),
                         style: const TextStyle(
                             fontSize: 12, color: AppTheme.textSecondary)),
