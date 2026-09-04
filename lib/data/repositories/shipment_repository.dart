@@ -89,6 +89,14 @@ class ShipmentRepository {
     if (lower == 'unauthorized') {
       return 'Sesi sudah berakhir. Masuk ulang lalu coba lagi.';
     }
+    // 400 dari endpoint kiriman selalu berupa 'invalid request' — satu-satunya
+    // pesan BE di alur ini yang masih berbahasa Inggris dan tidak menyebut
+    // sebabnya. Menampilkannya apa adanya membuat kasir mengira dirinya salah
+    // pencet, padahal ini kesalahan di sisi server yang tidak bisa dia benahi.
+    if (statusCode == 400) {
+      return 'Kiriman ini ditolak server dan bukan karena kesalahanmu. '
+          'Muat ulang dulu; kalau masih sama, laporkan ke admin gudang.';
+    }
     return null;
   }
 }
