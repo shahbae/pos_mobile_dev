@@ -14,11 +14,9 @@ class Shipment {
   /// `shipped` | `received` | `rejected` | `cancelled`.
   final String status;
 
-  final String courierName;
-  final String courierPhone;
-  final String vehiclePlate;
-  final String courierNote;
-
+  // Tidak ada data kurir: kolomnya sudah dibuang dari surat jalan di BE, jadi
+  // tidak ada yang bisa dibaca maupun ditampilkan. `shipperName` di bawah
+  // sudah menjawab "siapa yang melepas barangnya".
   final String? shipperName;
   final String? shippedAt;
   final String? receivedAt;
@@ -37,10 +35,6 @@ class Shipment {
     this.branchName,
     required this.stockRequestId,
     required this.status,
-    this.courierName = '',
-    this.courierPhone = '',
-    this.vehiclePlate = '',
-    this.courierNote = '',
     this.shipperName,
     this.shippedAt,
     this.receivedAt,
@@ -79,10 +73,6 @@ class Shipment {
       branchName: _nestedName(j['branch']),
       stockRequestId: _toInt(j['stock_request_id']),
       status: j['status']?.toString() ?? 'shipped',
-      courierName: j['courier_name']?.toString() ?? '',
-      courierPhone: j['courier_phone']?.toString() ?? '',
-      vehiclePlate: j['vehicle_plate']?.toString() ?? '',
-      courierNote: j['courier_note']?.toString() ?? '',
       shipperName: _nestedName(j['shipper']),
       shippedAt: j['shipped_at']?.toString(),
       receivedAt: j['received_at']?.toString(),

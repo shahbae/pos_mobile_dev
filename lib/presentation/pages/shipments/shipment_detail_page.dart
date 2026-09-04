@@ -197,16 +197,12 @@ class _ShipmentDetailPageState extends ConsumerState<ShipmentDetailPage> {
           ),
           const SizedBox(height: 8),
           _kv('Dari permintaan', '#${sh.stockRequestId}'),
-          if (sh.courierName.isNotEmpty) _kv('Kurir', sh.courierName),
-          if (sh.courierPhone.isNotEmpty) _kv('Telepon', sh.courierPhone),
-          if (sh.vehiclePlate.isNotEmpty) _kv('Kendaraan', sh.vehiclePlate),
           if (sh.shippedAt != null)
             _kv('Dikirim', fmtShipmentDate(sh.shippedAt!)),
           if (sh.shipperName != null) _kv('Oleh', sh.shipperName!),
           if (sh.receivedAt != null)
             _kv(sh.isReceived ? 'Diterima' : 'Diputuskan',
                 fmtShipmentDate(sh.receivedAt!)),
-          if (sh.courierNote.isNotEmpty) _kv('Catatan', sh.courierNote),
           if (sh.isOnTheWay) ...[
             const SizedBox(height: 10),
             Container(
