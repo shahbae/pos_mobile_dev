@@ -60,8 +60,9 @@ class _ShipmentDetailPageState extends ConsumerState<ShipmentDetailPage> {
           children: [
             const Text(
                 'Seluruh barang dikembalikan ke gudang — tidak ada tolak '
-                'sebagian. Permintaan stoknya hidup lagi, jadi gudang bisa '
-                'mengirim ulang tanpa kamu mengajukan dari nol.'),
+                'sebagian. Permintaan stoknya ikut tertutup: gudang TIDAK bisa '
+                'mengirim ulang, jadi kalau barangnya masih dibutuhkan, kamu '
+                'harus mengajukan permintaan baru.'),
             const SizedBox(height: 12),
             TextField(
               controller: ctrl,
