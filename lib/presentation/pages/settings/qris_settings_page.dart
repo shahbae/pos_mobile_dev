@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:pos_mobile/data/models/qris_payment_model.dart';
 import 'package:pos_mobile/presentation/providers/branch_provider.dart';
+import 'package:pos_mobile/presentation/widgets/confirm_dialog.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
 /// Setting QRIS cabang (docs/api-qris-manual-fe.md §5) — owner & supervisor.
@@ -83,6 +84,14 @@ class _QrisSettingsPageState extends ConsumerState<QrisSettingsPage> {
       _toast('Mode manual membutuhkan payload QRIS statis cabang', danger: true);
       return;
     }
+    final yakin = await confirmAction(
+      context,
+      title: 'Simpan setting QRIS?',
+      message: 'Cabang ini akan memakai mode $_mode untuk pembayaran QRIS.',
+      confirmLabel: 'Ya, simpan',
+    );
+    if (!yakin || !mounted) return;
+
     setState(() => _saving = true);
     try {
       final cfg = await ref.read(branchRepositoryProvider).saveQrisConfig(

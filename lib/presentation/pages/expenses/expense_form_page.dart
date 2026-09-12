@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:pos_mobile/presentation/widgets/confirm_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -96,6 +97,14 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
       _snack('Foto bukti wajib dilampirkan.', error: true);
       return;
     }
+
+    final yakin = await confirmAction(
+      context,
+      title: 'Catat pengeluaran?',
+      message: 'Pengeluaran sebesar Rp${_amountController.text} akan masuk ke kas shift ini.',
+      confirmLabel: 'Ya, catat',
+    );
+    if (!yakin) return;
 
     setState(() => _loading = true);
     final repo = ref.read(expenseRepositoryProvider);

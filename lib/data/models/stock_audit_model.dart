@@ -51,7 +51,9 @@ class StockAuditItem {
   final double systemQty;
   final double physicalQty;
 
-  /// Jumlah yang dikembalikan (keluar cabang secara sah, bukan terjual/hilang).
+  /// Jumlah yang dikembalikan ke gudang pusat (keluar cabang secara sah, bukan
+  /// terjual/hilang). Saat opname di-acc, jumlah ini keluar dari stok cabang dan
+  /// masuk ke stok gudang pada transaksi yang sama.
   /// diff = physical − (system − returned), dihitung BE. Default 0.
   final double returnedQty;
 

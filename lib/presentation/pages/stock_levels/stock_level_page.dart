@@ -10,6 +10,7 @@ import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/material_provider.dart';
 import 'package:pos_mobile/presentation/providers/stock_level_provider.dart';
 import 'package:pos_mobile/presentation/widgets/stock_packs_view.dart';
+import 'package:pos_mobile/presentation/widgets/confirm_dialog.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
 /// Stok material: lihat saldo per material + penyesuaian (adjust) stok.
@@ -141,6 +142,17 @@ class StockLevelPage extends ConsumerWidget {
     );
 
     if (result == null || lv.materialId == null) return;
+
+    if (!context.mounted) return;
+    // Penyesuaian stok menulis selisihnya ke buku stok dan tak bisa ditarik
+    // kembali, jadi angkanya dibacakan sekali lagi sebelum disimpan.
+    final yakin = await confirmAction(
+      context,
+      title: 'Sesuaikan stok bahan?',
+      message: 'Stok ${lv.name} akan diubah menjadi $result $unit.',
+      confirmLabel: 'Ya, simpan',
+    );
+    if (!yakin) return;
 
     try {
       await ref.read(stockLevelRepositoryProvider).adjustStock(

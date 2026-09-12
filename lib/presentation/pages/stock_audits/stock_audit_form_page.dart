@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/data/models/stock_audit_model.dart';
 import 'package:pos_mobile/data/repositories/stock_audit_repository.dart';
 import 'package:pos_mobile/presentation/providers/stock_audit_provider.dart';
+import 'package:pos_mobile/presentation/widgets/confirm_dialog.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
 class StockAuditFormPage extends ConsumerStatefulWidget {
@@ -85,6 +86,15 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
       _toast('Isi jumlah fisik minimal 1 item', Colors.orange);
       return;
     }
+
+    if (!mounted) return;
+    final yakin = await confirmAction(
+      context,
+      title: widget.isEdit ? 'Simpan perubahan audit?' : 'Simpan draft audit?',
+      message: '${items.length} item akan disimpan. Selisihnya baru memengaruhi stok setelah audit disetujui.',
+      confirmLabel: 'Ya, simpan',
+    );
+    if (!yakin) return;
 
     setState(() => _saving = true);
     try {
@@ -356,7 +366,7 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
                   width: 120,
                   child: _numField(key, _physical, 'qty fisik', unit: item.unit)),
               IconButton(
-                tooltip: open ? 'Batalkan dikembalikan' : 'Barang dikembalikan',
+                tooltip: open ? 'Batalkan dikembalikan' : 'Barang dikembalikan ke gudang',
                 visualDensity: VisualDensity.compact,
                 icon: Icon(
                   open ? Icons.remove_circle_outline : Icons.assignment_return_outlined,
@@ -381,7 +391,7 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
                 children: [
                   const Icon(Icons.assignment_return_outlined, size: 16, color: AppTheme.textSecondary),
                   const SizedBox(width: 6),
-                  const Text('Dikembalikan',
+                  const Text('Dikembalikan ke gudang',
                       style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
                   const Spacer(),
                   SizedBox(
