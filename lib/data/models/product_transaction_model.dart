@@ -89,6 +89,10 @@ class TransactionItem {
   final int productId;
   final int? variantId; // null = pakai harga & resep produk (behavior lama)
   final int quantity;
+  /// Berapa gelas dari [quantity] yang dituang ke tumbler bawaan pembeli. BE
+  /// memakai ini untuk tidak memotong cup & sealer sebanyak itu. Sedotan tetap
+  /// keluar. Tidak boleh melebihi [quantity].
+  final int tumblerQty;
   final List<ToppingSelection> freeToppings; // include di harga, tidak menambah subtotal
   final List<ToppingSelection> extraToppings; // berbayar
 
@@ -96,6 +100,7 @@ class TransactionItem {
     required this.productId,
     this.variantId,
     required this.quantity,
+    this.tumblerQty = 0,
     this.freeToppings = const [],
     this.extraToppings = const [],
   });
@@ -105,6 +110,7 @@ class TransactionItem {
       'product_id': productId,
       if (variantId != null) 'variant_id': variantId,
       'qty': quantity,
+      if (tumblerQty > 0) 'tumbler_qty': tumblerQty,
       if (freeToppings.isNotEmpty)
         'free_toppings': freeToppings.map((t) => t.toJson()).toList(),
       if (extraToppings.isNotEmpty)
