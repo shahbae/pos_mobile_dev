@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:pos_mobile/presentation/widgets/confirm_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -119,6 +120,14 @@ class _ExpenseFormEditPageState extends ConsumerState<ExpenseFormEditPage> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+
+    final yakin = await confirmAction(
+      context,
+      title: 'Simpan perubahan?',
+      message: 'Pengeluaran ini akan diubah menjadi Rp${_amountController.text}.',
+      confirmLabel: 'Ya, simpan',
+    );
+    if (!yakin) return;
 
     setState(() => _loading = true);
     final repo = ref.read(expenseRepositoryProvider);

@@ -224,7 +224,9 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       runSpacing: 8,
       children: [
         _cashChip("Uang Pas", () => _setPaid(total)),
-        for (final amt in const [50000, 100000, 150000, 200000])
+        // Pecahan yang benar-benar disodorkan pembeli es teh. Nominal besar
+        // (150rb, 200rb) nyaris tak pernah kepakai dan cuma makan tempat.
+        for (final amt in const [5000, 10000, 20000, 50000, 100000])
           _cashChip(formatRupiah(amt), () => _setPaid(amt)),
       ],
     );

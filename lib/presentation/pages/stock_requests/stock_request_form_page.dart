@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:pos_mobile/data/models/stock_request_model.dart';
 import 'package:pos_mobile/presentation/providers/stock_request_provider.dart';
+import 'package:pos_mobile/presentation/widgets/confirm_dialog.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
 /// Form mengajukan / mengubah permintaan stok.
@@ -123,6 +124,14 @@ class _StockRequestFormPageState extends ConsumerState<StockRequestFormPage> {
       _snack('Isi jumlah minimal satu barang dulu.');
       return;
     }
+
+    final yakin = await confirmAction(
+      context,
+      title: _isEdit ? 'Simpan perubahan permintaan?' : 'Kirim permintaan ke gudang?',
+      message: '${items.length} jenis barang akan diajukan ke gudang.',
+      confirmLabel: 'Ya, kirim',
+    );
+    if (!yakin || !mounted) return;
 
     setState(() => _saving = true);
     try {

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/data/models/stock_audit_model.dart';
 import 'package:pos_mobile/data/repositories/stock_audit_repository.dart';
 import 'package:pos_mobile/presentation/providers/stock_audit_provider.dart';
+import 'package:pos_mobile/presentation/widgets/confirm_dialog.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
 class StockAuditFormPage extends ConsumerStatefulWidget {
@@ -85,6 +86,15 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
       _toast('Isi jumlah fisik minimal 1 item', Colors.orange);
       return;
     }
+
+    if (!mounted) return;
+    final yakin = await confirmAction(
+      context,
+      title: widget.isEdit ? 'Simpan perubahan audit?' : 'Simpan draft audit?',
+      message: '${items.length} item akan disimpan. Selisihnya baru memengaruhi stok setelah audit disetujui.',
+      confirmLabel: 'Ya, simpan',
+    );
+    if (!yakin) return;
 
     setState(() => _saving = true);
     try {

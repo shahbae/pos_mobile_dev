@@ -11,6 +11,7 @@ import 'package:pos_mobile/data/repositories/attendance_repository.dart';
 import 'package:pos_mobile/presentation/providers/attendance_provider.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/branch_provider.dart';
+import 'package:pos_mobile/presentation/widgets/confirm_dialog.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
 /// Halaman absensi karyawan: check-in / check-out dengan selfie + GPS.
@@ -104,6 +105,14 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       branchId = null;
     }
 
+    final yakin = await confirmAction(
+      context,
+      title: 'Absen masuk sekarang?',
+      message: 'Jam masuk dicatat saat ini juga dan hanya bisa diubah oleh owner.',
+      confirmLabel: 'Ya, absen masuk',
+    );
+    if (!yakin || !mounted) return;
+
     await _run(() async {
       setState(() => _progress = 'Mengambil foto…');
       final photo = await _takeSelfie();
@@ -125,6 +134,14 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
   }
 
   Future<void> _checkOut() async {
+    final yakin = await confirmAction(
+      context,
+      title: 'Absen pulang sekarang?',
+      message: 'Jam pulang dicatat saat ini juga dan hanya bisa diubah oleh owner.',
+      confirmLabel: 'Ya, absen pulang',
+    );
+    if (!yakin || !mounted) return;
+
     await _run(() async {
       setState(() => _progress = 'Mengambil foto…');
       final photo = await _takeSelfie();
