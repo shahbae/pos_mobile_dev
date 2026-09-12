@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/presentation/pages/products/product_list_page.dart';
-import 'package:pos_mobile/presentation/pages/purchases/purchase_list_page.dart';
 import 'package:pos_mobile/presentation/pages/stock_movements/stock_movement_list_page.dart';
 import 'package:pos_mobile/presentation/pages/stock_audits/stock_audit_list_page.dart';
+import 'package:pos_mobile/presentation/pages/stock_requests/stock_request_list_page.dart';
+import 'package:pos_mobile/presentation/pages/shipments/shipment_list_page.dart';
 import 'package:pos_mobile/presentation/pages/stock_levels/stock_level_page.dart';
 import 'package:pos_mobile/presentation/pages/topping_stock/topping_stock_page.dart';
 import 'package:pos_mobile/presentation/pages/topping_stock/topping_stock_movement_page.dart';
@@ -14,6 +15,7 @@ import 'package:pos_mobile/presentation/pages/sedotan_stock/sedotan_stock_moveme
 import 'package:pos_mobile/presentation/pages/expenses/expense_list_page.dart';
 import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
+import 'package:pos_mobile/presentation/providers/shipment_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
 class StockTab extends ConsumerWidget {
@@ -25,6 +27,13 @@ class StockTab extends ConsumerWidget {
     final accent = theme.colorScheme.primary;
     final bottomInset = MediaQuery.of(context).padding.bottom;
     final features = featuresForRole(ref.watch(authProvider).role);
+    // Kiriman yang sudah sampai tapi belum ditekan terima berarti stoknya belum
+    // bertambah — kasir bisa menolak pesanan padahal bahannya ada di gudang
+    // toko. Angkanya ditaruh di menunya supaya tidak perlu ada yang ingat
+    // membukanya.
+    final pendingShipments = features.contains(AppFeature.shipment)
+        ? ref.watch(pendingShipmentCountProvider)
+        : 0;
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
@@ -83,16 +92,34 @@ class StockTab extends ConsumerWidget {
               ),
             ),
           ],
-          if (features.contains(AppFeature.purchases)) ...[
+          // Menggantikan menu Pembelian, yang dibuang bersama seluruh fiturnya:
+          // outlet tidak belanja sendiri lagi, semua barang datang dari gudang.
+          if (features.contains(AppFeature.stockRequest)) ...[
             const SizedBox(height: 16),
             _menuItem(
               context,
-              icon: Icons.shopping_cart_checkout_outlined,
-              title: "Pembelian",
-              subtitle: "Catat transaksi pembelian ke supplier",
+              icon: Icons.local_shipping_outlined,
+              title: "Permintaan Stok",
+              subtitle: "Minta barang ke gudang & pantau statusnya",
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const PurchaseListPage()),
+                MaterialPageRoute(builder: (_) => const StockRequestListPage()),
+              ),
+            ),
+          ],
+          // Tepat di bawah Permintaan Stok: kiriman adalah kelanjutannya, dan
+          // urutan menunya mengikuti urutan kerjanya.
+          if (features.contains(AppFeature.shipment)) ...[
+            const SizedBox(height: 16),
+            _menuItem(
+              context,
+              icon: Icons.inbox_outlined,
+              title: "Kiriman Gudang",
+              subtitle: "Terima barang yang dikirim gudang",
+              badge: pendingShipments,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ShipmentListPage()),
               ),
             ),
           ],
@@ -238,6 +265,9 @@ class StockTab extends ConsumerWidget {
     required String subtitle,
     VoidCallback? onTap,
     bool disabled = false,
+    // Jumlah hal yang menunggu ditindak di balik menu ini. Nol berarti tidak
+    // ada penanda sama sekali — lencana yang selalu tampil berhenti dibaca.
+    int badge = 0,
   }) {
     final theme = Theme.of(context);
     final color = theme.colorScheme.primary;
@@ -265,6 +295,25 @@ class StockTab extends ConsumerWidget {
                 ),
                 child: Icon(icon, color: color, size: 22),
               ),
+              if (badge > 0) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade600,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    badge > 99 ? '99+' : '$badge',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(width: 12),
               Expanded(
                 child: Column(

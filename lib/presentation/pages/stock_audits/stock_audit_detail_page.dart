@@ -260,7 +260,7 @@ class _StockAuditDetailPageState extends ConsumerState<StockAuditDetailPage> {
                 if (it.typeLabel != null)
                   Text(it.typeLabel!, style: const TextStyle(fontSize: 10, color: AppTheme.textSecondary)),
                 if (it.returnedQty > 0)
-                  Text('Dikembalikan ${_fmtQty(it.returnedQty)}',
+                  Text('Dikembalikan ke gudang ${_fmtQty(it.returnedQty)}',
                       style: const TextStyle(fontSize: 10, color: AppTheme.textSecondary)),
                 if (it.incomingToday > 0)
                   Text('Masuk hari ini ${_fmtQty(it.incomingToday)}',

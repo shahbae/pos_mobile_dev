@@ -16,7 +16,6 @@ enum AppFeature {
   leaderReport, // GET /reports/leader/daily (Laporan Harian Leader per shift)
   stockAlerts, // GET /reports/stock-alerts (Stok Menipis) — gate terpisah
   products, // GET /products (katalog baca di tab Stok)
-  purchases, // /purchases (Pembelian)
   stockMaterial, // /stock-levels (+ adjust)
   stockTopping, // /topping-stock (+ adjust)
   stockPlastic, // /plastic-stock (+ adjust)
@@ -26,6 +25,8 @@ enum AppFeature {
   plasticMovements, // /plastic-stock/movements (Riwayat Stok Plastik)
   strawMovements, // /sedotan-stock/movements (Riwayat Stok Sedotan)
   stockAudit, // /stock-audits
+  stockRequest, // /stock-requests (Permintaan Stok ke gudang)
+  shipment, // /shipments (Kiriman Gudang — terima / tolak)
   expenses, // /expenses (Pengeluaran)
   shift, // /shifts (Shift Kasir)
   attendance, // /attendance/check-in|out (Absensi)
@@ -45,7 +46,6 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.leaderReport,
         AppFeature.stockAlerts,
         AppFeature.products,
-        AppFeature.purchases,
         AppFeature.stockMaterial,
         AppFeature.stockTopping,
         AppFeature.stockPlastic,
@@ -55,6 +55,8 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.plasticMovements,
         AppFeature.strawMovements,
         AppFeature.stockAudit,
+        AppFeature.stockRequest,
+        AppFeature.shipment,
         AppFeature.expenses,
         AppFeature.shift,
         AppFeature.kitchenDisplay,
@@ -69,7 +71,6 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.leaderReport,
         AppFeature.stockAlerts,
         AppFeature.products,
-        AppFeature.purchases,
         AppFeature.stockMaterial,
         AppFeature.stockTopping,
         AppFeature.stockPlastic,
@@ -79,6 +80,8 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.plasticMovements,
         AppFeature.strawMovements,
         AppFeature.stockAudit,
+        AppFeature.stockRequest,
+        AppFeature.shipment,
         AppFeature.expenses,
         AppFeature.shift,
         AppFeature.attendance,
@@ -95,7 +98,6 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.leaderReport, // laporan harian per shift (GET /reports/leader/daily)
         AppFeature.stockAlerts, // peringatan stok (per arahan user 2026-06-20)
         AppFeature.products,
-        AppFeature.purchases,
         AppFeature.stockMaterial,
         AppFeature.stockTopping,
         AppFeature.stockPlastic,
@@ -105,6 +107,8 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.plasticMovements,
         AppFeature.strawMovements,
         AppFeature.stockAudit,
+        AppFeature.stockRequest,
+        AppFeature.shipment,
         AppFeature.expenses,
         AppFeature.shift,
         AppFeature.attendance,
@@ -219,18 +223,6 @@ bool canAdjustStock(String? role) {
   }
 }
 
-/// Boleh membuat pembelian. Owner/Supervisor/Leader. Finance hanya lihat.
-bool canCreatePurchase(String? role) {
-  switch (role?.toLowerCase()) {
-    case 'owner':
-    case 'supervisor':
-    case 'leader':
-      return true;
-    default:
-      return false;
-  }
-}
-
 /// Boleh mencatat / mengubah / menghapus pengeluaran.
 /// Owner, Supervisor, Finance, Leader (BE 2026-08-01: gate create == edit ==
 /// delete). Role lain hanya melihat daftar.
@@ -256,6 +248,41 @@ bool canCreateAudit(String? role) {
     case 'supervisor':
     case 'leader':
     case 'kasir':
+      return true;
+    default:
+      return false;
+  }
+}
+
+/// Boleh menerima atau menolak kiriman dari gudang.
+/// Owner, Supervisor, Leader (BE Stasiun 4) — sama dengan yang boleh
+/// mengajukan permintaan. Yang menerima barang harus orang yang benar-benar
+/// melihatnya turun, dan bertanggung jawab atas cabangnya.
+bool canReceiveShipment(String? role) {
+  switch (role?.toLowerCase()) {
+    case 'owner':
+    case 'supervisor':
+    case 'leader':
+      return true;
+    default:
+      return false;
+  }
+}
+
+/// Boleh mengajukan / mengubah / membatalkan permintaan stok ke gudang.
+/// Owner, Supervisor, Leader (BE Stasiun 3). Kasir & karyawan tidak: permintaan
+/// punya konsekuensi biaya dan harus jelas siapa yang bertanggung jawab per
+/// outlet.
+///
+/// Mengubah & membatalkan sebenarnya lebih sempit lagi — hanya PEMBUATNYA, dan
+/// itu tidak bisa dipastikan dari sini karena id user tidak ikut di AuthState.
+/// Tombolnya tetap ditampilkan; kalau bukan miliknya, BE membalas 403 dan
+/// repository menerjemahkannya jadi kalimat yang jelas.
+bool canCreateStockRequest(String? role) {
+  switch (role?.toLowerCase()) {
+    case 'owner':
+    case 'supervisor':
+    case 'leader':
       return true;
     default:
       return false;
