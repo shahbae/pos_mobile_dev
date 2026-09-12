@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:pos_mobile/presentation/widgets/confirm_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/models/purchase_template_model.dart';
@@ -161,6 +162,14 @@ class _PurchaseFormPageState extends ConsumerState<PurchaseFormPage>
     }
 
     setState(() => _loading = true);
+
+    final yakin = await confirmAction(
+      context,
+      title: 'Simpan pembelian?',
+      message: 'Pembelian dengan ${_items.length} jenis barang akan dicatat dan menambah stok.',
+      confirmLabel: 'Ya, simpan',
+    );
+    if (!yakin) return;
 
     final repo = ref.read(purchaseRepositoryProvider);
 
