@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import 'package:pos_mobile/data/models/product_variant_model.dart';
 import 'package:pos_mobile/data/models/promo_model.dart';
 import 'package:pos_mobile/data/models/plastic_model.dart';
-import 'package:pos_mobile/data/models/sedotan_model.dart';
 import 'package:pos_mobile/data/models/product_transaction_model.dart';
 import 'package:pos_mobile/data/models/qris_payment_model.dart';
 import 'package:pos_mobile/presentation/pages/product_transactions/qris_payment_page.dart';
@@ -12,7 +11,6 @@ import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/presentation/providers/product_pagination_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_transaction_provider.dart';
 import 'package:pos_mobile/presentation/providers/plastic_provider.dart';
-import 'package:pos_mobile/presentation/providers/sedotan_provider.dart';
 import 'package:pos_mobile/presentation/providers/promo_provider.dart';
 import 'package:pos_mobile/presentation/providers/transaction_refresh.dart';
 import 'package:pos_mobile/presentation/pages/product_transactions/transaction_success_page.dart';
@@ -388,11 +386,12 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
             ),
             const SizedBox(height: 24),
 
-            // ── Kemasan (Plastik) ──
+            // ── Kantong bawa pulang ──
             _plasticSection(cartState),
 
-            // ── Sedotan ──
-            _sedotanSection(cartState),
+            // Sedotan sengaja tidak ditawarkan lagi di sini: sejak aturan
+            // kemasan ada, backend yang menghitungnya dari varian tiap baris.
+            // Memilihnya manual berarti stok terpotong dua kali.
 
             // ── Promo ──
             promosAsync.when(
@@ -613,6 +612,8 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
             const SizedBox(height: 8),
             Wrap(spacing: 6, runSpacing: 6, children: chips),
           ],
+          const SizedBox(height: 8),
+          _tumblerRow(item),
           Row(
             children: [
               _lineAction(Icons.tune, "Topping", () => _editLine(item)),
@@ -643,19 +644,25 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   }
 
   // ── Section kemasan (plastik) ──
+  //
+  // Hanya plastik bertipe "bungkus" yang muncul di sini. Wadah (cup, sealer)
+  // dipotong otomatis oleh backend dari aturan kemasan varian; menampilkannya
+  // lagi sebagai pilihan manual akan memotong stok dua kali.
   Widget _plasticSection(ProductTransactionState cart) {
     final plasticsAsync = ref.watch(plasticListProvider);
+    const title = "Kantong Bawa Pulang";
     return plasticsAsync.when(
-      data: (plastics) {
+      data: (all) {
+        final plastics = all.where((p) => p.isPickedManually).toList();
         if (plastics.isEmpty) return const SizedBox.shrink();
         // qty terpilih per plastic_id
         final selected = {for (final cp in cart.plastics) cp.plastic.id: cp.qty};
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _sectionTitle("Kemasan (Plastik)", 18),
+            _sectionTitle(title, 18),
             const SizedBox(height: 12),
-            _infoBox("Gratis — tidak menambah total. Pilih kemasan yang dipakai untuk pesanan ini."),
+            _infoBox("Gratis — tidak menambah total. Cup, sealer, dan sedotan sudah dihitung otomatis; di sini cukup pilih kantongnya."),
             const SizedBox(height: 12),
             Container(
               decoration: BoxDecoration(
@@ -679,9 +686,9 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       // Jangan diam-diam menghilang: kalau seksi ini lenyap saat data belum
       // siap / gagal dimuat, kasir mengira transaksi ini memang tanpa kemasan
       // dan pemakaian plastik tidak tercatat.
-      loading: () => _sectionPlaceholder("Kemasan (Plastik)"),
+      loading: () => _sectionPlaceholder(title),
       error: (_, __) => _sectionError(
-        "Kemasan (Plastik)",
+        title,
         () => ref.invalidate(plasticListProvider),
       ),
     );
@@ -805,65 +812,26 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     );
   }
 
-  // ── Section sedotan ──
-  Widget _sedotanSection(ProductTransactionState cart) {
-    final sedotansAsync = ref.watch(sedotanListProvider);
-    return sedotansAsync.when(
-      data: (sedotans) {
-        if (sedotans.isEmpty) return const SizedBox.shrink();
-        // qty terpilih per sedotan_id
-        final selected = {for (final cs in cart.sedotans) cs.sedotan.id: cs.qty};
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _sectionTitle("Sedotan", 18),
-            const SizedBox(height: 12),
-            _infoBox("Gratis — tidak menambah total. Pilih sedotan yang dipakai untuk pesanan ini."),
-            const SizedBox(height: 12),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppTheme.borderLight),
-              ),
-              child: Column(
-                children: [
-                  for (int i = 0; i < sedotans.length; i++) ...[
-                    if (i > 0) const Divider(height: 1, color: AppTheme.borderLight),
-                    _sedotanRow(sedotans[i], selected[sedotans[i].id] ?? 0),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-          ],
-        );
-      },
-      loading: () => _sectionPlaceholder("Sedotan"),
-      error: (_, __) => _sectionError(
-        "Sedotan",
-        () => ref.invalidate(sedotanListProvider),
-      ),
-    );
-  }
-
-  Widget _sedotanRow(Sedotan sedotan, int qty) {
+  /// Berapa gelas pada baris ini yang dituang ke tumbler bawaan pembeli.
+  /// Sebanyak itu, cup & sealer tidak dipotong dari stok. Sedotan tetap keluar.
+  Widget _tumblerRow(CartItem item) {
     final notifier = ref.read(productTransactionProvider.notifier);
+    final active = item.tumblerQty > 0;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: const EdgeInsets.only(bottom: 4),
       child: Row(
         children: [
+          Icon(Icons.local_drink_outlined,
+              size: 16, color: active ? AppTheme.brandBlue : AppTheme.textSecondary),
+          const SizedBox(width: 6),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(sedotan.name,
-                    style: const TextStyle(
-                        color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 14)),
-                if (sedotan.unit.isNotEmpty)
-                  Text(sedotan.unit,
-                      style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-              ],
+            child: Text(
+              active ? "Pakai tumbler — ${item.tumblerQty} dari ${item.quantity} gelas" : "Pakai tumbler",
+              style: TextStyle(
+                color: active ? AppTheme.brandBlue : AppTheme.textSecondary,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                fontSize: 13,
+              ),
             ),
           ),
           Container(
@@ -875,19 +843,25 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               children: [
                 _QtyButton(
                   icon: Icons.remove,
-                  onTap: qty > 0 ? () => notifier.setSedotan(sedotan, qty: qty - 1) : null,
+                  onTap: item.tumblerQty > 0
+                      ? () => notifier.setTumblerQty(item.lineId, item.tumblerQty - 1)
+                      : null,
                 ),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Text("$qty",
+                  child: Text("${item.tumblerQty}",
                       style: TextStyle(
-                          color: qty > 0 ? AppTheme.brandBlue : AppTheme.textSecondary,
+                          color: active ? AppTheme.brandBlue : AppTheme.textSecondary,
                           fontWeight: FontWeight.w800,
                           fontSize: 15)),
                 ),
+                // Tidak boleh melebihi jumlah gelas di baris ini — BE menolak
+                // transaksi dengan tumbler lebih banyak dari yang dipesan.
                 _QtyButton(
                   icon: Icons.add,
-                  onTap: () => notifier.setSedotan(sedotan, qty: qty + 1),
+                  onTap: item.tumblerQty < item.quantity
+                      ? () => notifier.setTumblerQty(item.lineId, item.tumblerQty + 1)
+                      : null,
                 ),
               ],
             ),

@@ -29,6 +29,9 @@ class CartItem {
   final Product product;
   final ProductVariant? variant; // null = produk tanpa variant (behavior lama)
   final int quantity;
+  /// Berapa gelas dari [quantity] yang dituang ke tumbler bawaan pembeli.
+  /// Selalu 0..quantity — lihat [ProductTransactionNotifier.setTumblerQty].
+  final int tumblerQty;
   final List<CartTopping> freeToppings; // gratis, tidak menambah subtotal
   final List<CartTopping> extraToppings; // berbayar
 
@@ -37,20 +40,27 @@ class CartItem {
     required this.product,
     this.variant,
     required this.quantity,
+    this.tumblerQty = 0,
     this.freeToppings = const [],
     this.extraToppings = const [],
   });
 
   CartItem copyWith({
     int? quantity,
+    int? tumblerQty,
     List<CartTopping>? freeToppings,
     List<CartTopping>? extraToppings,
   }) {
+    final nextQuantity = quantity ?? this.quantity;
+    // Menurunkan qty tidak boleh meninggalkan tumbler yang lebih banyak dari
+    // gelasnya — BE menolak transaksi seperti itu.
+    final nextTumbler = (tumblerQty ?? this.tumblerQty).clamp(0, nextQuantity);
     return CartItem(
       lineId: lineId,
       product: product,
       variant: variant,
-      quantity: quantity ?? this.quantity,
+      quantity: nextQuantity,
+      tumblerQty: nextTumbler,
       freeToppings: freeToppings ?? this.freeToppings,
       extraToppings: extraToppings ?? this.extraToppings,
     );
@@ -74,6 +84,7 @@ class CartItem {
         productId: product.id,
         variantId: variant?.id,
         quantity: quantity,
+        tumblerQty: tumblerQty,
         freeToppings: freeToppings.map((t) => t.toSelection()).toList(),
         extraToppings: extraToppings.map((t) => t.toSelection()).toList(),
       );
@@ -284,6 +295,15 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
         .toList();
     state = state.copyWith(items: updated);
     _reconcilePromo();
+  }
+
+  /// Set berapa gelas pada satu baris yang dituang ke tumbler pembeli.
+  /// Dibatasi 0..qty baris itu; BE menolak nilai di luar rentang tersebut.
+  void setTumblerQty(int lineId, int tumblerQty) {
+    final updated = state.items
+        .map((i) => i.lineId == lineId ? i.copyWith(tumblerQty: tumblerQty) : i)
+        .toList();
+    state = state.copyWith(items: updated);
   }
 
   void clearCart() {
