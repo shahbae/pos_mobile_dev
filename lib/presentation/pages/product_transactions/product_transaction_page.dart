@@ -68,9 +68,34 @@ class _ProductTransactionPageState extends ConsumerState<ProductTransactionPage>
       try {
         variants = await ref.read(productVariantsProvider(product.id).future);
       } catch (_) {
-        variants = const [];
+        // Gagal mengambil daftar variant — biasanya jaringan. Dulu error ini
+        // ditelan dan produknya tetap masuk keranjang tanpa variant: harganya
+        // jatuh ke harga produk dan cup-nya tidak ikut terpotong. Sekarang
+        // backend menolaknya saat bayar, jadi lebih baik gagal di sini
+        // sekalian, sebelum kasir menyusun sisa pesanannya.
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Gagal memuat ukuran produk. Periksa koneksi, lalu coba lagi.'),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
       }
       if (!context.mounted) return;
+      if (variants.isEmpty) {
+        // Produk mengaku punya variant tapi daftarnya kosong — datanya tidak
+        // konsisten, dan menjualnya tanpa variant akan ditolak backend.
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Ukuran produk ini belum diatur. Hubungi owner.'),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
     }
 
     // 2. Bila produk punya variant aktif, kasir wajib memilih salah satu.
