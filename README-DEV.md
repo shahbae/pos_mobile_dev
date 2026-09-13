@@ -97,6 +97,13 @@ grep '^version:' pubspec.yaml
 flutter build apk --release
 ```
 
+**Rilis pertama sesudah penomoran di-reset harus di-uninstall dulu.** Android
+menolak memasang versionCode yang lebih kecil daripada yang terpasang
+(`INSTALL_FAILED_VERSION_DOWNGRADE`), dan HP yang masih memegang build lama ada
+di angka 23. Uninstall menghapus sesi login, setelan printer, dan setelan QRIS
+di HP itu, jadi siapkan orangnya untuk login ulang dan memasangkan printer
+sekali lagi. Hanya sekali — rilis sesudahnya menimpa seperti biasa.
+
 Aturan yang sama berlaku di `../gudang_mobile_dev`. Proyek produksi
 `../pos_mobile` punya deret nomornya sendiri — baris `version:` termasuk yang
 memang berbeda antara dev dan produksi, jadi jangan disamakan saat menarik
