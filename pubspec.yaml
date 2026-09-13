@@ -51,6 +51,18 @@ dependencies:
   cached_network_image: ^3.4.1 # cache gambar produk ke disk, tidak reload tiap buka
   wakelock_plus: ^1.2.5 # layar dapur tidak boleh mati saat KDS terbuka
 
+  # Update dalam aplikasi: baca versi terpasang, unduh APK dari /download/apk,
+  # cocokkan SHA-256-nya, lalu serahkan berkasnya ke installer Android.
+  package_info_plus: ^10.2.1 # versionCode APK yang sedang berjalan
+  path_provider: ^2.1.6 # tempat menaruh APK yang diunduh
+  crypto: ^3.0.7 # verifikasi checksum sebelum dipasang
+  # Ditahan di 12.x: permission_handler 13+ menarik permission_handler_android
+  # 14, yang berkas Gradle-nya gagal dikompilasi di Kotlin 2.2.20 / AGP 8.11.1
+  # / Gradle 8.14 yang dipakai proyek ini. Naikkan hanya bersama Gradle-nya.
+  permission_handler: ^12.0.0 # izin "Install unknown apps" (Android 8+)
+  open_filex: ^4.7.0 # memicu layar pemasangan Android
+  url_launcher: ^6.3.2 # jalan cadangan: buka halaman /download di browser
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

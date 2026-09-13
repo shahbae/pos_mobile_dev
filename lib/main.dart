@@ -10,6 +10,7 @@ import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/pages/attendance/attendance_page.dart';
 import 'package:pos_mobile/presentation/pages/dashboard/dashboard_page.dart';
 import 'package:pos_mobile/presentation/pages/login_page.dart';
+import 'package:pos_mobile/presentation/widgets/app_update_gate.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,9 +35,14 @@ class MyApp extends ConsumerWidget {
       case AuthStatus.authenticated:
         // Role absensi-saja (finance) langsung mendarat di halaman Absensi;
         // tidak ada dashboard/menu lain untuknya.
-        page = isAttendanceOnly(auth.role)
-            ? const AttendancePage(isRoot: true)
-            : const DashboardPage();
+        //
+        // Pembaruan ditawarkan sesudah login, bukan di halaman login: orang
+        // yang sedang berusaha masuk tidak perlu disodori dialog lebih dulu.
+        page = AppUpdateGate(
+          child: isAttendanceOnly(auth.role)
+              ? const AttendancePage(isRoot: true)
+              : const DashboardPage(),
+        );
         break;
 
       case AuthStatus.unauthenticated:

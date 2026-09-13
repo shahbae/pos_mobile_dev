@@ -4,6 +4,14 @@
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
+    <!-- Jaringan. Flutter hanya menyisipkannya di manifest debug & profile, jadi
+         tanpa baris ini APK rilis bergantung pada plugin lain yang kebetulan
+         memintanya — bukan jaminan yang pantas dipegang. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Update dalam aplikasi: memasang APK yang diunduh sendiri. Pengguna tetap
+         harus mengizinkan "Install unknown apps" untuk aplikasi ini sekali di
+         Setelan; izin ini hanya membuat aplikasi boleh mengajukannya. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Lokasi (geofence absensi) + kamera (selfie absensi) -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
