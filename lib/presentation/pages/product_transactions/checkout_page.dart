@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:pos_mobile/data/models/product_variant_model.dart';
 import 'package:pos_mobile/data/models/promo_model.dart';
 import 'package:pos_mobile/data/models/plastic_model.dart';
+import 'package:pos_mobile/data/models/sedotan_model.dart';
 import 'package:pos_mobile/data/models/product_transaction_model.dart';
 import 'package:pos_mobile/data/models/qris_payment_model.dart';
 import 'package:pos_mobile/presentation/pages/product_transactions/qris_payment_page.dart';
@@ -11,6 +12,7 @@ import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/presentation/providers/product_pagination_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_transaction_provider.dart';
 import 'package:pos_mobile/presentation/providers/plastic_provider.dart';
+import 'package:pos_mobile/presentation/providers/sedotan_provider.dart';
 import 'package:pos_mobile/presentation/providers/promo_provider.dart';
 import 'package:pos_mobile/presentation/providers/transaction_refresh.dart';
 import 'package:pos_mobile/presentation/pages/product_transactions/transaction_success_page.dart';
@@ -66,6 +68,18 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     super.initState();
     _lastTotal = ref.read(productTransactionProvider).total;
     _paidAmountController.text = NumberFormat.decimalPattern('id_ID').format(_lastTotal);
+    // Sedotan otomatis butuh master sedotan (penanda auto_for). Diteruskan ke
+    // notifier setiap daftarnya termuat; microtask karena mengubah provider
+    // saat widget tree sedang dibangun tidak diizinkan Riverpod.
+    ref.listenManual<AsyncValue<List<Sedotan>>>(
+      sedotanListProvider,
+      (_, next) => next.whenData((list) => Future.microtask(() {
+            if (mounted) {
+              ref.read(productTransactionProvider.notifier).setSedotanMasters(list);
+            }
+          })),
+      fireImmediately: true,
+    );
     // Fokus ke field = langsung blok semua teks, jadi mengetik nominal baru
     // tidak perlu menghapus angka lama satu per satu.
     _paidFocus.addListener(() {
@@ -391,9 +405,8 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
             // ── Kantong bawa pulang ──
             _plasticSection(cartState),
 
-            // Sedotan sengaja tidak ditawarkan lagi di sini: sejak aturan
-            // kemasan ada, backend yang menghitungnya dari varian tiap baris.
-            // Memilihnya manual berarti stok terpotong dua kali.
+            // ── Sedotan ──
+            _sedotanSection(cartState),
 
             // ── Promo ──
             promosAsync.when(
@@ -664,7 +677,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
           children: [
             _sectionTitle(title, 18),
             const SizedBox(height: 12),
-            _infoBox("Gratis — tidak menambah total. Cup, sealer, dan sedotan sudah dihitung otomatis; di sini cukup pilih kantongnya."),
+            _infoBox("Gratis — tidak menambah total. Cup dan sealer sudah dihitung otomatis; di sini cukup pilih kantongnya."),
             const SizedBox(height: 12),
             Container(
               decoration: BoxDecoration(
@@ -692,6 +705,119 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       error: (_, __) => _sectionError(
         title,
         () => ref.invalidate(plasticListProvider),
+      ),
+    );
+  }
+
+  // ── Section sedotan ──
+  //
+  // Backend tidak memotong sedotan sendiri; yang tercatat persis angka di sini.
+  // Sedotan bertanda auto_for terisi dari keranjang (lihat sedotanAutoQty) dan
+  // tetap bisa diubah kasir. Sedotan manual (mis. Tutup Cup) mulai dari 0.
+  Widget _sedotanSection(ProductTransactionState cart) {
+    final sedotansAsync = ref.watch(sedotanListProvider);
+    const title = "Sedotan";
+    return sedotansAsync.when(
+      data: (sedotans) {
+        if (sedotans.isEmpty) return const SizedBox.shrink();
+        // qty terpilih per sedotan_id
+        final selected = {for (final cs in cart.sedotans) cs.sedotan.id: cs.qty};
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _sectionTitle(title, 18),
+            const SizedBox(height: 12),
+            _infoBox("Gratis — tidak menambah total. Terisi otomatis: sedotan besar untuk gelas bertopping, kecil untuk yang tanpa topping. Ubah kalau pembeli tak mau atau minta tambah."),
+            const SizedBox(height: 12),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppTheme.borderLight),
+              ),
+              child: Column(
+                children: [
+                  for (int i = 0; i < sedotans.length; i++) ...[
+                    if (i > 0) const Divider(height: 1, color: AppTheme.borderLight),
+                    _sedotanRow(
+                      sedotans[i],
+                      selected[sedotans[i].id] ?? 0,
+                      changedByCashier: cart.manualSedotanIds.contains(sedotans[i].id),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+        );
+      },
+      // Sama seperti plastik: jangan diam-diam hilang, supaya kasir tahu
+      // sedotan belum terhitung.
+      loading: () => _sectionPlaceholder(title),
+      error: (_, __) => _sectionError(
+        title,
+        () => ref.invalidate(sedotanListProvider),
+      ),
+    );
+  }
+
+  Widget _sedotanRow(Sedotan sedotan, int qty, {required bool changedByCashier}) {
+    final notifier = ref.read(productTransactionProvider.notifier);
+    final String? hint = sedotan.autoFor == SedotanAutoFor.none
+        ? null
+        : changedByCashier
+            ? "Diubah kasir"
+            : sedotan.autoFor == SedotanAutoFor.withTopping
+                ? "Otomatis · gelas bertopping"
+                : "Otomatis · gelas tanpa topping";
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(sedotan.name,
+                    style: const TextStyle(
+                        color: AppTheme.textPrimary, fontWeight: FontWeight.w700, fontSize: 14)),
+                if (hint != null)
+                  Text(hint,
+                      style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12))
+                else if (sedotan.unit.isNotEmpty)
+                  Text(sedotan.unit,
+                      style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+              ],
+            ),
+          ),
+          Container(
+            decoration: BoxDecoration(
+              color: AppTheme.bgLight,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                _QtyButton(
+                  icon: Icons.remove,
+                  onTap: qty > 0 ? () => notifier.setSedotan(sedotan, qty: qty - 1) : null,
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text("$qty",
+                      style: TextStyle(
+                          color: qty > 0 ? AppTheme.brandBlue : AppTheme.textSecondary,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15)),
+                ),
+                _QtyButton(
+                  icon: Icons.add,
+                  onTap: () => notifier.setSedotan(sedotan, qty: qty + 1),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -815,7 +941,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   }
 
   /// Berapa gelas pada baris ini yang dituang ke tumbler bawaan pembeli.
-  /// Sebanyak itu, cup & sealer tidak dipotong dari stok. Sedotan tetap keluar.
+  /// Sebanyak itu, cup & sealer tidak dipotong dari stok. Sedotan tetap dihitung.
   Widget _tumblerRow(CartItem item) {
     final notifier = ref.read(productTransactionProvider.notifier);
     final active = item.tumblerQty > 0;
