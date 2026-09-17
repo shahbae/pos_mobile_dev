@@ -8,7 +8,7 @@ Salinan `pos_mobile` yang menembak **API dev**. Dibuat 22 Agustus 2026 dengan
 | Folder | `../pos_mobile` | `pos_mobile_dev` |
 | API | `https://api.estehcandi.com` | `https://api-dev.estehcandi.com` |
 | `applicationId` | `com.example.pos_mobile` | `com.example.pos_mobile.dev` |
-| Nama aplikasi | Esteh Candi App | **Esteh Candi DEV** |
+| Nama aplikasi | Esteh Candi App | **Kasir Es Teh** |
 | Remote git | `origin` → `shahbae/mobile-pos` | `prod` → `shahbae/mobile-pos` (baca saja) |
 
 `applicationId` sengaja dibedakan supaya **kedua APK bisa terpasang berdampingan

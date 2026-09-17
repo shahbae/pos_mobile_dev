@@ -55,7 +55,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 const SizedBox(height: 20),
 
                 Text(
-                  'Esteh Candi App',
+                  'Kasir Es Teh',
                   style: Theme.of(context).textTheme.titleLarge!.copyWith(
                     fontWeight: FontWeight.w700,
                     color: Colors.black87,

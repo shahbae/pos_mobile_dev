@@ -60,7 +60,7 @@ void main() {
 
   setUp(() {
     PackageInfo.setMockInitialValues(
-      appName: 'Esteh Candi DEV',
+      appName: 'Kasir Es Teh',
       packageName: 'com.example.pos_mobile.dev',
       version: '1.0.0',
       buildNumber: '1',
