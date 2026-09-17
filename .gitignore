@@ -49,6 +49,9 @@ app.*.symbols
 # Obfuscation related
 app.*.map.json
 
+# Gradle menaruh laporan build di sini sejak AGP 8; bukan sumber.
+/android/build/
+
 # Android Studio will place build artifacts here
 /android/app/debug
 /android/app/profile

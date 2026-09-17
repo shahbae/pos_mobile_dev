@@ -4,6 +4,7 @@ import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/branch_provider.dart';
 import 'package:pos_mobile/presentation/widgets/branch_switch_sheet.dart';
+import 'package:pos_mobile/presentation/widgets/app_version_card.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import '../../../pages/shifts/shift_page.dart';
 import '../../../pages/settings/printer_settings_page.dart';
@@ -161,6 +162,8 @@ class SettingTab extends ConsumerWidget {
             );
           },
         ),
+        const SizedBox(height: 16),
+        const AppVersionCard(),
         const SizedBox(height: 16),
         _SettingMenuCard(
           title: "Logout",

@@ -78,6 +78,37 @@ pubspec.yaml
 Sama persis dengan yang ada di `../pos_mobile`, dan **masih belum diuji ke
 printer fisik** di kedua proyek.
 
+## Menaikkan versi sebelum rilis
+
+Angka setelah `+` di `pubspec.yaml` menjadi `versionCode` APK, dan itu pula yang
+dikirim sebagai `version_code` ketika APK diunggah ke `api-dev`. **Keduanya
+harus angka yang sama.** Tombol "Periksa Pembaruan" di dalam aplikasi
+membandingkan persis dua angka itu — kalau pubspec tertinggal, HP yang sudah
+memakai build terbaru tetap dianggap usang dan terus ditawari update.
+
+Penomoran proyek dev dimulai ulang dari `1.0.0+1`. Nomor rilis lama di server
+(sampai `23`) tidak dipakai sebagai acuan; kode yang ada sekarang adalah yang
+paling baru. Nama versi yang diunggah memakai bentuk `1.0.0`, bukan angka polos,
+supaya tidak bentrok dengan nama rilis lama yang masih tersimpan.
+
+```bash
+# rilis berikutnya: pubspec 1.0.x+N, unggah dengan version_code = N
+grep '^version:' pubspec.yaml
+flutter build apk --release
+```
+
+**Rilis pertama sesudah penomoran di-reset harus di-uninstall dulu.** Android
+menolak memasang versionCode yang lebih kecil daripada yang terpasang
+(`INSTALL_FAILED_VERSION_DOWNGRADE`), dan HP yang masih memegang build lama ada
+di angka 23. Uninstall menghapus sesi login, setelan printer, dan setelan QRIS
+di HP itu, jadi siapkan orangnya untuk login ulang dan memasangkan printer
+sekali lagi. Hanya sekali — rilis sesudahnya menimpa seperti biasa.
+
+Aturan yang sama berlaku di `../gudang_mobile_dev`. Proyek produksi
+`../pos_mobile` punya deret nomornya sendiri — baris `version:` termasuk yang
+memang berbeda antara dev dan produksi, jadi jangan disamakan saat menarik
+perbaikan lewat remote `prod`.
+
 ## Remote GitHub
 
 Belum ada. Kalau nanti dibuat repo sendiri:

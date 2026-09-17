@@ -147,12 +147,32 @@ class CartSedotan {
   SedotanSelection toSelection() => SedotanSelection(sedotanId: sedotan.id, qty: qty);
 }
 
+/// Jumlah gelas yang jadi dasar sedotan otomatis untuk sebuah [autoFor]:
+/// gelas di baris bertopping untuk `with_topping`, sisanya (termasuk bonus
+/// promo, yang tak pernah membawa topping) untuk `without_topping`. Gelas
+/// tumbler tetap dihitung — pembeli tetap butuh sedotan.
+int sedotanAutoQty(ProductTransactionState state, String autoFor) {
+  switch (autoFor) {
+    case SedotanAutoFor.withTopping:
+      return state.items.where((i) => i.hasToppings).fold(0, (s, i) => s + i.quantity);
+    case SedotanAutoFor.withoutTopping:
+      return state.items.where((i) => !i.hasToppings).fold(0, (s, i) => s + i.quantity) +
+          state.selectedFreeQty;
+    default:
+      return 0;
+  }
+}
+
 class ProductTransactionState {
   final List<CartItem> items;
   final Promo? selectedPromo;
   final List<PromoFreeSelection> promoFreeItems;
   final List<CartPlastic> plastics;
   final List<CartSedotan> sedotans;
+
+  /// sedotan_id yang angkanya sudah diubah kasir. Sedotan ini tidak lagi diisi
+  /// otomatis sampai transaksi selesai (state baru = set kosong).
+  final Set<int> manualSedotanIds;
   final bool isLoading;
   final String? error;
   final ProductTransactionResponse? lastResponse;
@@ -163,6 +183,7 @@ class ProductTransactionState {
     this.promoFreeItems = const [],
     this.plastics = const [],
     this.sedotans = const [],
+    this.manualSedotanIds = const {},
     this.isLoading = false,
     this.error,
     this.lastResponse,
@@ -194,6 +215,7 @@ class ProductTransactionState {
     List<PromoFreeSelection>? promoFreeItems,
     List<CartPlastic>? plastics,
     List<CartSedotan>? sedotans,
+    Set<int>? manualSedotanIds,
     bool? isLoading,
     String? error,
     ProductTransactionResponse? lastResponse,
@@ -205,6 +227,7 @@ class ProductTransactionState {
       promoFreeItems: promoFreeItems ?? this.promoFreeItems,
       plastics: plastics ?? this.plastics,
       sedotans: sedotans ?? this.sedotans,
+      manualSedotanIds: manualSedotanIds ?? this.manualSedotanIds,
       isLoading: isLoading ?? this.isLoading,
       error: error,
       lastResponse: clearLastResponse ? null : (lastResponse ?? this.lastResponse),
@@ -221,6 +244,10 @@ final productTransactionProvider =
 class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> {
   final ProductTransactionRepository repo;
   int _lineCounter = 0;
+
+  /// Master sedotan aktif, diberikan halaman checkout. Kosong = belum dimuat,
+  /// sedotan otomatis belum bisa diisi.
+  List<Sedotan> _sedotanMasters = const [];
 
   ProductTransactionNotifier(this.repo) : super(ProductTransactionState());
 
@@ -242,6 +269,7 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
         CartItem(lineId: _nextLineId(), product: product, variant: variant, quantity: 1),
       ]);
     }
+    _syncAutoSedotans();
   }
 
   /// Tambah baris baru dengan topping (selalu baris terpisah).
@@ -263,6 +291,7 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
         extraToppings: extraToppings,
       ),
     ]);
+    _syncAutoSedotans();
   }
 
   void updateLineToppings(
@@ -276,6 +305,7 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
             : i)
         .toList();
     state = state.copyWith(items: updated);
+    _syncAutoSedotans();
   }
 
   void removeLine(int lineId) {
@@ -283,6 +313,7 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
       items: state.items.where((i) => i.lineId != lineId).toList(),
     );
     _reconcilePromo();
+    _syncAutoSedotans();
   }
 
   void updateQuantity(int lineId, int quantity) {
@@ -295,6 +326,7 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
         .toList();
     state = state.copyWith(items: updated);
     _reconcilePromo();
+    _syncAutoSedotans();
   }
 
   /// Set berapa gelas pada satu baris yang dituang ke tumbler pembeli.
@@ -326,9 +358,37 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
 
   // ── Sedotan ───────────────────────────────────────────
   /// Set jumlah sedotan untuk sebuah master sedotan (0 = hapus dari transaksi).
+  /// Dipanggil saat kasir mengubah angka, jadi sedotan ini berhenti diisi
+  /// otomatis — termasuk kalau sengaja dinolkan (pembeli tak mau sedotan).
   void setSedotan(Sedotan sedotan, {required int qty}) {
     final list = state.sedotans.where((s) => s.sedotan.id != sedotan.id).toList();
     if (qty > 0) list.add(CartSedotan(sedotan: sedotan, qty: qty));
+    state = state.copyWith(
+      sedotans: list,
+      manualSedotanIds: {...state.manualSedotanIds, sedotan.id},
+    );
+  }
+
+  /// Terima daftar master sedotan dari halaman checkout, lalu isi ulang
+  /// sedotan otomatis dari keranjang saat ini.
+  void setSedotanMasters(List<Sedotan> sedotans) {
+    _sedotanMasters = sedotans;
+    _syncAutoSedotans();
+  }
+
+  /// Isi jumlah sedotan bertanda auto_for dari keranjang. Sedotan yang sudah
+  /// diubah kasir dan sedotan manual (none) dibiarkan apa adanya. Dipanggil
+  /// setiap baris atau bonus promo berubah.
+  void _syncAutoSedotans() {
+    final auto = _sedotanMasters.where((s) =>
+        s.autoFor != SedotanAutoFor.none && !state.manualSedotanIds.contains(s.id));
+    if (auto.isEmpty) return;
+    final autoIds = {for (final s in auto) s.id};
+    final list = state.sedotans.where((cs) => !autoIds.contains(cs.sedotan.id)).toList();
+    for (final s in auto) {
+      final qty = sedotanAutoQty(state, s.autoFor);
+      if (qty > 0) list.add(CartSedotan(sedotan: s, qty: qty));
+    }
     state = state.copyWith(sedotans: list);
   }
 
@@ -346,6 +406,7 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
       state = state.copyWith(selectedPromo: promo);
       _reconcilePromo();
     }
+    _syncAutoSedotans();
   }
 
   /// Set jumlah bonus gratis untuk sebuah produk+varian (0 = hapus).
@@ -358,12 +419,14 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
     }
     state = state.copyWith(promoFreeItems: list);
     _reconcilePromo();
+    _syncAutoSedotans();
   }
 
   void removePromoFreeItem(String key) {
     state = state.copyWith(
       promoFreeItems: state.promoFreeItems.where((p) => p.key != key).toList(),
     );
+    _syncAutoSedotans();
   }
 
   /// Pastikan total item gratis (bonus) tidak melebihi kuota promo dari
