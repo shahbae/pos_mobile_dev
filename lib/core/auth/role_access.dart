@@ -165,16 +165,27 @@ Set<AppFeature> featuresForRole(String? role) {
 }
 
 /// Role yang diizinkan masuk ke aplikasi mobile ini (login gate).
-/// `finance` ditambahkan per docs/api-finance-absensi-fe.md — masuk hanya untuk
-/// absensi. Selain enam role ini (mis. karyawan) ditolak masuk.
+///
+/// `finance` dikeluarkan (revisi 18 Sep 2026): finance kini absen di gudang
+/// lewat app Gudang, dengan lokasi gudang. Dulu dia masuk ke sini hanya untuk
+/// absensi. Selain lima role ini (mis. karyawan) ditolak masuk.
 const allowedAppRoles = {
   'owner',
   'kasir',
   'supervisor',
   'leader',
   'produksi',
-  'finance',
 };
+
+/// Pesan penolakan login. Finance diberi arah yang jelas — dia bukan salah
+/// akun, absensinya pindah aplikasi.
+String accessDeniedMessage(String? role) {
+  if (role?.toLowerCase() == 'finance') {
+    return 'Absensi finance sekarang lewat app Gudang. Silakan pasang dan '
+        'masuk ke aplikasi Gudang Es Teh.';
+  }
+  return 'Akses ditolak. Role Anda tidak diizinkan menggunakan aplikasi ini.';
+}
 
 /// Boleh masuk app? Role harus ada di allowlist & punya minimal satu fitur.
 bool canAccessApp(String? role) {
