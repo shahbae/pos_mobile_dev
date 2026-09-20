@@ -8,9 +8,6 @@ import 'package:pos_mobile/data/repositories/auth_repository.dart';
 import 'package:pos_mobile/data/services/api_provider.dart';
 import 'package:pos_mobile/data/services/secure_storage.dart';
 
-const _accessDeniedMsg =
-    'Akses ditolak. Role Anda tidak diizinkan menggunakan aplikasi ini.';
-
 enum AuthStatus { unknown, authenticated, unauthenticated }
 
 const _noChange = Object();
@@ -192,7 +189,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         state = state.copyWith(
           status: AuthStatus.unauthenticated,
           role: null,
-          error: _accessDeniedMsg,
+          error: accessDeniedMessage(role),
         );
         return;
       }
@@ -232,7 +229,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
           status: AuthStatus.unauthenticated,
           loading: false,
           role: null,
-          error: _accessDeniedMsg,
+          error: accessDeniedMessage(role),
         );
         return;
       }

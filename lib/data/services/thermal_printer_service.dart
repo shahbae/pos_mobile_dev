@@ -184,6 +184,29 @@ class ThermalPrinterService {
       bytes += g.hr(ch: '=');
     }
 
+    // Estimasi siap — tepat di bawah nomor antrean (revisi 18 Sep 2026): dua
+    // hal yang dicari pelanggan sesudah membayar adalah "nomor saya berapa"
+    // dan "jadi jam berapa", jadi keduanya berdampingan di atas, bukan
+    // estimasinya terselip di bawah rincian bayar.
+    //
+    // Dicetak sebagai jam absolut — kertas tidak ikut berjalan, jadi hitung
+    // mundur tidak berguna. Tanpa estimasi barisnya dilewati.
+    if (r.hasEstimate) {
+      bytes += g.text(
+        'Estimasi siap ${_timeFmt.format(r.estimatedReadyAt!.toLocal())}',
+        styles: const PosStyles(align: PosAlign.center, bold: true),
+      );
+      // "+/-" dan bukan "±": codepage printer (CP437) memetakan ± ke karakter
+      // blok, jadi simbolnya tercetak sebagai sampah.
+      // "tunggu", bukan "proses": angkanya sudah termasuk antrean pesanan lain
+      // di depan, bukan cuma waktu meracik pesanan ini.
+      bytes += g.text(
+        'Perkiraan tunggu +/-${r.estimatedPrepMinutes} menit',
+        styles: const PosStyles(align: PosAlign.center),
+      );
+      bytes += g.hr(ch: '=');
+    }
+
     // Info transaksi
     bytes += g.text('No    : ${r.invoiceNo}');
     if (r.createdAt != null) {
@@ -257,20 +280,6 @@ class ThermalPrinterService {
       bytes += g.text('Ref: ${r.paymentRef}');
     }
 
-    // Estimasi siap. Dicetak sebagai jam absolut — kertas tidak ikut berjalan,
-    // jadi hitung mundur tidak berguna. Tanpa estimasi barisnya dilewati.
-    if (r.hasEstimate) {
-      bytes += g.hr();
-      bytes += g.text(
-        'Estimasi siap : ${_timeFmt.format(r.estimatedReadyAt!.toLocal())}',
-        styles: const PosStyles(bold: true),
-      );
-      // "+/-" dan bukan "±": codepage printer (CP437) memetakan ± ke karakter
-      // blok, jadi simbolnya tercetak sebagai sampah.
-      // "tunggu", bukan "proses": angkanya sudah termasuk antrean pesanan lain
-      // di depan, bukan cuma waktu meracik pesanan ini.
-      bytes += g.text('Perkiraan tunggu +/-${r.estimatedPrepMinutes} menit');
-    }
 
     // Footer
     bytes += g.feed(1);
