@@ -61,10 +61,31 @@ void main() {
     expect(n.state.sedotans, isEmpty);
   });
 
-  test('gelas tumbler tetap dapat sedotan', () {
+  test('gelas tumbler tidak dapat sedotan, sesuai jenisnya', () {
     final n = _notifier();
-    n.addToCart(_original);
-    n.addToCart(_original);
+    n.addLineWithToppings(_original, quantity: 2, extraToppings: [CartTopping(topping: _oreo)]);
+    n.addLineWithToppings(_original, quantity: 3);
+    final bertopping = n.state.items.firstWhere((i) => i.hasToppings).lineId;
+    final polos = n.state.items.firstWhere((i) => !i.hasToppings).lineId;
+
+    n.setTumblerQty(bertopping, 1);
+    n.setTumblerQty(polos, 1);
+    expect(_qty(n, _besar), 1);
+    expect(_qty(n, _kecil), 2);
+
+    // Semua gelas polos ke tumbler → sedotan kecil hilang dari keranjang.
+    n.setTumblerQty(polos, 3);
+    expect(_qty(n, _kecil), 0);
+
+    // Batal pakai tumbler → sedotannya kembali.
+    n.setTumblerQty(bertopping, 0);
+    expect(_qty(n, _besar), 2);
+  });
+
+  test('angka yang diubah kasir tidak ditimpa saat tumbler berubah', () {
+    final n = _notifier();
+    n.addLineWithToppings(_original, quantity: 2);
+    n.setSedotan(_kecil, qty: 2); // pembeli bertumbler tetap minta sedotan
     n.setTumblerQty(n.state.items.single.lineId, 2);
     expect(_qty(n, _kecil), 2);
   });
