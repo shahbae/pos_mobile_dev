@@ -5,6 +5,8 @@
 /// gudang. Keduanya tidak bisa dibatalkan.
 library;
 
+import 'package:pos_mobile/data/models/stock_pack_model.dart';
+
 class Shipment {
   final int id;
   final int branchId;
@@ -99,6 +101,10 @@ class ShipmentLine {
   final double unitCost;
   final double subtotal;
 
+  /// [qty] dalam kemasan pertama barang ini, null bila tak punya template
+  /// (atau BE lama yang belum mengirimnya).
+  final StockPack? pack;
+
   ShipmentLine({
     required this.id,
     required this.itemType,
@@ -108,6 +114,7 @@ class ShipmentLine {
     this.qty = 0,
     this.unitCost = 0,
     this.subtotal = 0,
+    this.pack,
   });
 
   String get displayName => name.isNotEmpty ? name : '$itemType #$itemId';
@@ -137,6 +144,7 @@ class ShipmentLine {
       qty: _toDouble(j['qty']),
       unitCost: _toDouble(j['unit_cost']),
       subtotal: _toDouble(j['subtotal']),
+      pack: StockPack.tryFrom(j['pack']),
     );
   }
 }
