@@ -379,12 +379,26 @@ class _LineCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          Text(
-            '${_fmtQty(line.qty)} ${line.unit}',
-            style: const TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 14,
-                color: AppTheme.textPrimary),
+          // Kemasan di atas karena itu yang dihitung orang saat membuka
+          // kiriman ("2 jerigen"); satuan dasar di bawahnya untuk memastikan.
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                line.pack?.label(line.unit) ??
+                    '${_fmtQty(line.qty)} ${line.unit}',
+                style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                    color: AppTheme.textPrimary),
+              ),
+              if (line.pack != null && line.pack!.whole > 0)
+                Text(
+                  '${_fmtQty(line.qty)} ${line.unit}',
+                  style: const TextStyle(
+                      fontSize: 12, color: AppTheme.textSecondary),
+                ),
+            ],
           ),
         ],
       ),

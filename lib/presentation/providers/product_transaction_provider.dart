@@ -150,13 +150,15 @@ class CartSedotan {
 /// Jumlah gelas yang jadi dasar sedotan otomatis untuk sebuah [autoFor]:
 /// gelas di baris bertopping untuk `with_topping`, sisanya (termasuk bonus
 /// promo, yang tak pernah membawa topping) untuk `without_topping`. Gelas
-/// tumbler tetap dihitung — pembeli tetap butuh sedotan.
+/// yang dituang ke tumbler tidak dihitung: pembeli bertumbler tidak mengambil
+/// sedotan. Kalau ia tetap minta, kasir menambah angkanya sendiri.
 int sedotanAutoQty(ProductTransactionState state, String autoFor) {
+  int glasses(CartItem i) => i.quantity - i.tumblerQty;
   switch (autoFor) {
     case SedotanAutoFor.withTopping:
-      return state.items.where((i) => i.hasToppings).fold(0, (s, i) => s + i.quantity);
+      return state.items.where((i) => i.hasToppings).fold(0, (s, i) => s + glasses(i));
     case SedotanAutoFor.withoutTopping:
-      return state.items.where((i) => !i.hasToppings).fold(0, (s, i) => s + i.quantity) +
+      return state.items.where((i) => !i.hasToppings).fold(0, (s, i) => s + glasses(i)) +
           state.selectedFreeQty;
     default:
       return 0;
@@ -336,6 +338,7 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
         .map((i) => i.lineId == lineId ? i.copyWith(tumblerQty: tumblerQty) : i)
         .toList();
     state = state.copyWith(items: updated);
+    _syncAutoSedotans();
   }
 
   void clearCart() {

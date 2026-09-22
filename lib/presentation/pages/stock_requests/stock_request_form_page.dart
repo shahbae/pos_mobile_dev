@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:pos_mobile/data/models/stock_pack_model.dart';
 import 'package:pos_mobile/data/models/stock_request_model.dart';
 import 'package:pos_mobile/presentation/providers/stock_request_provider.dart';
 import 'package:pos_mobile/presentation/widgets/confirm_dialog.dart';
@@ -588,7 +589,14 @@ class _ItemCard extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           Text(
-            'Stok gudang ${_trimNum(item.warehouseQty)} ${item.unit}',
+            // Dibaca dalam kemasan yang sedang dipilih, supaya bisa langsung
+            // dibandingkan dengan angka yang akan diketik di kotak jumlah.
+            'Stok gudang ${StockPack.of(
+              qty: item.warehouseQty,
+              templateId: template.id,
+              name: template.name,
+              baseQty: template.baseQty,
+            ).label(item.unit)}',
             style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
           ),
           const SizedBox(height: 12),
