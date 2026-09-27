@@ -12,7 +12,9 @@ import 'package:pos_mobile/theme/app_theme.dart';
 /// Mode `manual` memakai QR statis milik cabang: owner menempel hasil scan QR
 /// yang terpasang di kasir, lalu BE menyisipkan nominal tiap transaksi. Mode
 /// `midtrans` dipakai begitu gateway di-ACC — tombol konfirmasi kasir hilang
-/// dengan sendirinya tanpa rilis ulang aplikasi.
+/// dengan sendirinya tanpa rilis ulang aplikasi. Mode `midtrans_snap` memakai
+/// gateway yang sama tapi QR tampil di halaman Snap — dipakai selama Core API
+/// Midtrans di production belum dibuka.
 class QrisSettingsPage extends ConsumerStatefulWidget {
   final int branchId;
   final String? branchName;
@@ -381,10 +383,19 @@ class _QrisSettingsPageState extends ConsumerState<QrisSettingsPage> {
         const SizedBox(height: 10),
         _modeTile(
           value: QrisProvider.midtrans,
-          title: 'Midtrans (gateway)',
+          title: 'Midtrans Core API (gateway)',
           subtitle:
               'Pembayaran dikonfirmasi otomatis oleh gateway. Pakai ini setelah '
-              'akun Midtrans di-ACC.',
+              'akses Core API Midtrans dibuka.',
+        ),
+        const SizedBox(height: 10),
+        _modeTile(
+          value: QrisProvider.midtransSnap,
+          title: 'Midtrans Snap (gateway)',
+          subtitle:
+              'Pembayaran dikonfirmasi otomatis, QR tampil di halaman Midtrans. '
+              'Semua HP kasir di cabang ini harus sudah memakai aplikasi versi '
+              'terbaru; versi lama menampilkan layar QR kosong.',
         ),
       ],
     );

@@ -1,9 +1,13 @@
 import 'package:pos_mobile/data/models/product_transaction_model.dart';
 
-/// Model untuk alur QRIS dinamis. Dua mode cabang, satu bentuk response:
-/// - `midtrans` — gateway yang mengonfirmasi (docs/api-qris-midtrans-fe.md)
-/// - `manual`   — QR statis cabang dibuat dinamis di BE, kasir yang menekan
-///                "Diterima" (docs/api-qris-manual-fe.md)
+/// Model untuk alur QRIS dinamis. Tiga mode cabang, satu bentuk response:
+/// - `midtrans`      — gateway Core API yang mengonfirmasi, QR digambar dari
+///                     `qr_string` (docs/api-qris-midtrans-fe.md)
+/// - `midtrans_snap` — gateway & konfirmasi yang sama, tapi QR tampil di
+///                     halaman Snap (`payment_url`) di dalam WebView
+///                     (be-pos docs/api-qris-midtrans-snap-fe.md)
+/// - `manual`        — QR statis cabang dibuat dinamis di BE, kasir yang menekan
+///                     "Diterima" (docs/api-qris-manual-fe.md)
 
 /// Nilai status yang mungkin dari BE.
 class QrisStatusValue {
@@ -19,6 +23,7 @@ class QrisStatusValue {
 class QrisProvider {
   static const manual = 'manual';
   static const midtrans = 'midtrans';
+  static const midtransSnap = 'midtrans_snap';
 }
 
 /// Hasil charge QRIS ketika Midtrans aktif (Response A): kembalikan QR.
@@ -28,9 +33,14 @@ class QrisCharge {
   final num grossAmount;
   final String qrString;
   final String? qrUrl;
+
+  /// Halaman Snap berisi QR. Hanya terisi di mode `midtrans_snap`; saat itu
+  /// `qrString` kosong karena Snap tidak pernah memberikan isi QR-nya.
+  final String? paymentUrl;
   final DateTime? expiresAt;
 
-  /// `manual` | `midtrans` — menentukan siapa yang mengonfirmasi pembayaran.
+  /// `manual` | `midtrans` | `midtrans_snap` — menentukan siapa yang
+  /// mengonfirmasi pembayaran dan cara QR ditampilkan.
   final String provider;
 
   /// true → kasir harus menekan "Pembayaran Diterima" (mode manual).
@@ -42,10 +52,14 @@ class QrisCharge {
     required this.grossAmount,
     required this.qrString,
     this.qrUrl,
+    this.paymentUrl,
     this.expiresAt,
     this.provider = QrisProvider.midtrans,
     this.manualConfirm = false,
   });
+
+  /// true → QR ditampilkan lewat halaman Snap, bukan digambar dari `qrString`.
+  bool get usesPaymentPage => paymentUrl != null && paymentUrl!.isNotEmpty;
 
   factory QrisCharge.fromJson(Map<String, dynamic> json) {
     return QrisCharge(
@@ -54,6 +68,7 @@ class QrisCharge {
       grossAmount: _toNum(json['gross_amount']),
       qrString: json['qr_string']?.toString() ?? '',
       qrUrl: json['qr_url']?.toString(),
+      paymentUrl: _emptyToNull(json['payment_url']),
       expiresAt: _toDate(json['expires_at']),
       provider: json['provider']?.toString() ?? QrisProvider.midtrans,
       manualConfirm: _toBool(json['manual_confirm']),
@@ -152,7 +167,7 @@ class QrisChargeCompleted extends QrisChargeResult {
 class QrisBranchConfig {
   final int branchId;
 
-  /// `manual` | `midtrans`.
+  /// `manual` | `midtrans` | `midtrans_snap`.
   final String mode;
 
   /// `branch` = cabang punya setting sendiri, `default` = ikut setting server.

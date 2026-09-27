@@ -7,6 +7,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import 'package:pos_mobile/data/models/qris_payment_model.dart';
 import 'package:pos_mobile/data/repositories/product_transaction_repository.dart';
+import 'package:pos_mobile/presentation/widgets/snap_payment_view.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/utils/currency.dart';
 
@@ -18,6 +19,10 @@ import 'package:pos_mobile/utils/currency.dart';
 /// `manual_confirm: true` dan kasir menekan "Pembayaran Diterima" setelah dana
 /// terlihat masuk di aplikasi merchant. Polling tetap jalan supaya layar ikut
 /// ter-update bila transaksi diselesaikan dari HP lain.
+///
+/// Mode `midtrans_snap`: BE tidak mengirim `qr_string`, melainkan `payment_url`
+/// (halaman Snap berisi QR). Halaman itu ditampilkan di WebView; polling,
+/// hitung mundur, dan tombol batal tetap sama dengan mode lain.
 class QrisPaymentPage extends ConsumerStatefulWidget {
   final QrisCharge charge;
 
@@ -275,7 +280,11 @@ class _QrisPaymentPageState extends ConsumerState<QrisPaymentPage> {
       child: Scaffold(
         appBar: AppBar(title: const Text('Pembayaran QRIS')),
         body: SafeArea(
-          child: _view == _View.failed ? _buildFailed() : _buildWaiting(),
+          child: _view == _View.failed
+              ? _buildFailed()
+              : widget.charge.usesPaymentPage
+                  ? _buildWaitingSnap()
+                  : _buildWaiting(),
         ),
       ),
     );
@@ -389,6 +398,77 @@ class _QrisPaymentPageState extends ConsumerState<QrisPaymentPage> {
           ),
         ],
       ),
+    );
+  }
+
+  /// Layar tunggu mode `midtrans_snap`: halaman Snap mengisi sebagian besar
+  /// layar supaya QR cukup besar untuk di-scan. Nominal & hitung mundur dibuat
+  /// ringkas di atas; Snap sendiri juga menampilkan keduanya.
+  Widget _buildWaitingSnap() {
+    final hasExpiry = widget.charge.expiresAt != null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 8, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(formatRupiah(widget.charge.grossAmount),
+                        style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            color: AppTheme.brandBlue)),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        const SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(strokeWidth: 2)),
+                        const SizedBox(width: 8),
+                        Text(
+                            hasExpiry
+                                ? 'Menunggu pembayaran · ${_fmtCountdown(_remaining)}'
+                                : 'Menunggu pembayaran…',
+                            style: const TextStyle(
+                                fontSize: 12, color: AppTheme.textSecondary)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              // Link bisa dibuka di perangkat lain bila WebView bermasalah
+              // (dan memudahkan uji di sandbox).
+              IconButton(
+                icon: const Icon(Icons.link, color: AppTheme.brandBlue),
+                tooltip: 'Salin link pembayaran',
+                onPressed: () =>
+                    _copy('Link pembayaran', widget.charge.paymentUrl!),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1, color: AppTheme.borderLight),
+        Expanded(child: SnapPaymentView(url: widget.charge.paymentUrl!)),
+        const Divider(height: 1, color: AppTheme.borderLight),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+          child: OutlinedButton.icon(
+            onPressed: _onCancelPressed,
+            icon: const Icon(Icons.close, color: AppTheme.danger),
+            label: const Text('Batalkan',
+                style: TextStyle(color: AppTheme.danger)),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              side: const BorderSide(color: AppTheme.danger),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
