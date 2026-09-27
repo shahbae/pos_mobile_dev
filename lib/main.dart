@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show appFlavor;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -15,7 +16,9 @@ import 'package:pos_mobile/presentation/widgets/app_update_gate.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await dotenv.load(fileName: '.env');
+  // Flavor prod membaca .env.prod (API produksi); flavor lain, termasuk
+  // `flutter run` tanpa --flavor, membaca .env (API dev).
+  await dotenv.load(fileName: appFlavor == 'prod' ? '.env.prod' : '.env');
   await initializeDateFormatting('id_ID', null);
   Intl.defaultLocale = 'id_ID';
 
