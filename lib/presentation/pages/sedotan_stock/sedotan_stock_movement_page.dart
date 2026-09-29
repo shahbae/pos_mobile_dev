@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 
 import 'package:pos_mobile/data/models/sedotan_stock_movement_model.dart';
 import 'package:pos_mobile/presentation/providers/sedotan_provider.dart';
-import 'package:pos_mobile/presentation/widgets/paged_movement_list.dart';
+import 'package:pos_mobile/presentation/widgets/paged_list_view.dart';
 
 /// Riwayat mutasi stok sedotan (IN/OUT/ADJUST), qty desimal.
 class SedotanStockMovementPage extends ConsumerStatefulWidget {
@@ -75,11 +75,12 @@ class _SedotanStockMovementPageState extends ConsumerState<SedotanStockMovementP
             ),
           ),
           Expanded(
-            child: PagedMovementList<SedotanStockMovement>(
+            child: PagedListView<SedotanStockMovement>(
               state: movements,
               notifier: movementsNotifier,
               itemBuilder: _item,
               emptyText: 'Belum ada riwayat stok sedotan',
+              unit: 'mutasi',
             ),
           ),
         ],

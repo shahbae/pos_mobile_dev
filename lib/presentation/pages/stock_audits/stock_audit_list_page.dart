@@ -7,6 +7,7 @@ import 'package:pos_mobile/data/models/stock_audit_model.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/stock_audit_provider.dart';
 import 'package:pos_mobile/presentation/widgets/branch_switch_sheet.dart';
+import 'package:pos_mobile/presentation/widgets/paged_list_view.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'stock_audit_detail_page.dart';
 import 'stock_audit_form_page.dart';
@@ -31,7 +32,8 @@ class StockAuditListPage extends ConsumerWidget {
       );
     }
 
-    final auditsAsync = ref.watch(stockAuditListProvider);
+    final audits = ref.watch(stockAuditListProvider);
+    final auditsNotifier = ref.watch(stockAuditListProvider.notifier);
 
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
@@ -50,35 +52,20 @@ class StockAuditListPage extends ConsumerWidget {
                 if (created == true) ref.invalidate(stockAuditListProvider);
               },
             ),
-      body: RefreshIndicator(
-        onRefresh: () async => ref.invalidate(stockAuditListProvider),
-        child: auditsAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => ListView(
-            children: [
-              const SizedBox(height: 120),
-              Center(child: Text('Gagal memuat audit:\n$e', textAlign: TextAlign.center)),
-            ],
-          ),
-          data: (audits) {
-            if (audits.isEmpty) {
-              return ListView(
-                children: const [
-                  SizedBox(height: 140),
-                  Icon(Icons.fact_check_outlined, size: 56, color: AppTheme.textSecondary),
-                  SizedBox(height: 12),
-                  Center(child: Text('Belum ada audit stok', style: TextStyle(color: AppTheme.textSecondary))),
-                ],
-              );
-            }
-            return ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: audits.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (context, i) => _AuditCard(audit: audits[i]),
-            );
-          },
+      body: PagedListView<StockAudit>(
+        state: audits,
+        notifier: auditsNotifier,
+        unit: 'audit',
+        emptyText: 'Belum ada audit stok',
+        empty: const Column(
+          children: [
+            SizedBox(height: 140),
+            Icon(Icons.fact_check_outlined, size: 56, color: AppTheme.textSecondary),
+            SizedBox(height: 12),
+            Center(child: Text('Belum ada audit stok', style: TextStyle(color: AppTheme.textSecondary))),
+          ],
         ),
+        itemBuilder: (context, audit) => _AuditCard(audit: audit),
       ),
     );
   }

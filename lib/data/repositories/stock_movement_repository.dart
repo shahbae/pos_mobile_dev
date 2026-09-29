@@ -1,5 +1,5 @@
 import '../services/api_services.dart';
-import '../models/movement_page.dart';
+import '../models/page_result.dart';
 import '../models/stock_movement_model.dart';
 
 class StockMovementRepository {
@@ -7,7 +7,7 @@ class StockMovementRepository {
   StockMovementRepository(this.api);
 
   /// Satu halaman riwayat mutasi bahan (terbaru dulu). Param opsional: material_id.
-  Future<MovementPage<StockMovementModel>> getStockMovementPage({
+  Future<PageResult<StockMovementModel>> getStockMovementPage({
     int? materialId,
     required int page,
     required int limit,
@@ -20,7 +20,7 @@ class StockMovementRepository {
         if (materialId != null) 'material_id': materialId,
       },
     );
-    return MovementPage.parse(
+    return PageResult.parse(
       res.data['data'],
       StockMovementModel.fromJson,
       page: page,

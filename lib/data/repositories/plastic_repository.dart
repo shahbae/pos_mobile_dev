@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../services/api_services.dart';
 import '../models/plastic_model.dart';
 import '../models/plastic_stock_model.dart';
-import '../models/movement_page.dart';
+import '../models/page_result.dart';
 import '../models/plastic_stock_movement_model.dart';
 
 class PlasticRepository {
@@ -30,7 +30,7 @@ class PlasticRepository {
   }
 
   /// Satu halaman riwayat mutasi stok plastic (terbaru dulu). Param opsional: plastic_id.
-  Future<MovementPage<PlasticStockMovement>> getPlasticStockMovementPage({
+  Future<PageResult<PlasticStockMovement>> getPlasticStockMovementPage({
     int? plasticId,
     required int page,
     required int limit,
@@ -40,7 +40,7 @@ class PlasticRepository {
       'limit': limit,
       if (plasticId != null) 'plastic_id': plasticId,
     });
-    return MovementPage.parse(
+    return PageResult.parse(
       res.data['data'],
       PlasticStockMovement.fromJson,
       page: page,

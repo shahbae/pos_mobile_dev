@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 
 import 'package:pos_mobile/data/models/topping_stock_movement_model.dart';
 import 'package:pos_mobile/presentation/providers/topping_provider.dart';
-import 'package:pos_mobile/presentation/widgets/paged_movement_list.dart';
+import 'package:pos_mobile/presentation/widgets/paged_list_view.dart';
 
 /// Riwayat mutasi stok topping (IN/OUT/ADJUST), qty desimal.
 class ToppingStockMovementPage extends ConsumerStatefulWidget {
@@ -75,11 +75,12 @@ class _ToppingStockMovementPageState extends ConsumerState<ToppingStockMovementP
             ),
           ),
           Expanded(
-            child: PagedMovementList<ToppingStockMovement>(
+            child: PagedListView<ToppingStockMovement>(
               state: movements,
               notifier: movementsNotifier,
               itemBuilder: _item,
               emptyText: 'Belum ada riwayat stok topping',
+              unit: 'mutasi',
             ),
           ),
         ],

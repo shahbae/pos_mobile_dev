@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../services/api_services.dart';
 import '../models/topping_model.dart';
 import '../models/topping_stock_model.dart';
-import '../models/movement_page.dart';
+import '../models/page_result.dart';
 import '../models/topping_stock_movement_model.dart';
 
 class ToppingRepository {
@@ -33,7 +33,7 @@ class ToppingRepository {
   }
 
   /// Satu halaman riwayat mutasi stok topping (terbaru dulu). Param opsional: topping_id.
-  Future<MovementPage<ToppingStockMovement>> getToppingStockMovementPage({
+  Future<PageResult<ToppingStockMovement>> getToppingStockMovementPage({
     int? toppingId,
     required int page,
     required int limit,
@@ -43,7 +43,7 @@ class ToppingRepository {
       'limit': limit,
       if (toppingId != null) 'topping_id': toppingId,
     });
-    return MovementPage.parse(
+    return PageResult.parse(
       res.data['data'],
       ToppingStockMovement.fromJson,
       page: page,

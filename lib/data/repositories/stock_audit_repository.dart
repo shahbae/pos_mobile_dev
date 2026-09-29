@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../services/api_services.dart';
+import '../models/page_result.dart';
 import '../models/stock_audit_model.dart';
 
 /// Cabang masih punya draft opname yang belum disetujui (BE 2026-08-08 §2 —
@@ -42,15 +43,24 @@ class StockAuditRepository {
   // opname) sengaja TIDAK diimplementasikan di app ini — pengaturannya ada di
   // web admin, sama seperti master data lain (keputusan user 2026-08-08).
 
-  /// List audit (tanpa items). Role non-owner wajib punya konteks cabang
-  /// (BE 2026-08-03 §4) — kalau belum pilih cabang, BE balas 400.
-  Future<List<StockAudit>> getAudits() async {
+  /// Satu halaman audit (tanpa items), terbaru dulu. Role non-owner wajib
+  /// punya konteks cabang (BE 2026-08-03 §4) — kalau belum pilih cabang, BE
+  /// balas 400.
+  Future<PageResult<StockAudit>> getAuditPage({
+    required int page,
+    required int limit,
+  }) async {
     try {
-      final res = await api.dio.get('/stock-audits');
-      debugPrint('[StockAuditRepo] list status=${res.statusCode} body=${res.data}');
-      final data = res.data['data'];
-      if (data == null || data is! List) return [];
-      return data.map((e) => StockAudit.fromJson(e)).toList();
+      final res = await api.dio.get(
+        '/stock-audits',
+        queryParameters: {'page': page, 'limit': limit},
+      );
+      return PageResult.parse(
+        res.data['data'],
+        StockAudit.fromJson,
+        page: page,
+        limit: limit,
+      );
     } on DioException catch (e) {
       throw _msg(e, 'Gagal memuat audit stok');
     }
