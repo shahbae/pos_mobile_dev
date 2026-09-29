@@ -3,6 +3,7 @@ import '../../data/repositories/stock_movement_repository.dart';
 import '../../data/services/api_provider.dart';
 import '../../data/models/stock_movement_model.dart';
 import 'package:pos_mobile/presentation/providers/branch_scope.dart';
+import 'package:pos_mobile/presentation/providers/movement_list_notifier.dart';
 
 final stockMovementRepositoryProvider = Provider<StockMovementRepository>((ref) {
   // Ikut lahir ulang saat pindah cabang — lihat [branchScopeProvider].
@@ -11,9 +12,13 @@ final stockMovementRepositoryProvider = Provider<StockMovementRepository>((ref) 
   return StockMovementRepository(api);
 });
 
-// Ambil mutasi stok (material-level). Param opsional: material_id.
-final stockMovementListProvider =
-    FutureProvider.family<List<StockMovementModel>, int?>((ref, materialId) async {
-  final repo = ref.watch(stockMovementRepositoryProvider);
-  return repo.getStockMovements(materialId: materialId);
-});
+/// Riwayat mutasi bahan per halaman. Param: material_id (null = semua).
+final stockMovementListProvider = StateNotifierProvider.autoDispose.family<
+    MovementListNotifier<StockMovementModel>, MovementListState<StockMovementModel>, int?>(
+  (ref, materialId) {
+    final repo = ref.watch(stockMovementRepositoryProvider);
+    return MovementListNotifier<StockMovementModel>(
+      (page, limit) => repo.getStockMovementPage(materialId: materialId, page: page, limit: limit),
+    );
+  },
+);

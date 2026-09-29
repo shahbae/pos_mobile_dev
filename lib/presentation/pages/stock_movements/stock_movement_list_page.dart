@@ -5,6 +5,7 @@ import '../../providers/stock_movement_provider.dart';
 import '../../providers/material_provider.dart';
 import '../../../data/models/material_model.dart';
 import '../../../data/models/stock_movement_model.dart';
+import '../../widgets/paged_movement_list.dart';
 
 class StockMovementListPage extends ConsumerStatefulWidget {
   const StockMovementListPage({super.key});
@@ -21,8 +22,8 @@ class _StockMovementListPageState extends ConsumerState<StockMovementListPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final materialsAsync = ref.watch(materialListProvider);
-    final movementsAsync =
-        ref.watch(stockMovementListProvider(_selectedMaterialId));
+    final movements = ref.watch(stockMovementListProvider(_selectedMaterialId));
+    final movementsNotifier = ref.watch(stockMovementListProvider(_selectedMaterialId).notifier);
     final names = {
       for (final m in (materialsAsync.valueOrNull ?? const <MaterialItem>[])) m.id: m.name
     };
@@ -96,30 +97,11 @@ class _StockMovementListPageState extends ConsumerState<StockMovementListPage> {
 
           // List
           Expanded(
-            child: movementsAsync.when(
-              data: (movements) {
-                if (movements.isEmpty) {
-                  return Center(
-                    child: Text(
-                      'Belum ada riwayat mutasi stok',
-                      style: TextStyle(color: Colors.grey.shade600),
-                    ),
-                  );
-                }
-
-                return ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: movements.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, i) {
-                    final m = movements[i];
-                    return _buildItem(context, m, names);
-                  },
-                );
-              },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (_, __) =>
-                  const Center(child: Text('Gagal memuat data mutasi')),
+            child: PagedMovementList<StockMovementModel>(
+              state: movements,
+              notifier: movementsNotifier,
+              itemBuilder: (context, m) => _buildItem(context, m, names),
+              emptyText: 'Belum ada riwayat mutasi stok',
             ),
           )
         ],

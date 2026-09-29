@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import 'package:pos_mobile/data/models/sedotan_stock_movement_model.dart';
 import 'package:pos_mobile/presentation/providers/sedotan_provider.dart';
+import 'package:pos_mobile/presentation/widgets/paged_movement_list.dart';
 
 /// Riwayat mutasi stok sedotan (IN/OUT/ADJUST), qty desimal.
 class SedotanStockMovementPage extends ConsumerStatefulWidget {
@@ -20,7 +21,8 @@ class _SedotanStockMovementPageState extends ConsumerState<SedotanStockMovementP
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final sedotansAsync = ref.watch(sedotanListProvider);
-    final movementsAsync = ref.watch(sedotanStockMovementListProvider(_selectedSedotanId));
+    final movements = ref.watch(sedotanStockMovementListProvider(_selectedSedotanId));
+    final movementsNotifier = ref.watch(sedotanStockMovementListProvider(_selectedSedotanId).notifier);
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
@@ -73,23 +75,11 @@ class _SedotanStockMovementPageState extends ConsumerState<SedotanStockMovementP
             ),
           ),
           Expanded(
-            child: movementsAsync.when(
-              data: (movements) {
-                if (movements.isEmpty) {
-                  return Center(
-                    child: Text('Belum ada riwayat stok sedotan',
-                        style: TextStyle(color: Colors.grey.shade600)),
-                  );
-                }
-                return ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: movements.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, i) => _item(context, movements[i]),
-                );
-              },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('Gagal memuat riwayat: $e')),
+            child: PagedMovementList<SedotanStockMovement>(
+              state: movements,
+              notifier: movementsNotifier,
+              itemBuilder: _item,
+              emptyText: 'Belum ada riwayat stok sedotan',
             ),
           ),
         ],
