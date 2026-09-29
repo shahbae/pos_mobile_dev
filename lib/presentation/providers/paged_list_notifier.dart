@@ -1,11 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:pos_mobile/data/models/movement_page.dart';
+import 'package:pos_mobile/data/models/page_result.dart';
 
-/// Ukuran halaman riwayat mutasi di aplikasi.
-const movementPageLimit = 30;
+/// Ukuran halaman bawaan daftar riwayat (mutasi, opname) di aplikasi.
+const defaultPageLimit = 30;
 
-class MovementListState<T> {
+class PagedListState<T> {
   final List<T> items;
   final int total;
   final bool loading;
@@ -17,7 +17,7 @@ class MovementListState<T> {
   /// di jaringan yang sedang putus.
   final Object? error;
 
-  const MovementListState({
+  const PagedListState({
     this.items = const [],
     this.total = 0,
     this.loading = false,
@@ -30,16 +30,18 @@ class MovementListState<T> {
       items.isEmpty && (loading || error == null && hasMore);
 }
 
-/// Memuat riwayat mutasi per halaman: halaman 1 saat dibuat, halaman
-/// berikutnya lewat [loadMore], mulai ulang lewat [refresh].
-class MovementListNotifier<T> extends StateNotifier<MovementListState<T>> {
-  final Future<MovementPage<T>> Function(int page, int limit) _fetch;
+/// Memuat daftar riwayat (mutasi, opname) per halaman: halaman 1 saat dibuat,
+/// halaman berikutnya lewat [loadMore], mulai ulang lewat [refresh].
+class PagedListNotifier<T> extends StateNotifier<PagedListState<T>> {
+  final Future<PageResult<T>> Function(int page, int limit) _fetch;
+  final int pageLimit;
 
   /// Penanda permintaan aktif; respons dari permintaan yang sudah digantikan
   /// (mis. tarik-refresh di tengah muat lanjutan) dibuang.
   int _reqId = 0;
 
-  MovementListNotifier(this._fetch) : super(MovementListState<T>()) {
+  PagedListNotifier(this._fetch, {this.pageLimit = defaultPageLimit})
+    : super(PagedListState<T>()) {
     _load(reset: true);
   }
 
@@ -56,7 +58,7 @@ class MovementListNotifier<T> extends StateNotifier<MovementListState<T>> {
   Future<void> _load({bool reset = false}) async {
     final req = ++_reqId;
     final page = reset ? 1 : state.nextPage;
-    state = MovementListState<T>(
+    state = PagedListState<T>(
       items: reset ? const [] : state.items,
       total: reset ? 0 : state.total,
       loading: true,
@@ -65,9 +67,9 @@ class MovementListNotifier<T> extends StateNotifier<MovementListState<T>> {
     );
 
     try {
-      final result = await _fetch(page, movementPageLimit);
+      final result = await _fetch(page, pageLimit);
       if (!mounted || req != _reqId) return;
-      state = MovementListState<T>(
+      state = PagedListState<T>(
         items: [...state.items, ...result.items],
         total: result.total,
         hasMore: result.hasMore,
@@ -75,7 +77,7 @@ class MovementListNotifier<T> extends StateNotifier<MovementListState<T>> {
       );
     } catch (e) {
       if (!mounted || req != _reqId) return;
-      state = MovementListState<T>(
+      state = PagedListState<T>(
         items: state.items,
         total: state.total,
         hasMore: state.hasMore,

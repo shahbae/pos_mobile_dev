@@ -4,6 +4,7 @@ import 'package:pos_mobile/data/repositories/stock_audit_repository.dart';
 import 'package:pos_mobile/data/services/api_provider.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/branch_scope.dart';
+import 'package:pos_mobile/presentation/providers/paged_list_notifier.dart';
 
 final stockAuditRepositoryProvider = Provider<StockAuditRepository>((ref) {
   // Ikut lahir ulang saat pindah cabang — lihat [branchScopeProvider].
@@ -11,8 +12,14 @@ final stockAuditRepositoryProvider = Provider<StockAuditRepository>((ref) {
   return StockAuditRepository(ref.watch(apiProvider));
 });
 
-final stockAuditListProvider = FutureProvider.autoDispose<List<StockAudit>>((ref) async {
-  return ref.watch(stockAuditRepositoryProvider).getAudits();
+/// Daftar audit stok per halaman (20), terbaru dulu.
+final stockAuditListProvider = StateNotifierProvider.autoDispose<
+    PagedListNotifier<StockAudit>, PagedListState<StockAudit>>((ref) {
+  final repo = ref.watch(stockAuditRepositoryProvider);
+  return PagedListNotifier<StockAudit>(
+    (page, limit) => repo.getAuditPage(page: page, limit: limit),
+    pageLimit: 20,
+  );
 });
 
 final stockAuditDetailProvider =

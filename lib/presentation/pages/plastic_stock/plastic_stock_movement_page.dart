@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 
 import 'package:pos_mobile/data/models/plastic_stock_movement_model.dart';
 import 'package:pos_mobile/presentation/providers/plastic_provider.dart';
-import 'package:pos_mobile/presentation/widgets/paged_movement_list.dart';
+import 'package:pos_mobile/presentation/widgets/paged_list_view.dart';
 
 /// Riwayat mutasi stok plastik (IN/OUT/ADJUST), qty desimal.
 class PlasticStockMovementPage extends ConsumerStatefulWidget {
@@ -75,11 +75,12 @@ class _PlasticStockMovementPageState extends ConsumerState<PlasticStockMovementP
             ),
           ),
           Expanded(
-            child: PagedMovementList<PlasticStockMovement>(
+            child: PagedListView<PlasticStockMovement>(
               state: movements,
               notifier: movementsNotifier,
               itemBuilder: _item,
               emptyText: 'Belum ada riwayat stok plastik',
+              unit: 'mutasi',
             ),
           ),
         ],

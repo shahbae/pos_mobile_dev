@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../services/api_services.dart';
 import '../models/sedotan_model.dart';
 import '../models/sedotan_stock_model.dart';
-import '../models/movement_page.dart';
+import '../models/page_result.dart';
 import '../models/sedotan_stock_movement_model.dart';
 
 class SedotanRepository {
@@ -30,7 +30,7 @@ class SedotanRepository {
   }
 
   /// Satu halaman riwayat mutasi stok sedotan (terbaru dulu). Param opsional: sedotan_id.
-  Future<MovementPage<SedotanStockMovement>> getSedotanStockMovementPage({
+  Future<PageResult<SedotanStockMovement>> getSedotanStockMovementPage({
     int? sedotanId,
     required int page,
     required int limit,
@@ -40,7 +40,7 @@ class SedotanRepository {
       'limit': limit,
       if (sedotanId != null) 'sedotan_id': sedotanId,
     });
-    return MovementPage.parse(
+    return PageResult.parse(
       res.data['data'],
       SedotanStockMovement.fromJson,
       page: page,

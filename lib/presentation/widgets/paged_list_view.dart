@@ -1,22 +1,30 @@
 import 'package:flutter/material.dart';
 
-import 'package:pos_mobile/presentation/providers/movement_list_notifier.dart';
+import 'package:pos_mobile/presentation/providers/paged_list_notifier.dart';
 
-/// Daftar riwayat mutasi yang memuat halaman berikutnya sendiri saat ujung
-/// daftar mendekati layar. Dipakai layar riwayat bahan, topping, plastik, dan
-/// sedotan.
-class PagedMovementList<T> extends StatelessWidget {
-  final MovementListState<T> state;
-  final MovementListNotifier<T> notifier;
+/// Daftar riwayat yang memuat halaman berikutnya sendiri saat ujung daftar
+/// mendekati layar. Dipakai layar riwayat mutasi (bahan, topping, plastik,
+/// sedotan) dan daftar audit stok.
+class PagedListView<T> extends StatelessWidget {
+  final PagedListState<T> state;
+  final PagedListNotifier<T> notifier;
   final Widget Function(BuildContext context, T item) itemBuilder;
   final String emptyText;
 
-  const PagedMovementList({
+  /// Kata benda untuk kaki daftar, mis. "mutasi" → "Semua 40 mutasi ...".
+  final String unit;
+
+  /// Pengganti tampilan kosong bawaan (teks [emptyText]).
+  final Widget? empty;
+
+  const PagedListView({
     super.key,
     required this.state,
     required this.notifier,
     required this.itemBuilder,
     required this.emptyText,
+    required this.unit,
+    this.empty,
   });
 
   @override
@@ -26,7 +34,10 @@ class PagedMovementList<T> extends StatelessWidget {
     }
     if (state.items.isEmpty && state.error != null) {
       return Center(
-        child: _Retry(message: 'Gagal memuat riwayat', onRetry: notifier.retry),
+        child: _Retry(
+          message: _errorText(state.error),
+          onRetry: notifier.retry,
+        ),
       );
     }
 
@@ -36,13 +47,16 @@ class PagedMovementList<T> extends StatelessWidget {
           ? ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               children: [
-                const SizedBox(height: 160),
-                Center(
-                  child: Text(
-                    emptyText,
-                    style: TextStyle(color: Colors.grey.shade600),
-                  ),
-                ),
+                empty ??
+                    Padding(
+                      padding: const EdgeInsets.only(top: 160),
+                      child: Center(
+                        child: Text(
+                          emptyText,
+                          style: TextStyle(color: Colors.grey.shade600),
+                        ),
+                      ),
+                    ),
               ],
             )
           : ListView.separated(
@@ -59,6 +73,13 @@ class PagedMovementList<T> extends StatelessWidget {
             ),
     );
   }
+
+  /// Repository yang sudah menyiapkan pesan siap tampil melempar [String];
+  /// selain itu (mis. DioException mentah) cukup pesan umum.
+  static String _errorText(Object? error) =>
+      error is String && error.trim().isNotEmpty
+      ? error
+      : 'Gagal memuat riwayat';
 
   Widget _footer(BuildContext context) {
     if (state.error != null) {
@@ -77,7 +98,7 @@ class PagedMovementList<T> extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Center(
         child: Text(
-          'Semua ${state.total} mutasi sudah ditampilkan',
+          'Semua ${state.total} $unit sudah ditampilkan',
           style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
         ),
       ),

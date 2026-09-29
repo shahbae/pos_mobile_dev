@@ -6,7 +6,7 @@ import 'package:pos_mobile/data/repositories/plastic_repository.dart';
 import 'package:pos_mobile/data/services/api_provider.dart';
 import 'package:pos_mobile/presentation/providers/master_data_cache.dart';
 import 'package:pos_mobile/presentation/providers/branch_scope.dart';
-import 'package:pos_mobile/presentation/providers/movement_list_notifier.dart';
+import 'package:pos_mobile/presentation/providers/paged_list_notifier.dart';
 
 final plasticRepositoryProvider = Provider<PlasticRepository>((ref) {
   // Ikut lahir ulang saat pindah cabang — lihat [branchScopeProvider].
@@ -29,10 +29,10 @@ final plasticStockListProvider = FutureProvider.autoDispose<List<PlasticStock>>(
 
 /// Riwayat mutasi stok plastic per halaman. Param: plastic_id (null = semua).
 final plasticStockMovementListProvider = StateNotifierProvider.autoDispose.family<
-    MovementListNotifier<PlasticStockMovement>, MovementListState<PlasticStockMovement>, int?>(
+    PagedListNotifier<PlasticStockMovement>, PagedListState<PlasticStockMovement>, int?>(
   (ref, plasticId) {
     final repo = ref.watch(plasticRepositoryProvider);
-    return MovementListNotifier<PlasticStockMovement>(
+    return PagedListNotifier<PlasticStockMovement>(
       (page, limit) => repo.getPlasticStockMovementPage(plasticId: plasticId, page: page, limit: limit),
     );
   },

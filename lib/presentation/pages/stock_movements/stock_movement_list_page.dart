@@ -5,7 +5,7 @@ import '../../providers/stock_movement_provider.dart';
 import '../../providers/material_provider.dart';
 import '../../../data/models/material_model.dart';
 import '../../../data/models/stock_movement_model.dart';
-import '../../widgets/paged_movement_list.dart';
+import '../../widgets/paged_list_view.dart';
 
 class StockMovementListPage extends ConsumerStatefulWidget {
   const StockMovementListPage({super.key});
@@ -97,11 +97,12 @@ class _StockMovementListPageState extends ConsumerState<StockMovementListPage> {
 
           // List
           Expanded(
-            child: PagedMovementList<StockMovementModel>(
+            child: PagedListView<StockMovementModel>(
               state: movements,
               notifier: movementsNotifier,
               itemBuilder: (context, m) => _buildItem(context, m, names),
               emptyText: 'Belum ada riwayat mutasi stok',
+              unit: 'mutasi',
             ),
           )
         ],
