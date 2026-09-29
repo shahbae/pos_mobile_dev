@@ -212,7 +212,7 @@ class _StockMovementListPageState extends ConsumerState<StockMovementListPage> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    '${m.type == 'OUT' ? '-' : '+'}${m.quantity}',
+                    '${m.type == 'OUT' ? '-' : '+'}${_fmtQty(m.quantity)}',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
@@ -231,6 +231,8 @@ class _StockMovementListPageState extends ConsumerState<StockMovementListPage> {
       ),
     );
   }
+
+  String _fmtQty(double q) => q == q.roundToDouble() ? q.toInt().toString() : q.toString();
 
   String _formatDate(String? dateStr) {
     if (dateStr == null) return '-';
