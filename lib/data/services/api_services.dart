@@ -6,12 +6,23 @@ import 'package:pos_mobile/data/services/secure_storage.dart';
 
 class ApiService {
   late final Dio dio;
-  final Dio _authClient = Dio(); // khusus refresh — tanpa interceptor
+
+  /// Khusus refresh — tanpa interceptor. Wajib punya timeout sendiri: semua
+  /// request yang kena 401 menunggu refresh yang sama (single-flight), jadi
+  /// satu refresh yang menggantung di jaringan jelek membuat SEMUA layar
+  /// berputar tanpa akhir sampai aplikasi ditutup paksa.
+  final Dio _authClient = Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 15),
+      sendTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 15),
+    ),
+  );
 
   /// Single-flight: satu proses refresh dipakai bersama semua request yang
   /// kena 401 bersamaan. Tanpa ini, refresh token yang dirotasi BE akan
   /// dipakai berkali-kali → request kedua gagal → user logout paksa.
-  Future<bool>? _refreshing;
+  Future<_RefreshResult>? _refreshing;
 
   ApiService() {
     dio = Dio(
@@ -19,6 +30,10 @@ class ApiService {
         baseUrl: dotenv.env['API_BASE_URL']!,
         connectTimeout: const Duration(seconds: 15),
         receiveTimeout: const Duration(seconds: 15),
+        // Total waktu kirim body. Tanpa ini unggahan foto (absensi,
+        // pengeluaran, hasil produksi) di sinyal jelek bisa menggantung
+        // selamanya. Foto sudah dikompres ke ≤1280 px, jadi 60 dtk longgar.
+        sendTimeout: const Duration(seconds: 60),
         headers: {'Content-Type': 'application/json'},
         validateStatus: (status) => status != null && status < 400,
       ),
@@ -49,9 +64,19 @@ class ApiService {
             return handler.next(e);
           }
 
-          final refreshed = await _refreshSingleFlight();
+          final result = await _refreshSingleFlight();
 
-          if (!refreshed) {
+          if (result.networkError != null) {
+            // Gagal karena jaringan, bukan karena token ditolak — token
+            // disimpan supaya user cukup coba lagi, tidak dipaksa login ulang.
+            // Error jaringan yang diteruskan (bukan 401 aslinya) supaya pesan
+            // di layar "periksa koneksi", bukan "sesi berakhir".
+            return handler.next(
+              result.networkError!.copyWith(requestOptions: req),
+            );
+          }
+
+          if (!result.ok) {
             await SecureStorage.clear();
             return handler.next(e);
           }
@@ -100,15 +125,15 @@ class ApiService {
 
   /// Menjamin hanya ada SATU proses refresh berjalan. Request lain yang kena
   /// 401 di saat bersamaan ikut menunggu Future yang sama.
-  Future<bool> _refreshSingleFlight() {
+  Future<_RefreshResult> _refreshSingleFlight() {
     return _refreshing ??= _refreshToken().whenComplete(() {
       _refreshing = null;
     });
   }
 
-  Future<bool> _refreshToken() async {
+  Future<_RefreshResult> _refreshToken() async {
     final refresh = await SecureStorage.getRefreshToken();
-    if (refresh == null) return false;
+    if (refresh == null) return _RefreshResult.rejected;
 
     try {
       final res = await _authClient.post(
@@ -117,21 +142,36 @@ class ApiService {
         options: Options(headers: {'Content-Type': 'application/json'}),
       );
 
-      if (res.data['success'] != true) return false;
+      if (res.data['success'] != true) return _RefreshResult.rejected;
 
       final data = res.data['data'];
       final token = data?['access_token'];
 
-      if (token == null) return false;
+      if (token == null) return _RefreshResult.rejected;
 
       await SecureStorage.saveTokens(
         accessToken: token,
         refreshToken: data?['refresh_token'],
       );
 
-      return true;
+      return _RefreshResult.success;
+    } on DioException catch (err) {
+      // Ada respons = server menjawab dan menolak (401 dsb.). Tanpa respons =
+      // timeout / koneksi putus, refresh token-nya belum tentu tidak sah.
+      if (err.response != null) return _RefreshResult.rejected;
+      return _RefreshResult(ok: false, networkError: err);
     } catch (_) {
-      return false;
+      return _RefreshResult.rejected;
     }
   }
+}
+
+class _RefreshResult {
+  final bool ok;
+  final DioException? networkError;
+
+  const _RefreshResult({required this.ok, this.networkError});
+
+  static const success = _RefreshResult(ok: true);
+  static const rejected = _RefreshResult(ok: false);
 }
