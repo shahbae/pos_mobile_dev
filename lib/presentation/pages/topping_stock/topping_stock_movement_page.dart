@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import 'package:pos_mobile/data/models/topping_stock_movement_model.dart';
 import 'package:pos_mobile/presentation/providers/topping_provider.dart';
+import 'package:pos_mobile/presentation/widgets/paged_movement_list.dart';
 
 /// Riwayat mutasi stok topping (IN/OUT/ADJUST), qty desimal.
 class ToppingStockMovementPage extends ConsumerStatefulWidget {
@@ -20,7 +21,8 @@ class _ToppingStockMovementPageState extends ConsumerState<ToppingStockMovementP
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final toppingsAsync = ref.watch(toppingListProvider);
-    final movementsAsync = ref.watch(toppingStockMovementListProvider(_selectedToppingId));
+    final movements = ref.watch(toppingStockMovementListProvider(_selectedToppingId));
+    final movementsNotifier = ref.watch(toppingStockMovementListProvider(_selectedToppingId).notifier);
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
@@ -73,23 +75,11 @@ class _ToppingStockMovementPageState extends ConsumerState<ToppingStockMovementP
             ),
           ),
           Expanded(
-            child: movementsAsync.when(
-              data: (movements) {
-                if (movements.isEmpty) {
-                  return Center(
-                    child: Text('Belum ada riwayat stok topping',
-                        style: TextStyle(color: Colors.grey.shade600)),
-                  );
-                }
-                return ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: movements.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, i) => _item(context, movements[i]),
-                );
-              },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('Gagal memuat riwayat: $e')),
+            child: PagedMovementList<ToppingStockMovement>(
+              state: movements,
+              notifier: movementsNotifier,
+              itemBuilder: _item,
+              emptyText: 'Belum ada riwayat stok topping',
             ),
           ),
         ],

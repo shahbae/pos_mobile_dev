@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../services/api_services.dart';
 import '../models/topping_model.dart';
 import '../models/topping_stock_model.dart';
+import '../models/movement_page.dart';
 import '../models/topping_stock_movement_model.dart';
 
 class ToppingRepository {
@@ -31,15 +32,23 @@ class ToppingRepository {
     return data.map((e) => ToppingStock.fromJson(e)).toList();
   }
 
-  /// Riwayat mutasi stok topping. Param opsional: topping_id.
-  Future<List<ToppingStockMovement>> getToppingStockMovements({int? toppingId}) async {
+  /// Satu halaman riwayat mutasi stok topping (terbaru dulu). Param opsional: topping_id.
+  Future<MovementPage<ToppingStockMovement>> getToppingStockMovementPage({
+    int? toppingId,
+    required int page,
+    required int limit,
+  }) async {
     final res = await api.dio.get('/topping-stock/movements', queryParameters: {
+      'page': page,
+      'limit': limit,
       if (toppingId != null) 'topping_id': toppingId,
     });
-    debugPrint('[ToppingRepo] movements status=${res.statusCode} body=${res.data}');
-    final data = res.data['data'];
-    if (data == null || data is! List) return [];
-    return data.map((e) => ToppingStockMovement.fromJson(e)).toList();
+    return MovementPage.parse(
+      res.data['data'],
+      ToppingStockMovement.fromJson,
+      page: page,
+      limit: limit,
+    );
   }
 
   /// Set stok topping ke nilai absolut (qty bisa desimal). POST /topping-stock/adjust

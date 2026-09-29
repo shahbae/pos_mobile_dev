@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../services/api_services.dart';
 import '../models/plastic_model.dart';
 import '../models/plastic_stock_model.dart';
+import '../models/movement_page.dart';
 import '../models/plastic_stock_movement_model.dart';
 
 class PlasticRepository {
@@ -28,15 +29,23 @@ class PlasticRepository {
     return data.map((e) => PlasticStock.fromJson(e)).toList();
   }
 
-  /// Riwayat mutasi stok plastik. Param opsional: plastic_id.
-  Future<List<PlasticStockMovement>> getPlasticStockMovements({int? plasticId}) async {
+  /// Satu halaman riwayat mutasi stok plastic (terbaru dulu). Param opsional: plastic_id.
+  Future<MovementPage<PlasticStockMovement>> getPlasticStockMovementPage({
+    int? plasticId,
+    required int page,
+    required int limit,
+  }) async {
     final res = await api.dio.get('/plastic-stock/movements', queryParameters: {
+      'page': page,
+      'limit': limit,
       if (plasticId != null) 'plastic_id': plasticId,
     });
-    debugPrint('[PlasticRepo] movements status=${res.statusCode} body=${res.data}');
-    final data = res.data['data'];
-    if (data == null || data is! List) return [];
-    return data.map((e) => PlasticStockMovement.fromJson(e)).toList();
+    return MovementPage.parse(
+      res.data['data'],
+      PlasticStockMovement.fromJson,
+      page: page,
+      limit: limit,
+    );
   }
 
   /// Set stok plastik ke nilai absolut (qty bisa desimal). POST /plastic-stock/adjust

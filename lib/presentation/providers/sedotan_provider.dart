@@ -6,6 +6,7 @@ import 'package:pos_mobile/data/repositories/sedotan_repository.dart';
 import 'package:pos_mobile/data/services/api_provider.dart';
 import 'package:pos_mobile/presentation/providers/master_data_cache.dart';
 import 'package:pos_mobile/presentation/providers/branch_scope.dart';
+import 'package:pos_mobile/presentation/providers/movement_list_notifier.dart';
 
 final sedotanRepositoryProvider = Provider<SedotanRepository>((ref) {
   // Ikut lahir ulang saat pindah cabang — lihat [branchScopeProvider].
@@ -25,8 +26,13 @@ final sedotanStockListProvider = FutureProvider.autoDispose<List<SedotanStock>>(
   return ref.watch(sedotanRepositoryProvider).getSedotanStock();
 });
 
-/// Riwayat mutasi stok sedotan. Param: sedotan_id (null = semua).
-final sedotanStockMovementListProvider =
-    FutureProvider.autoDispose.family<List<SedotanStockMovement>, int?>((ref, sedotanId) async {
-  return ref.watch(sedotanRepositoryProvider).getSedotanStockMovements(sedotanId: sedotanId);
-});
+/// Riwayat mutasi stok sedotan per halaman. Param: sedotan_id (null = semua).
+final sedotanStockMovementListProvider = StateNotifierProvider.autoDispose.family<
+    MovementListNotifier<SedotanStockMovement>, MovementListState<SedotanStockMovement>, int?>(
+  (ref, sedotanId) {
+    final repo = ref.watch(sedotanRepositoryProvider);
+    return MovementListNotifier<SedotanStockMovement>(
+      (page, limit) => repo.getSedotanStockMovementPage(sedotanId: sedotanId, page: page, limit: limit),
+    );
+  },
+);

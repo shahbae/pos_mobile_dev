@@ -5,6 +5,7 @@ import 'package:pos_mobile/data/models/topping_stock_movement_model.dart';
 import 'package:pos_mobile/data/repositories/topping_repository.dart';
 import 'package:pos_mobile/data/services/api_provider.dart';
 import 'package:pos_mobile/presentation/providers/branch_scope.dart';
+import 'package:pos_mobile/presentation/providers/movement_list_notifier.dart';
 
 final toppingRepositoryProvider = Provider<ToppingRepository>((ref) {
   // Ikut lahir ulang saat pindah cabang — lihat [branchScopeProvider].
@@ -22,8 +23,13 @@ final toppingStockListProvider = FutureProvider.autoDispose<List<ToppingStock>>(
   return ref.watch(toppingRepositoryProvider).getToppingStock();
 });
 
-/// Riwayat mutasi stok topping. Param: topping_id (null = semua).
-final toppingStockMovementListProvider =
-    FutureProvider.autoDispose.family<List<ToppingStockMovement>, int?>((ref, toppingId) async {
-  return ref.watch(toppingRepositoryProvider).getToppingStockMovements(toppingId: toppingId);
-});
+/// Riwayat mutasi stok topping per halaman. Param: topping_id (null = semua).
+final toppingStockMovementListProvider = StateNotifierProvider.autoDispose.family<
+    MovementListNotifier<ToppingStockMovement>, MovementListState<ToppingStockMovement>, int?>(
+  (ref, toppingId) {
+    final repo = ref.watch(toppingRepositoryProvider);
+    return MovementListNotifier<ToppingStockMovement>(
+      (page, limit) => repo.getToppingStockMovementPage(toppingId: toppingId, page: page, limit: limit),
+    );
+  },
+);

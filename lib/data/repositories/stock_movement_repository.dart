@@ -1,34 +1,31 @@
-import 'package:flutter/foundation.dart';
 import '../services/api_services.dart';
+import '../models/movement_page.dart';
 import '../models/stock_movement_model.dart';
 
 class StockMovementRepository {
   final ApiService api;
   StockMovementRepository(this.api);
 
-  Future<List<StockMovementModel>> getStockMovements({
+  /// Satu halaman riwayat mutasi bahan (terbaru dulu). Param opsional: material_id.
+  Future<MovementPage<StockMovementModel>> getStockMovementPage({
     int? materialId,
+    required int page,
+    required int limit,
   }) async {
     final res = await api.dio.get(
       '/stock-movements',
       queryParameters: {
+        'page': page,
+        'limit': limit,
         if (materialId != null) 'material_id': materialId,
       },
     );
-
-    debugPrint('[StockMovementRepo] status=${res.statusCode} body=${res.data}');
-
-    final data = res.data['data'];
-    if (data == null) return [];
-
-    List listData = [];
-    if (data is List) {
-      listData = data;
-    } else if (data is Map && data['data'] is List) {
-      listData = data['data'];
-    }
-
-    return listData.map((e) => StockMovementModel.fromJson(e)).toList();
+    return MovementPage.parse(
+      res.data['data'],
+      StockMovementModel.fromJson,
+      page: page,
+      limit: limit,
+    );
   }
 
   Future<Map<String, dynamic>> createStockMovement(Map<String, dynamic> data) async {

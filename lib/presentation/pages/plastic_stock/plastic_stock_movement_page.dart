@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import 'package:pos_mobile/data/models/plastic_stock_movement_model.dart';
 import 'package:pos_mobile/presentation/providers/plastic_provider.dart';
+import 'package:pos_mobile/presentation/widgets/paged_movement_list.dart';
 
 /// Riwayat mutasi stok plastik (IN/OUT/ADJUST), qty desimal.
 class PlasticStockMovementPage extends ConsumerStatefulWidget {
@@ -20,7 +21,8 @@ class _PlasticStockMovementPageState extends ConsumerState<PlasticStockMovementP
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final plasticsAsync = ref.watch(plasticListProvider);
-    final movementsAsync = ref.watch(plasticStockMovementListProvider(_selectedPlasticId));
+    final movements = ref.watch(plasticStockMovementListProvider(_selectedPlasticId));
+    final movementsNotifier = ref.watch(plasticStockMovementListProvider(_selectedPlasticId).notifier);
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
@@ -73,23 +75,11 @@ class _PlasticStockMovementPageState extends ConsumerState<PlasticStockMovementP
             ),
           ),
           Expanded(
-            child: movementsAsync.when(
-              data: (movements) {
-                if (movements.isEmpty) {
-                  return Center(
-                    child: Text('Belum ada riwayat stok plastik',
-                        style: TextStyle(color: Colors.grey.shade600)),
-                  );
-                }
-                return ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: movements.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, i) => _item(context, movements[i]),
-                );
-              },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('Gagal memuat riwayat: $e')),
+            child: PagedMovementList<PlasticStockMovement>(
+              state: movements,
+              notifier: movementsNotifier,
+              itemBuilder: _item,
+              emptyText: 'Belum ada riwayat stok plastik',
             ),
           ),
         ],
