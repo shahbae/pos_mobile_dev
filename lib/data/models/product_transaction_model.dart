@@ -146,15 +146,37 @@ class PromoFreeItem {
   }
 }
 
+/// Gagal membuat transaksi. [toString] mengembalikan pesannya saja supaya bisa
+/// langsung ditampilkan ke kasir.
+class TransactionSubmitException implements Exception {
+  final String message;
+
+  /// true → server menjawab dan menolak (4xx): transaksi pasti TIDAK tercatat.
+  /// false → tak ada jawaban atau server galat (5xx): transaksi bisa saja sudah
+  /// tercatat, jadi percobaan berikutnya wajib memakai idempotency key yang sama.
+  final bool rejected;
+
+  const TransactionSubmitException(this.message, {required this.rejected});
+
+  @override
+  String toString() => message;
+}
+
 class ProductTransactionResponse {
   final String invoiceNumber;
   final int saleId;
   final bool success;
 
+  /// Metode bayar yang tercatat di server (huruf kecil), null bila tidak ada di
+  /// response. Bisa beda dari yang baru dipilih kasir: percobaan ulang dengan
+  /// key yang sama dibalas dengan transaksi yang SUDAH tercatat.
+  final String? paymentMethod;
+
   ProductTransactionResponse({
     required this.invoiceNumber,
     required this.saleId,
     required this.success,
+    this.paymentMethod,
   });
 
   factory ProductTransactionResponse.fromJson(Map<String, dynamic> json) {
@@ -179,6 +201,7 @@ class ProductTransactionResponse {
       invoiceNumber: invoice.toString(),
       saleId: data['sale_id'] ?? json['sale_id'] ?? 0,
       success: json['success'] ?? false,
+      paymentMethod: data['payment_method']?.toString(),
     );
   }
 }
