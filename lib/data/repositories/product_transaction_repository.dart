@@ -28,12 +28,20 @@ class ProductTransactionRepository {
       );
 
       debugPrint('[TransactionRepo] Response: ${res.data}');
+      // Key yang sama pernah dipakai percobaan QRIS dan QR-nya masih menunggu:
+      // server membalas QR itu, bukan struk. Tanpa cek ini balasannya terbaca
+      // sebagai transaksi berhasil dengan nomor invoice kosong.
+      if (_isPendingQr(_dataOf(res.data))) {
+        throw const TransactionSubmitException(
+          'Pesanan ini sudah punya QR QRIS yang masih menunggu pembayaran. '
+          'Pilih QRIS untuk menampilkannya lagi.',
+          rejected: false,
+        );
+      }
       return ProductTransactionResponse.fromJson(res.data);
     } on DioException catch (e) {
       debugPrint('[TransactionRepo] DioError ${e.response?.statusCode}: ${e.response?.data}');
-      final data = e.response?.data;
-      final raw = (data is Map) ? (data['message'] ?? data['error']) : null;
-      throw _mapError(raw?.toString(), e.response?.statusCode, e.message);
+      throw _submitError(e);
     }
   }
 
@@ -46,24 +54,41 @@ class ProductTransactionRepository {
       final res = await api.dio.post('/product-transactions', data: payload);
       debugPrint('[TransactionRepo] QRIS response: ${res.data}');
       final body = res.data;
-      final data = (body is Map && body['data'] is Map) ? body['data'] as Map : body;
+      final data = _dataOf(body);
 
       // Response A: ada qr_string / payment_ref tanpa invoice → tampilkan QR.
-      final hasQr = data is Map &&
-          (data['qr_string'] != null || data['payment_ref'] != null) &&
-          data['invoice_no'] == null &&
-          data['invoice_number'] == null;
-      if (hasQr) {
+      if (_isPendingQr(data)) {
         return QrisChargePending(QrisCharge.fromJson(Map<String, dynamic>.from(data)));
       }
       // Response B: receipt biasa (langsung lunas).
       return QrisChargeCompleted(
           ProductTransactionResponse.fromJson(Map<String, dynamic>.from(body)));
     } on DioException catch (e) {
-      final data = e.response?.data;
-      final raw = (data is Map) ? (data['message'] ?? data['error']) : null;
-      throw _mapError(raw?.toString(), e.response?.statusCode, e.message);
+      throw _submitError(e);
     }
+  }
+
+  dynamic _dataOf(dynamic body) =>
+      (body is Map && body['data'] is Map) ? body['data'] as Map : body;
+
+  /// Bentuk response QR yang menunggu pembayaran: ada qr_string / payment_ref
+  /// tanpa nomor invoice.
+  bool _isPendingQr(dynamic data) =>
+      data is Map &&
+      (data['qr_string'] != null || data['payment_ref'] != null) &&
+      data['invoice_no'] == null &&
+      data['invoice_number'] == null;
+
+  /// Galat `POST /product-transactions`, dengan penanda apakah server memang
+  /// menolaknya — lihat [TransactionSubmitException.rejected].
+  TransactionSubmitException _submitError(DioException e) {
+    final data = e.response?.data;
+    final raw = (data is Map) ? (data['message'] ?? data['error']) : null;
+    final status = e.response?.statusCode;
+    return TransactionSubmitException(
+      _mapError(raw?.toString(), status, e.message),
+      rejected: status != null && status >= 400 && status < 500,
+    );
   }
 
   /// Cek status pembayaran QRIS (polling).

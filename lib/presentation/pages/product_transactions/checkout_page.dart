@@ -145,6 +145,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     if (!mounted) return;
     final newState = ref.read(productTransactionProvider);
     if (newState.lastResponse != null) {
+      _warnIfRecordedOtherwise(newState.lastResponse!);
       _goToSuccess(newState.lastResponse!);
     } else if (newState.error != null) {
       _toast("Gagal: ${newState.error}", Colors.red);
@@ -178,6 +179,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     // Response B — Midtrans belum aktif, transaksi langsung lunas.
     if (result is QrisChargeCompleted) {
       notifier.clearCart();
+      _warnIfRecordedOtherwise(result.response);
       _goToSuccess(result.response);
       return;
     }
@@ -200,6 +202,18 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       }
       // Dibatalkan / kedaluwarsa → tetap di checkout, keranjang utuh (bisa ulangi).
     }
+  }
+
+  /// Percobaan ulang dibalas server dengan transaksi yang sudah tercatat pada
+  /// percobaan sebelumnya. Kalau kasir sempat mengganti metode bayar di
+  /// antaranya, yang tercatat tetap metode yang pertama — dan tanpa peringatan
+  /// ini kasir yang memilih QRIS akan melihat "berhasil" tanpa pernah ada QR.
+  void _warnIfRecordedOtherwise(ProductTransactionResponse response) {
+    final recorded = response.paymentMethod;
+    if (recorded == null || recorded.toLowerCase() == _paymentMethod.toLowerCase()) return;
+    final known = _payMethods.where((m) => m.value.toLowerCase() == recorded.toLowerCase());
+    final label = known.isEmpty ? recorded.toUpperCase() : known.first.label;
+    _toast("Pesanan ini sudah tercatat lunas dengan $label pada percobaan sebelumnya", Colors.orange);
   }
 
   /// Satu-satunya pintu ke halaman sukses — sekaligus tempat membuang cache

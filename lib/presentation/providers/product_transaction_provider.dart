@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -251,6 +252,17 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
   /// sedotan otomatis belum bisa diisi.
   List<Sedotan> _sedotanMasters = const [];
 
+  /// Idempotency key percobaan bayar yang hasilnya belum pasti, dan isi
+  /// keranjang saat key itu dibuat. Null = percobaan berikutnya memulai
+  /// transaksi baru. Lihat [_attemptKeyFor].
+  String? _attemptKey;
+  String? _attemptCart;
+
+  /// true selama semua percobaan dengan [_attemptKey] adalah QRIS yang
+  /// menghasilkan QR, jadi paling jauh yang tercatat di server adalah QR yang
+  /// belum dibayar — bukan penjualan lunas.
+  bool _attemptOnlyQr = false;
+
   ProductTransactionNotifier(this.repo) : super(ProductTransactionState());
 
   int _nextLineId() => ++_lineCounter;
@@ -342,6 +354,7 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
   }
 
   void clearCart() {
+    _dropAttemptKey();
     state = ProductTransactionState();
   }
 
@@ -484,18 +497,69 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
           )),
     ];
 
+    final plastics = state.plastics.map((p) => p.toSelection()).toList();
+    final sedotans = state.sedotans.map((s) => s.toSelection()).toList();
+
+    // Yang menentukan stok dan total. Metode bayar, nominal, dan nama pembeli
+    // sengaja tidak ikut: mengubahnya bukan berarti pesanannya lain.
+    final cart = jsonEncode({
+      'items': items.map((i) => i.toJson()).toList(),
+      'promo_free_items': promoFreeItems.map((p) => p.toJson()).toList(),
+      'plastics': plastics.map((p) => p.toJson()).toList(),
+      'sedotans': sedotans.map((s) => s.toJson()).toList(),
+      'discount': discount,
+    });
+    // QRIS senilai Rp0 langsung dicatat lunas oleh server, tanpa QR.
+    final makesQr = paymentMethod.toLowerCase() == 'qris' && state.total > 0;
+
     return ProductTransactionRequest(
       items: items,
       promoFreeItems: promoFreeItems,
-      plastics: state.plastics.map((p) => p.toSelection()).toList(),
-      sedotans: state.sedotans.map((s) => s.toSelection()).toList(),
+      plastics: plastics,
+      sedotans: sedotans,
       paymentMethod: paymentMethod,
       paid: paid,
       discount: discount,
       paymentRef: paymentRef,
       customerName: customerName,
-      idempotencyKey: _genIdempotencyKey(),
+      idempotencyKey: _attemptKeyFor(cart, makesQr: makesQr),
     );
+  }
+
+  /// Idempotency key untuk percobaan bayar ini.
+  ///
+  /// Satu key dipakai untuk semua percobaan atas keranjang yang sama selama
+  /// hasilnya belum pasti: permintaan yang sampai ke server tapi jawabannya
+  /// hilang akan dibalas server dengan transaksi yang sudah tercatat, bukan
+  /// dicatat sekali lagi. Key diganti kalau isi keranjang berubah, atau begitu
+  /// server menjawab (lihat [_dropAttemptKey]).
+  String _attemptKeyFor(String cart, {required bool makesQr}) {
+    // Percobaan sebelumnya paling jauh meninggalkan QR yang belum dibayar, dan
+    // QR tidak bisa dilunasi dengan tunai. Mulai transaksi baru; QR lama
+    // kedaluwarsa sendiri dan stoknya dikembalikan server.
+    final abandonsQr = _attemptOnlyQr && !makesQr;
+    if (_attemptKey == null || _attemptCart != cart || abandonsQr) {
+      _attemptKey = _genIdempotencyKey();
+      _attemptCart = cart;
+      _attemptOnlyQr = makesQr;
+    } else {
+      _attemptOnlyQr = _attemptOnlyQr && makesQr;
+    }
+    return _attemptKey!;
+  }
+
+  /// Hasil percobaan sudah pasti — tercatat, atau ditolak server — jadi
+  /// percobaan berikutnya adalah transaksi baru.
+  void _dropAttemptKey() {
+    _attemptKey = null;
+    _attemptCart = null;
+    _attemptOnlyQr = false;
+  }
+
+  /// Galat tanpa kepastian (timeout, koneksi putus, 5xx) membiarkan key tetap
+  /// dipakai; hanya penolakan yang jelas dari server yang melepasnya.
+  void _dropAttemptKeyIfRejected(Object error) {
+    if (error is TransactionSubmitException && error.rejected) _dropAttemptKey();
   }
 
   Future<void> submitTransaction({
@@ -524,8 +588,10 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
 
     try {
       final response = await repo.createTransaction(request);
+      _dropAttemptKey();
       state = ProductTransactionState(lastResponse: response); // reset cart on success
     } catch (e) {
+      _dropAttemptKeyIfRejected(e);
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
@@ -551,15 +617,16 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
 
     try {
       final result = await repo.createQrisTransaction(request);
+      _dropAttemptKey();
       state = state.copyWith(isLoading: false);
       return result;
     } catch (e) {
+      _dropAttemptKeyIfRejected(e);
       state = state.copyWith(isLoading: false, error: e.toString());
       return null;
     }
   }
 
-  /// Idempotency key unik per submit (cegah transaksi dobel saat retry).
   String _genIdempotencyKey() {
     final rnd = Random();
     String seg(int n) =>
