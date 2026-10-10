@@ -73,6 +73,48 @@ class Receipt {
 
   bool get hasQueueNo => queueNo > 0;
 
+  /// Bentuk yang sama dengan struk dari server, supaya nota yang disusun di HP
+  /// saat offline bisa disimpan lalu dibaca lagi oleh [Receipt.fromJson].
+  Map<String, dynamic> toJson() => {
+        'invoice_no': invoiceNo,
+        'created_at': createdAt?.toUtc().toIso8601String(),
+        'cashier_name': cashierName,
+        'customer_name': customerName,
+        'items': [
+          for (final i in items)
+            {
+              'name': i.name,
+              'variant_name': i.variantName,
+              'qty': i.qty,
+              'price': i.price,
+              'toppings': [
+                for (final t in i.toppings) {'name': t.name, 'qty': t.qty, 'price': t.price},
+              ],
+            },
+        ],
+        'plastics': [for (final p in plastics) {'name': p.name, 'qty': p.qty}],
+        'sedotans': [for (final s in sedotans) {'name': s.name, 'qty': s.qty}],
+        'subtotal': subtotal,
+        'discount': discount,
+        'promo_discount': promoDiscount,
+        'promos': [for (final p in promos) {'name': p.name, 'discount': p.discount}],
+        'tax': tax,
+        'total': total,
+        'paid': paid,
+        'change': change,
+        'payment_method': paymentMethod,
+        'payment_ref': paymentRef,
+        'estimated_prep_minutes': estimatedPrepMinutes,
+        'estimated_ready_at': estimatedReadyAt?.toUtc().toIso8601String(),
+        'queue_no': queueNo,
+        'store': {
+          'name': store.name,
+          'address': store.address,
+          'footer_note': store.footerNote,
+          'complaint_note': store.complaintNote,
+        },
+      };
+
   factory Receipt.fromJson(Map<String, dynamic> json) {
     final data = (json['data'] is Map) ? json['data'] as Map<String, dynamic> : json;
     final List<dynamic> itemsJson = data['items'] ?? [];

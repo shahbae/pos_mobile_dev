@@ -14,6 +14,7 @@ import 'package:pos_mobile/data/repositories/pos_catalog_repository.dart';
 import 'package:pos_mobile/data/services/api_provider.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/branch_scope.dart';
+import 'package:pos_mobile/presentation/providers/offline_provider.dart';
 
 /// DB lokal kasir, dibuka sekali untuk seumur aplikasi.
 final kasirLocalDbProvider = Provider<Future<Database>>((ref) => openKasirLocalDb());
@@ -89,6 +90,11 @@ final posCatalogProvider =
     // Potret disimpan per cabang supaya katalog cabang lain tidak pernah
     // terpakai setelah kasir pindah cabang.
     branchId: ref.watch(activeBranchIdProvider),
+    // Tiap jawaban (atau ketiadaan jawaban) dari server juga kabar bagi mode
+    // offline: shift, kasir, dan jam server diingat, dan antrean dikirim begitu
+    // server terjangkau lagi.
+    onAnswer: (fetch) => ref.read(offlineProvider.notifier).onCatalogAnswer(fetch),
+    onFailure: () => ref.read(offlineProvider.notifier).onRequestFailed(),
   );
   notifier.start();
   return notifier;
@@ -103,6 +109,12 @@ class PosCatalogNotifier extends StateNotifier<PosCatalogState> {
   final int? branchId;
   final Duration checkInterval;
 
+  /// Dipanggil tiap server menjawab, berubah atau tidak.
+  final FutureOr<void> Function(PosCatalogFetch fetch)? onAnswer;
+
+  /// Dipanggil tiap permintaan ke server gagal.
+  final FutureOr<void> Function()? onFailure;
+
   Timer? _timer;
   Future<void>? _refreshing;
 
@@ -110,6 +122,8 @@ class PosCatalogNotifier extends StateNotifier<PosCatalogState> {
     required this.repo,
     required this.store,
     required this.branchId,
+    this.onAnswer,
+    this.onFailure,
     this.checkInterval = posCatalogCheckInterval,
     // Lahir dalam keadaan "sedang memuat": sebelum potret lokal terbaca, layar
     // harus menunggu, bukan menampilkan "produk tidak ditemukan".
@@ -160,6 +174,7 @@ class PosCatalogNotifier extends StateNotifier<PosCatalogState> {
     state = state.copyWith(refreshing: true);
     try {
       final fetch = await repo.fetch(version: state.catalog?.version);
+      _tell(() => onAnswer?.call(fetch));
       if (!mounted) return;
       if (fetch.unchanged || fetch.catalog == null) {
         state = state.copyWith(refreshing: false, clearError: true);
@@ -179,9 +194,18 @@ class PosCatalogNotifier extends StateNotifier<PosCatalogState> {
       if (!mounted) return;
       state = state.copyWith(catalog: fetch.catalog, refreshing: false, clearError: true);
     } catch (e) {
+      _tell(() => onFailure?.call());
       if (!mounted) return;
       state = state.copyWith(refreshing: false, error: e.toString());
     }
+  }
+
+  /// Kabari pendengar tanpa membiarkan galatnya merusak katalog.
+  void _tell(FutureOr<void> Function() notify) {
+    try {
+      final result = notify();
+      if (result is Future) result.catchError((_) {});
+    } catch (_) {}
   }
 
   @override

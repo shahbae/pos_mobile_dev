@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pos_mobile/presentation/widgets/offline_hold.dart';
+import 'package:pos_mobile/presentation/providers/offline_provider.dart';
 import 'package:intl/intl.dart';
 
 import 'package:pos_mobile/core/auth/role_access.dart';
@@ -82,6 +84,9 @@ class ShiftPage extends ConsumerWidget {
   }
 
   Future<void> _closeShift(BuildContext context, WidgetRef ref, ShiftModel shift) async {
+    // Kas shift dihitung dari penjualan yang sudah sampai di server.
+    if (!await ensureNothingUnsent(context, ref, action: 'Tutup shift')) return;
+    if (!context.mounted) return;
     final amount = await _askAmount(
       context,
       title: 'Tutup Shift',
@@ -94,6 +99,8 @@ class ShiftPage extends ConsumerWidget {
     await _runWithLoading(context, () async {
       result = await ref.read(shiftRepositoryProvider).closeCurrent(amount);
       ref.invalidate(currentShiftProvider);
+      // Shift yang diingat HP untuk jualan offline sudah tidak berlaku.
+      await ref.read(offlineProvider.notifier).forgetShift();
     }, successMsg: 'Shift ditutup');
 
     if (result != null && context.mounted) {

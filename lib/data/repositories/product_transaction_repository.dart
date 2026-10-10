@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/data/models/product_transaction_model.dart';
@@ -22,10 +24,17 @@ class ProductTransactionRepository {
   Future<ProductTransactionResponse> createTransaction(ProductTransactionRequest request) async {
     try {
       debugPrint('[TransactionRepo] POST /product-transactions body: ${request.toJson()}');
-      final res = await api.dio.post(
-        '/product-transactions',
-        data: request.toJson(),
-      );
+      // Batasnya lebih pendek dari permintaan lain: pembeli sedang menunggu di
+      // depan kasir, dan bila server tak menjawab penjualannya masih bisa
+      // disimpan di HP. Permintaan yang terlanjur sampai tetap aman — kiriman
+      // ulangnya memakai idempotency key yang sama.
+      final res = await api.dio
+          .post(
+            '/product-transactions',
+            data: request.toJson(),
+            options: Options(sendTimeout: _saleTimeout, receiveTimeout: _saleTimeout),
+          )
+          .timeout(_saleTimeout + const Duration(seconds: 2));
 
       debugPrint('[TransactionRepo] Response: ${res.data}');
       // Key yang sama pernah dipakai percobaan QRIS dan QR-nya masih menunggu:
@@ -42,8 +51,16 @@ class ProductTransactionRepository {
     } on DioException catch (e) {
       debugPrint('[TransactionRepo] DioError ${e.response?.statusCode}: ${e.response?.data}');
       throw _submitError(e);
+    } on TimeoutException {
+      throw const TransactionSubmitException(
+        'Tidak ada jawaban dari server',
+        rejected: false,
+        unreachable: true,
+      );
     }
   }
+
+  static const _saleTimeout = Duration(seconds: 10);
 
   /// Charge QRIS: sama-sama `POST /product-transactions` (payment_method "qris"),
   /// tapi response bisa 2 bentuk — QR (pending) atau receipt biasa (langsung lunas).
@@ -88,8 +105,43 @@ class ProductTransactionRepository {
     return TransactionSubmitException(
       _mapError(raw?.toString(), status, e.message),
       rejected: status != null && status >= 400 && status < 500,
+      unreachable: e.response == null,
+      statusCode: status,
     );
   }
+
+  /// Kirim satu penjualan yang dibuat saat offline. [payload] adalah isi yang
+  /// dibekukan saat penjualan terjadi; mengirimnya ulang dengan
+  /// `idempotency_key` yang sama dibalas transaksi yang sudah tercatat.
+  ///
+  /// Mengembalikan nomor invoice resminya.
+  Future<String> sendOffline(Map<String, dynamic> payload) async {
+    try {
+      final res = await api.dio.post('/product-transactions/offline', data: payload);
+      final data = _dataOf(res.data);
+      final invoice = data is Map ? data['invoice_no']?.toString() ?? '' : '';
+      debugPrint('[TransactionRepo] offline ${payload['client_ref']} -> $invoice');
+      return invoice;
+    } on DioException catch (e) {
+      throw _submitError(e);
+    }
+  }
+
+  /// Apakah server terjangkau saat ini. Dipakai untuk memutuskan kapan mode
+  /// offline boleh berakhir; jawabannya cepat karena tidak menyentuh data.
+  Future<bool> ping() async {
+    try {
+      await api.dio.get(
+        '/health',
+        options: Options(sendTimeout: _pingTimeout, receiveTimeout: _pingTimeout),
+      ).timeout(_pingTimeout + const Duration(seconds: 2));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static const _pingTimeout = Duration(seconds: 5);
 
   /// Cek status pembayaran QRIS (polling).
   Future<QrisStatus> getQrisStatus(String paymentRef) async {

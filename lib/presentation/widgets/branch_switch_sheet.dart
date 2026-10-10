@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pos_mobile/presentation/widgets/offline_hold.dart';
 import 'package:pos_mobile/data/models/branch_model.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/branch_provider.dart';
@@ -28,6 +29,11 @@ class _BranchSwitchSheetState extends ConsumerState<BranchSwitchSheet> {
       Navigator.pop(context);
       return;
     }
+
+    // Server mencatat penjualan ke cabang yang sedang login, jadi antrean
+    // cabang ini harus terkirim sebelum pindah.
+    if (!await ensureNothingUnsent(context, ref, action: 'Pindah cabang')) return;
+    if (!mounted) return;
 
     // Keranjang milik cabang lama: produk, harga, dan stoknya tidak berlaku di
     // cabang baru. Dibuang, tapi kasir dikasih tahu dulu supaya tidak kaget

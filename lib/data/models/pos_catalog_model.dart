@@ -192,8 +192,15 @@ class PosCatalogFetch {
   final bool unchanged;
   final DateTime? serverTime;
 
+  /// Jam HP saat jawaban ini diterima.
+  final DateTime receivedAt;
+
   /// null bila cabang belum membuka shift.
   final PosCatalogShift? shift;
+
+  /// Kasir yang sedang login, menurut server.
+  final int cashierId;
+  final String cashierName;
 
   final PosCatalog? catalog;
 
@@ -203,11 +210,18 @@ class PosCatalogFetch {
   const PosCatalogFetch({
     required this.version,
     required this.unchanged,
+    required this.receivedAt,
     this.serverTime,
     this.shift,
+    this.cashierId = 0,
+    this.cashierName = '',
     this.catalog,
     this.stored,
   });
+
+  /// Seberapa jauh jam server di depan jam HP (negatif = HP lebih maju). null
+  /// bila server tidak mengirim jamnya.
+  Duration? get clockOffset => serverTime?.difference(receivedAt);
 
   /// Baca `data` dari jawaban server. [fetchedAt] adalah jam HP saat jawaban
   /// diterima.
@@ -216,13 +230,19 @@ class PosCatalogFetch {
     final unchanged = data['unchanged'] == true;
     final shift = data['shift'];
     final serverTime = DateTime.tryParse(data['server_time']?.toString() ?? '');
+    final cashier = data['cashier'];
+    final cashierId = cashier is Map ? (cashier['id'] as num?)?.toInt() ?? 0 : 0;
+    final cashierName = cashier is Map ? cashier['name']?.toString() ?? '' : '';
 
     if (unchanged) {
       return PosCatalogFetch(
         version: version,
         unchanged: true,
+        receivedAt: fetchedAt,
         serverTime: serverTime,
         shift: shift is Map ? PosCatalogShift.fromJson(Map<String, dynamic>.from(shift)) : null,
+        cashierId: cashierId,
+        cashierName: cashierName,
       );
     }
 
@@ -243,8 +263,11 @@ class PosCatalogFetch {
     return PosCatalogFetch(
       version: version,
       unchanged: false,
+      receivedAt: fetchedAt,
       serverTime: serverTime,
       shift: shift is Map ? PosCatalogShift.fromJson(Map<String, dynamic>.from(shift)) : null,
+      cashierId: cashierId,
+      cashierName: cashierName,
       catalog: PosCatalog.fromContent(content, version: version, fetchedAt: fetchedAt),
       stored: StoredCatalog(
         schema: posCatalogSchema,

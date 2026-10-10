@@ -166,12 +166,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       // Jika token expired → refresh
       if (JwtDecoder.isExpired(accessToken)) {
-        final ok = await repo.tryRefreshToken();
+        final outcome = await repo.tryRefreshToken();
 
-        if (!ok) {
+        if (outcome == RefreshOutcome.rejected) {
           await logout();
           return;
         }
+        // Server tak terjangkau: sesi dilanjutkan dari token yang tersimpan.
+        // Logout di sini akan membuat kasir tidak bisa masuk lagi sampai
+        // jaringan kembali (login butuh server), tepat saat aplikasi paling
+        // dibutuhkan untuk jualan offline. Token diperbarui sendiri oleh
+        // permintaan pertama yang berhasil sampai ke server.
       }
 
       final latestToken = await SecureStorage.getAccessToken();
