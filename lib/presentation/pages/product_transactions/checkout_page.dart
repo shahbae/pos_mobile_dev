@@ -11,9 +11,7 @@ import 'package:pos_mobile/presentation/pages/product_transactions/qris_payment_
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/presentation/providers/product_pagination_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_transaction_provider.dart';
-import 'package:pos_mobile/presentation/providers/plastic_provider.dart';
-import 'package:pos_mobile/presentation/providers/sedotan_provider.dart';
-import 'package:pos_mobile/presentation/providers/promo_provider.dart';
+import 'package:pos_mobile/presentation/providers/pos_catalog_provider.dart';
 import 'package:pos_mobile/presentation/providers/transaction_refresh.dart';
 import 'package:pos_mobile/presentation/pages/product_transactions/transaction_success_page.dart';
 import 'package:pos_mobile/presentation/widgets/free_item_picker_sheet.dart';
@@ -72,7 +70,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     // notifier setiap daftarnya termuat; microtask karena mengubah provider
     // saat widget tree sedang dibangun tidak diizinkan Riverpod.
     ref.listenManual<AsyncValue<List<Sedotan>>>(
-      sedotanListProvider,
+      posSedotansProvider,
       (_, next) => next.whenData((list) => Future.microtask(() {
             if (mounted) {
               ref.read(productTransactionProvider.notifier).setSedotanMasters(list);
@@ -362,7 +360,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   @override
   Widget build(BuildContext context) {
     final cartState = ref.watch(productTransactionProvider);
-    final promosAsync = ref.watch(activePromosProvider);
+    final promosAsync = ref.watch(posPromosProvider);
 
     // Jaga field "Jumlah Bayar" tetap sinkron dengan total saat berubah.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -430,7 +428,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               loading: () => _sectionPlaceholder("Promo"),
               error: (_, __) => _sectionError(
                 "Promo",
-                () => ref.invalidate(activePromosProvider),
+                () => ref.read(posCatalogProvider.notifier).refresh(),
               ),
             ),
 
@@ -678,7 +676,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   // dipotong otomatis oleh backend dari aturan kemasan varian; menampilkannya
   // lagi sebagai pilihan manual akan memotong stok dua kali.
   Widget _plasticSection(ProductTransactionState cart) {
-    final plasticsAsync = ref.watch(plasticListProvider);
+    final plasticsAsync = ref.watch(posPlasticsProvider);
     const title = "Kantong Bawa Pulang";
     return plasticsAsync.when(
       data: (all) {
@@ -718,7 +716,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       loading: () => _sectionPlaceholder(title),
       error: (_, __) => _sectionError(
         title,
-        () => ref.invalidate(plasticListProvider),
+        () => ref.read(posCatalogProvider.notifier).refresh(),
       ),
     );
   }
@@ -729,7 +727,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   // Sedotan bertanda auto_for terisi dari keranjang (lihat sedotanAutoQty) dan
   // tetap bisa diubah kasir. Sedotan manual (mis. Tutup Cup) mulai dari 0.
   Widget _sedotanSection(ProductTransactionState cart) {
-    final sedotansAsync = ref.watch(sedotanListProvider);
+    final sedotansAsync = ref.watch(posSedotansProvider);
     const title = "Sedotan";
     return sedotansAsync.when(
       data: (sedotans) {
@@ -771,7 +769,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       loading: () => _sectionPlaceholder(title),
       error: (_, __) => _sectionError(
         title,
-        () => ref.invalidate(sedotanListProvider),
+        () => ref.read(posCatalogProvider.notifier).refresh(),
       ),
     );
   }

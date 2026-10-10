@@ -1,0 +1,236 @@
+{
+ "data": {
+  "version": "a9ed08c06022564e",
+  "unchanged": false,
+  "server_time": "2026-10-10T10:20:43.726443+07:00",
+  "cashier": {
+   "id": 1,
+   "name": "Admin"
+  },
+  "shift": {
+   "id": 1,
+   "shift_name": "Shift 1",
+   "shift_date": "2026-10-10",
+   "opened_at": "2026-10-10T10:20:43.714+07:00",
+   "last_queue_no": 0
+  },
+  "store": {
+   "name": "Cabang Uji",
+   "address": "Jl. Uji",
+   "footer_note": "Terima kasih",
+   "complaint_note": ""
+  },
+  "offline_sales_enabled": true,
+  "products": [
+   {
+    "id": 2,
+    "sku": null,
+    "name": "Kopi Susu",
+    "image_url": null,
+    "category": {
+     "id": 1,
+     "name": "Minuman",
+     "freeable": true
+    },
+    "selling_price": "8000",
+    "free_topping_slots": 0,
+    "prep_minutes": 3,
+    "has_free_toppings": false,
+    "has_variants": false,
+    "product_ready": false,
+    "variants": [],
+    "created_at": "2026-10-10T10:20:43.62+07:00"
+   },
+   {
+    "id": 1,
+    "sku": null,
+    "name": "Es Teh",
+    "image_url": null,
+    "category": {
+     "id": 1,
+     "name": "Minuman",
+     "freeable": true
+    },
+    "selling_price": "5000",
+    "free_topping_slots": 1,
+    "prep_minutes": 2,
+    "has_free_toppings": true,
+    "has_variants": true,
+    "product_ready": true,
+    "variants": [
+     {
+      "id": 1,
+      "name": "Jumbo",
+      "selling_price": "7000",
+      "free_topping_slots": 1,
+      "prep_minutes": null,
+      "effective_prep_minutes": 2,
+      "is_active": true,
+      "is_ready": true
+     }
+    ],
+    "created_at": "2026-10-10T10:20:43.594+07:00"
+   }
+  ],
+  "toppings": [
+   {
+    "id": 2,
+    "name": "Jelly",
+    "price": 1500,
+    "unit": "pcs",
+    "purchase_qty": "1",
+    "purchase_price": "0",
+    "usage_qty": "1",
+    "is_active": true,
+    "is_auditable": false,
+    "created_at": "2026-10-10T10:20:43.629+07:00"
+   },
+   {
+    "id": 1,
+    "name": "Oreo",
+    "price": 2000,
+    "unit": "pcs",
+    "purchase_qty": "1",
+    "purchase_price": "0",
+    "usage_qty": "1",
+    "is_active": true,
+    "is_auditable": true,
+    "created_at": "2026-10-10T10:20:43.627+07:00"
+   },
+   {
+    "id": 9,
+    "name": "Boba (nonaktif)",
+    "price": 1500,
+    "unit": "pcs",
+    "purchase_qty": "1",
+    "purchase_price": "0",
+    "usage_qty": "1",
+    "is_active": false,
+    "is_auditable": false,
+    "created_at": "2026-10-10T10:20:43.629+07:00"
+   }
+  ],
+  "plastics": [
+   {
+    "id": 1,
+    "name": "Kantong",
+    "unit": "pcs",
+    "purchase_qty": "1",
+    "purchase_price": "0",
+    "is_active": true,
+    "packaging_type": "bungkus",
+    "is_auditable": true,
+    "created_at": "2026-10-10T10:20:43.632+07:00"
+   },
+   {
+    "id": 8,
+    "name": "Cup 16 oz",
+    "unit": "pcs",
+    "purchase_qty": "1",
+    "purchase_price": "0",
+    "is_active": true,
+    "packaging_type": "wadah",
+    "is_auditable": true,
+    "created_at": "2026-10-10T10:20:43.632+07:00"
+   },
+   {
+    "id": 9,
+    "name": "Kantong lama",
+    "unit": "pcs",
+    "purchase_qty": "1",
+    "purchase_price": "0",
+    "is_active": false,
+    "packaging_type": "bungkus",
+    "is_auditable": true,
+    "created_at": "2026-10-10T10:20:43.632+07:00"
+   }
+  ],
+  "sedotans": [
+   {
+    "id": 1,
+    "name": "Sedotan kecil",
+    "unit": "pcs",
+    "purchase_qty": "1",
+    "purchase_price": "0",
+    "is_active": true,
+    "auto_for": "without_topping",
+    "is_auditable": true,
+    "created_at": "2026-10-10T10:20:43.634+07:00"
+   },
+   {
+    "id": 2,
+    "name": "Sedotan besar",
+    "unit": "pcs",
+    "purchase_qty": "1",
+    "purchase_price": "0",
+    "is_active": true,
+    "auto_for": "with_topping",
+    "is_auditable": true,
+    "created_at": "2026-10-10T10:20:43.634+07:00"
+   }
+  ],
+  "promos": [
+   {
+    "id": 1,
+    "name": "Beli 2 Gratis 1",
+    "buy_qty": 2,
+    "free_qty": 1,
+    "is_active": true,
+    "days": [
+     {
+      "id": 1,
+      "promo_id": 1,
+      "day_of_week": 0
+     },
+     {
+      "id": 2,
+      "promo_id": 1,
+      "day_of_week": 1
+     },
+     {
+      "id": 3,
+      "promo_id": 1,
+      "day_of_week": 2
+     },
+     {
+      "id": 4,
+      "promo_id": 1,
+      "day_of_week": 3
+     },
+     {
+      "id": 5,
+      "promo_id": 1,
+      "day_of_week": 4
+     },
+     {
+      "id": 6,
+      "promo_id": 1,
+      "day_of_week": 5
+     },
+     {
+      "id": 7,
+      "promo_id": 1,
+      "day_of_week": 6
+     }
+    ],
+    "created_at": "2026-10-10T10:20:43.636+07:00"
+   },
+   {
+    "id": 2,
+    "name": "Jumat Berkah",
+    "buy_qty": 3,
+    "free_qty": 1,
+    "is_active": true,
+    "days": [
+     {
+      "id": 8,
+      "promo_id": 2,
+      "day_of_week": 5
+     }
+    ],
+    "created_at": "2026-10-10T10:20:43.636+07:00"
+   }
+  ]
+ },
+ "success": true
+}
