@@ -1,9 +1,8 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:pos_mobile/data/repositories/product_repository.dart';
-import 'package:pos_mobile/presentation/providers/product_provider.dart';
 import 'package:pos_mobile/data/models/product_model.dart';
+import 'package:pos_mobile/presentation/providers/pos_catalog_provider.dart';
 
 /// Tab kategori untuk filter menu POS.
 class ProductCategoryTab {
@@ -79,46 +78,44 @@ final productPaginationProvider =
     StateNotifierProvider.autoDispose<ProductPaginationNotifier, ProductPaginationState>((
       ref,
     ) {
-      final repo = ref.watch(productRepositoryProvider);
-      return ProductPaginationNotifier(repo)..loadAll();
+      // Menonton notifier-nya menjaga katalog tetap hidup selama daftar produk
+      // dipakai, dan membuat daftar ini lahir ulang saat kasir pindah cabang.
+      final catalog = ref.watch(posCatalogProvider.notifier);
+      final notifier = ProductPaginationNotifier(catalog.refresh);
+      ref.listen<PosCatalogState>(
+        posCatalogProvider,
+        (_, next) => notifier.applyCatalog(next),
+        fireImmediately: true,
+      );
+      return notifier;
     });
 
 class ProductPaginationNotifier extends StateNotifier<ProductPaginationState> {
-  final ProductRepository repo;
+  final Future<void> Function() _refreshCatalog;
   Timer? _debounce;
 
-  ProductPaginationNotifier(this.repo) : super(ProductPaginationState());
+  ProductPaginationNotifier(this._refreshCatalog) : super(ProductPaginationState());
 
-  /// Muat seluruh katalog (looping semua halaman). Menu POS biasanya kecil,
-  /// jadi cukup sekali muat lalu filter kategori/search di klien.
-  ///
-  /// `loading` WAJIB dikembalikan ke false di jalur gagal juga: kalau satu
-  /// halaman error (jaringan goyang saat ramai) dan flag-nya tertinggal `true`,
-  /// semua panggilan berikutnya ikut ter-skip oleh guard di bawah dan katalog
-  /// beku permanen — kasir cuma lihat stok lama tanpa cara memulihkan.
-  Future<void> loadAll() async {
-    if (state.loading) return;
-    state = state.copyWith(loading: true, clearError: true);
+  /// Minta katalog diperbarui dari server. Daftar produk sendiri datang dari
+  /// katalog lewat [applyCatalog]; pencarian dan tab kategori tetap di klien.
+  Future<void> loadAll() => _refreshCatalog();
 
-    const pageSize = 50;
-    final all = <Product>[];
-    var page = 1;
-    try {
-      while (page <= 100) {
-        final res = await repo.getProducts(page: page, limit: pageSize);
-        all.addAll(res);
-        if (res.length < pageSize) break;
-        page++;
-      }
-      // Notifier bisa sudah di-dispose saat request selesai (kasir pindah halaman).
-      if (!mounted) return;
-      state = state.copyWith(allItems: all, loading: false, clearError: true);
-    } catch (e) {
-      if (!mounted) return;
-      // Katalog lama dipertahankan supaya kasir tetap bisa jualan; error
-      // ditampilkan agar jelas datanya belum tentu terbaru.
-      state = state.copyWith(loading: false, error: e.toString());
+  /// Ikuti keadaan katalog. Daftar lama dipertahankan selama katalog belum
+  /// punya isi, supaya kasir tetap bisa jualan saat pembaruan gagal; galatnya
+  /// ditampilkan agar jelas datanya belum tentu terbaru.
+  void applyCatalog(PosCatalogState catalog) {
+    final items = catalog.catalog?.products ?? state.allItems;
+    if (identical(items, state.allItems) &&
+        catalog.refreshing == state.loading &&
+        catalog.error == state.error) {
+      return;
     }
+    state = state.copyWith(
+      allItems: items,
+      loading: catalog.refreshing,
+      error: catalog.error,
+      clearError: catalog.error == null,
+    );
   }
 
   void search(String value) {

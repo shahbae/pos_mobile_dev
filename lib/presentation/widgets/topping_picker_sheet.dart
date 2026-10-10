@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/data/models/product_model.dart';
 import 'package:pos_mobile/data/models/product_variant_model.dart';
 import 'package:pos_mobile/data/models/topping_model.dart';
-import 'package:pos_mobile/presentation/providers/topping_provider.dart';
+import 'package:pos_mobile/presentation/providers/pos_catalog_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_transaction_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/utils/currency.dart';
@@ -114,7 +114,7 @@ class _ToppingPickerSheetState extends ConsumerState<_ToppingPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final toppingsAsync = ref.watch(toppingListProvider);
+    final toppingsAsync = ref.watch(posToppingsProvider);
 
     return DraggableScrollableSheet(
       expand: false,
