@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pos_mobile/presentation/pages/offline/offline_queue_page.dart';
+import 'package:pos_mobile/presentation/widgets/offline_hold.dart';
 import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/branch_provider.dart';
@@ -162,6 +164,21 @@ class SettingTab extends ConsumerWidget {
             );
           },
         ),
+        if (hasFeature(auth.role, AppFeature.pos)) ...[
+          const SizedBox(height: 16),
+          _SettingMenuCard(
+            title: "Penjualan Offline",
+            subtitle: "Penjualan yang dibuat saat jaringan putus",
+            icon: Icons.cloud_off_outlined,
+            color: accent,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const OfflineQueuePage()),
+              );
+            },
+          ),
+        ],
         const SizedBox(height: 16),
         const AppVersionCard(),
         const SizedBox(height: 16),
@@ -171,6 +188,7 @@ class SettingTab extends ConsumerWidget {
           icon: Icons.logout,
           color: AppTheme.danger,
           onTap: () async {
+            if (!await ensureNothingUnsent(context, ref, action: 'Logout')) return;
             await ref.read(authProvider.notifier).logout();
           },
         ),

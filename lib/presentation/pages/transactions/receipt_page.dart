@@ -13,11 +13,17 @@ import 'package:pos_mobile/utils/currency.dart';
 class ReceiptPage extends ConsumerWidget {
   final String invoiceNo;
 
-  const ReceiptPage({super.key, required this.invoiceNo});
+  /// Nota yang sudah ada di tangan — nota penjualan offline, yang salinannya
+  /// tersimpan di HP. Bila diisi, tidak ada yang diminta ke server.
+  final Receipt? receipt;
+
+  const ReceiptPage({super.key, required this.invoiceNo, this.receipt});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final receiptAsync = ref.watch(receiptProvider(invoiceNo));
+    final local = receipt;
+    final AsyncValue<Receipt> receiptAsync =
+        local != null ? AsyncData(local) : ref.watch(receiptProvider(invoiceNo));
 
     return Scaffold(
       backgroundColor: AppTheme.bgLight,

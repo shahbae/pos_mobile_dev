@@ -4,6 +4,18 @@ import 'package:pos_mobile/data/models/me_model.dart';
 import 'package:pos_mobile/data/services/api_services.dart';
 import '../services/secure_storage.dart';
 
+/// Hasil mencoba memperbarui access token.
+enum RefreshOutcome {
+  /// Token baru tersimpan.
+  refreshed,
+
+  /// Server menjawab dan menolak: sesi memang sudah tidak sah.
+  rejected,
+
+  /// Server tidak menjawab (jaringan putus). Sesinya belum tentu tidak sah.
+  unreachable,
+}
+
 class AuthRepository {
   final ApiService api;
 
@@ -70,9 +82,9 @@ class AuthRepository {
     }
   }
 
-  Future<bool> tryRefreshToken() async {
+  Future<RefreshOutcome> tryRefreshToken() async {
     final refresh = await SecureStorage.getRefreshToken();
-    if (refresh == null) return false;
+    if (refresh == null) return RefreshOutcome.rejected;
 
     try {
       final res = await api.dio.post(
@@ -80,21 +92,25 @@ class AuthRepository {
         data: {'refresh_token': refresh},
       );
 
-      if (res.data['success'] != true) return false;
+      if (res.data['success'] != true) return RefreshOutcome.rejected;
 
       final data = res.data['data'];
       final newAccess = data?['access_token'];
 
-      if (newAccess == null) return false;
+      if (newAccess == null) return RefreshOutcome.rejected;
 
       await SecureStorage.saveTokens(
         accessToken: newAccess,
         refreshToken: data?['refresh_token'],
       );
 
-      return true;
+      return RefreshOutcome.refreshed;
+    } on DioException catch (e) {
+      // Ada jawaban = server menolak. Tanpa jawaban = timeout / koneksi putus,
+      // refresh token-nya belum tentu tidak sah.
+      return e.response == null ? RefreshOutcome.unreachable : RefreshOutcome.rejected;
     } catch (_) {
-      return false;
+      return RefreshOutcome.rejected;
     }
   }
 

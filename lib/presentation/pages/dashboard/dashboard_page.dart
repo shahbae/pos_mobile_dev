@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pos_mobile/presentation/widgets/offline_banner.dart';
 import 'package:pos_mobile/presentation/pages/dashboard/tabs/stock_tab.dart';
 
 import 'package:pos_mobile/core/auth/role_access.dart';
@@ -121,16 +122,25 @@ class DashboardPage extends ConsumerWidget {
       ),
 
       body: SafeArea(
-        child: Row(
+        child: Column(
           children: [
-            if (showSidebar)
-              _Sidebar(
-                tabs: tabs,
-                currentPageIndex: index,
-                showNewTransaction: showFab,
-                onNewTransaction: startTransaction,
+            // Selalu terlihat di semua tab: selama spanduk ini ada, masih ada
+            // penjualan yang hanya tersimpan di HP ini.
+            if (showFab) const OfflineBanner(),
+            Expanded(
+              child: Row(
+                children: [
+                  if (showSidebar)
+                    _Sidebar(
+                      tabs: tabs,
+                      currentPageIndex: index,
+                      showNewTransaction: showFab,
+                      onNewTransaction: startTransaction,
+                    ),
+                  Expanded(child: pages[index]),
+                ],
               ),
-            Expanded(child: pages[index]),
+            ),
           ],
         ),
       ),

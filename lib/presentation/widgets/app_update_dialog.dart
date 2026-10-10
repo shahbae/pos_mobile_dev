@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pos_mobile/presentation/widgets/offline_hold.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:pos_mobile/data/models/app_release_model.dart';
@@ -52,6 +53,9 @@ class _AppUpdateDialogState extends ConsumerState<_AppUpdateDialog> {
   }
 
   Future<void> _start() async {
+    // Memasang pembaruan menghentikan aplikasi; antrean harus kosong dulu.
+    if (!await ensureNothingUnsent(context, ref, action: 'Pembaruan aplikasi')) return;
+    if (!mounted) return;
     final cancel = CancelToken();
     setState(() {
       _phase = _Phase.downloading;

@@ -7,14 +7,17 @@ import 'package:pos_mobile/data/models/plastic_model.dart';
 import 'package:pos_mobile/data/models/sedotan_model.dart';
 import 'package:pos_mobile/data/models/product_transaction_model.dart';
 import 'package:pos_mobile/data/models/qris_payment_model.dart';
+import 'package:pos_mobile/data/models/receipt_model.dart';
 import 'package:pos_mobile/presentation/pages/product_transactions/qris_payment_page.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/presentation/providers/product_pagination_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_transaction_provider.dart';
+import 'package:pos_mobile/presentation/providers/offline_provider.dart';
 import 'package:pos_mobile/presentation/providers/pos_catalog_provider.dart';
 import 'package:pos_mobile/presentation/providers/transaction_refresh.dart';
 import 'package:pos_mobile/presentation/pages/product_transactions/transaction_success_page.dart';
 import 'package:pos_mobile/presentation/widgets/free_item_picker_sheet.dart';
+import 'package:pos_mobile/presentation/widgets/offline_banner.dart';
 import 'package:pos_mobile/presentation/widgets/topping_picker_sheet.dart';
 import 'package:pos_mobile/presentation/widgets/variant_picker_sheet.dart';
 import 'package:pos_mobile/utils/currency.dart';
@@ -129,22 +132,37 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       _toast("Nomor referensi pembayaran wajib diisi untuk non-tunai", Colors.orange);
       return;
     }
+    final customerName =
+        _customerNameController.text.trim().isEmpty ? null : _customerNameController.text.trim();
+
+    // Mode offline: server tak terjangkau, atau masih ada penjualan yang belum
+    // terkirim. Tunai langsung disimpan di HP, tanpa mencoba server dulu —
+    // menunggu jawaban yang tidak akan datang hanya membuat antrean memanjang.
+    if (_isCash && ref.read(offlineProvider).active) {
+      await _payOffline(paidValue, customerName);
+      return;
+    }
 
     await ref.read(productTransactionProvider.notifier).submitTransaction(
           paymentMethod: _paymentMethod,
           paid: paidValue,
           discount: 0,
           paymentRef: _isCash ? null : _paymentRefController.text.trim(),
-          customerName: _customerNameController.text.trim().isEmpty
-              ? null
-              : _customerNameController.text.trim(),
+          customerName: customerName,
         );
 
     if (!mounted) return;
     final newState = ref.read(productTransactionProvider);
     if (newState.lastResponse != null) {
+      ref.read(offlineProvider.notifier).observeQueueNo(newState.lastResponse!.queueNo);
       _warnIfRecordedOtherwise(newState.lastResponse!);
       _goToSuccess(newState.lastResponse!);
+    } else if (_isCash && newState.unreachable) {
+      // Tidak ada jawaban sama sekali. Uangnya sudah di tangan kasir, jadi
+      // penjualannya disimpan di HP dengan kunci yang sama: kalau ternyata
+      // server sempat mencatatnya, kirimannya nanti dikenali dan tidak dobel.
+      ref.read(offlineProvider.notifier).markUnreachable();
+      await _payOffline(paidValue, customerName, fallbackError: newState.error);
     } else if (newState.error != null) {
       _toast("Gagal: ${newState.error}", Colors.red);
       // Stok bisa berubah sejak katalog dimuat (mis. ditolak karena bahan habis).
@@ -155,8 +173,40 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     }
   }
 
+  /// Simpan keranjang sebagai penjualan offline, lalu tampilkan notanya.
+  ///
+  /// [fallbackError] adalah galat percobaan online yang baru saja gagal;
+  /// ditampilkan bila cabang ini ternyata tidak bisa berjualan offline, supaya
+  /// kasir tetap tahu apa yang terjadi.
+  Future<void> _payOffline(int paid, String? customerName, {String? fallbackError}) async {
+    try {
+      final sale = await ref.read(offlineProvider.notifier).record(
+            cart: ref.read(productTransactionProvider.notifier),
+            catalog: ref.read(posCatalogProvider).catalog,
+            paid: paid,
+            customerName: customerName,
+          );
+      if (!mounted) return;
+      _goToSuccess(
+        ProductTransactionResponse(invoiceNumber: sale.entry.clientRef, saleId: 0, success: true),
+        localReceipt: sale.receipt,
+      );
+    } on OfflineUnavailable catch (e) {
+      if (!mounted) return;
+      _toast(fallbackError != null ? "Gagal: $fallbackError. ${e.message}" : e.message, Colors.red);
+    } catch (e) {
+      if (!mounted) return;
+      _toast("Gagal menyimpan penjualan di HP: $e", Colors.red);
+    }
+  }
+
   /// Alur QRIS dinamis: charge → (QR page + polling) → lunas cetak struk.
   Future<void> _submitQris() async {
+    // QRIS butuh server untuk membuat dan mengonfirmasi QR-nya.
+    if (ref.read(offlineProvider).active) {
+      _toast("QRIS belum bisa dipakai: ${_qrisBlockedReason(ref.read(offlineProvider))}", Colors.orange);
+      return;
+    }
     final notifier = ref.read(productTransactionProvider.notifier);
     final customerName = _customerNameController.text.trim().isEmpty
         ? null
@@ -217,13 +267,19 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   /// Satu-satunya pintu ke halaman sukses — sekaligus tempat membuang cache
   /// data yang sudah basi begitu transaksi tercatat (katalog, dashboard,
   /// shift, riwayat, stok plastik/sedotan).
-  void _goToSuccess(ProductTransactionResponse response) {
+  void _goToSuccess(ProductTransactionResponse response, {Receipt? localReceipt}) {
     invalidateAfterTransaction(ref);
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => TransactionSuccessPage(response: response)),
+      MaterialPageRoute(
+        builder: (_) => TransactionSuccessPage(response: response, localReceipt: localReceipt),
+      ),
     );
   }
+
+  String _qrisBlockedReason(OfflineState offline) => offline.reachable
+      ? "menunggu ${offline.pending} penjualan offline terkirim dulu"
+      : "jaringan sedang putus, hanya tunai";
 
   void _toast(String msg, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -361,6 +417,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   Widget build(BuildContext context) {
     final cartState = ref.watch(productTransactionProvider);
     final promosAsync = ref.watch(posPromosProvider);
+    final offline = ref.watch(offlineProvider);
 
     // Jaga field "Jumlah Bayar" tetap sinkron dengan total saat berubah.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -370,7 +427,11 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
       appBar: AppBar(title: const Text("Konfirmasi Pembayaran"), centerTitle: true),
-      body: SingleChildScrollView(
+      body: Column(
+        children: [
+          OfflineBanner(catalogFetchedAt: ref.watch(posCatalogProvider).catalog?.fetchedAt),
+          Expanded(
+            child: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Center(
           child: ConstrainedBox(
@@ -442,21 +503,32 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               mainAxisSpacing: 10,
               crossAxisSpacing: 10,
               childAspectRatio: 2.8,
-              children: _payMethods
-                  .map((m) => _PaymentMethodCard(
-                        label: m.label,
-                        icon: m.icon,
-                        isSelected: _paymentMethod == m.value,
-                        onTap: () => setState(() {
-                          _paymentMethod = m.value;
-                          // Reset jumlah bayar ke total saat ganti metode —
-                          // sekaligus mengembalikan sinkronisasi otomatis.
-                          _paidTouched = false;
-                          _paidAmountController.text =
-                              NumberFormat.decimalPattern('id_ID').format(cartState.total);
-                        }),
-                      ))
-                  .toList(),
+              children: _payMethods.map((m) {
+                // Selain tunai, semua metode butuh server.
+                final blocked = offline.active && m.value != 'CASH';
+                return Opacity(
+                  opacity: blocked ? 0.4 : 1,
+                  child: _PaymentMethodCard(
+                    label: m.label,
+                    icon: m.icon,
+                    isSelected: _paymentMethod == m.value,
+                    onTap: () {
+                      if (blocked) {
+                        _toast("${m.label} belum bisa dipakai: ${_qrisBlockedReason(offline)}", Colors.orange);
+                        return;
+                      }
+                      setState(() {
+                        _paymentMethod = m.value;
+                        // Reset jumlah bayar ke total saat ganti metode —
+                        // sekaligus mengembalikan sinkronisasi otomatis.
+                        _paidTouched = false;
+                        _paidAmountController.text =
+                            NumberFormat.decimalPattern('id_ID').format(cartState.total);
+                      });
+                    },
+                  ),
+                );
+              }).toList(),
             ),
 
             if (!_isCash && !_isQris) ...[
@@ -569,6 +641,9 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
             ),
           ),
         ),
+            ),
+          ),
+        ],
       ),
     );
   }

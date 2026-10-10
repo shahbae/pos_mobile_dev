@@ -4,11 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/data/models/product_model.dart';
 import 'package:pos_mobile/data/models/product_variant_model.dart';
+import 'package:pos_mobile/presentation/providers/pos_catalog_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_pagination_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_transaction_provider.dart';
 import 'package:pos_mobile/presentation/providers/transaction_refresh.dart';
 import 'package:pos_mobile/presentation/pages/product_transactions/checkout_page.dart';
+import 'package:pos_mobile/presentation/widgets/offline_banner.dart';
 import 'package:pos_mobile/presentation/widgets/topping_picker_sheet.dart';
 import 'package:pos_mobile/presentation/widgets/variant_picker_sheet.dart';
 import 'package:pos_mobile/utils/currency.dart';
@@ -141,6 +143,7 @@ class _ProductTransactionPageState extends ConsumerState<ProductTransactionPage>
       ),
       body: Column(
         children: [
+          OfflineBanner(catalogFetchedAt: ref.watch(posCatalogProvider).catalog?.fetchedAt),
           Container(
             padding: const EdgeInsets.all(16.0),
             color: Colors.white,

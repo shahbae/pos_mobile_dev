@@ -81,13 +81,19 @@ class CartItem {
   /// (harga variant/produk + extra topping) × qty
   num get subtotal => (unitPrice + extraToppingTotal) * quantity;
 
-  TransactionItem toTransactionItem() => TransactionItem(
+  /// [withPrices] menyertakan harga yang ditagih, untuk penjualan offline.
+  TransactionItem toTransactionItem({bool withPrices = false}) => TransactionItem(
         productId: product.id,
         variantId: variant?.id,
         quantity: quantity,
         tumblerQty: tumblerQty,
         freeToppings: freeToppings.map((t) => t.toSelection()).toList(),
-        extraToppings: extraToppings.map((t) => t.toSelection()).toList(),
+        extraToppings: extraToppings
+            .map((t) => withPrices
+                ? ToppingSelection(toppingId: t.topping.id, qty: t.qty, price: t.topping.price)
+                : t.toSelection())
+            .toList(),
+        unitPrice: withPrices ? unitPrice.toInt() : null,
       );
 }
 
@@ -166,6 +172,57 @@ int sedotanAutoQty(ProductTransactionState state, String autoFor) {
   }
 }
 
+/// Isi pesanan dalam bentuk yang dikirim ke server.
+class SaleLines {
+  final List<TransactionItem> items;
+  final List<PromoFreeItem> promoFreeItems;
+  final List<PlasticSelection> plastics;
+  final List<SedotanSelection> sedotans;
+
+  const SaleLines({
+    required this.items,
+    required this.promoFreeItems,
+    required this.plastics,
+    required this.sedotans,
+  });
+}
+
+/// Susun isi pesanan dari keranjang. Satu-satunya tempat keranjang diubah
+/// menjadi baris permintaan, supaya penjualan online dan offline tidak pernah
+/// berbeda soal apa yang dipesan.
+///
+/// Bonus gratis dikirim sebagai baris TAMBAHAN di items[] (agar product_id ada
+/// di order, syarat BE) lalu didaftarkan di promo_free_items supaya harganya
+/// dipotong jadi 0. Bonus tidak membawa extra topping.
+///
+/// [withPrices] menyertakan harga yang ditagih di tiap baris — hanya untuk
+/// penjualan offline.
+SaleLines saleLinesOf(ProductTransactionState state, {bool withPrices = false}) {
+  final promo = state.selectedPromo;
+  final freeSelections = (promo == null) ? const <PromoFreeSelection>[] : state.promoFreeItems;
+  return SaleLines(
+    items: [
+      ...state.items.map((i) => i.toTransactionItem(withPrices: withPrices)),
+      ...freeSelections.map((p) => TransactionItem(
+            productId: p.product.id,
+            variantId: p.variant?.id,
+            quantity: p.qty,
+            unitPrice: withPrices ? p.unitPrice.toInt() : null,
+          )),
+    ],
+    promoFreeItems: freeSelections
+        .map((p) => PromoFreeItem(
+              promoId: promo!.id,
+              productId: p.product.id,
+              variantId: p.variant?.id,
+              qty: p.qty,
+            ))
+        .toList(),
+    plastics: state.plastics.map((p) => p.toSelection()).toList(),
+    sedotans: state.sedotans.map((s) => s.toSelection()).toList(),
+  );
+}
+
 class ProductTransactionState {
   final List<CartItem> items;
   final Promo? selectedPromo;
@@ -178,6 +235,10 @@ class ProductTransactionState {
   final Set<int> manualSedotanIds;
   final bool isLoading;
   final String? error;
+
+  /// true bila [error] berarti server tidak menjawab sama sekali (jaringan
+  /// putus), bukan menolak. Checkout memakainya untuk beralih ke mode offline.
+  final bool unreachable;
   final ProductTransactionResponse? lastResponse;
 
   ProductTransactionState({
@@ -189,6 +250,7 @@ class ProductTransactionState {
     this.manualSedotanIds = const {},
     this.isLoading = false,
     this.error,
+    this.unreachable = false,
     this.lastResponse,
   });
 
@@ -221,6 +283,7 @@ class ProductTransactionState {
     Set<int>? manualSedotanIds,
     bool? isLoading,
     String? error,
+    bool unreachable = false,
     ProductTransactionResponse? lastResponse,
     bool clearLastResponse = false,
   }) {
@@ -233,6 +296,8 @@ class ProductTransactionState {
       manualSedotanIds: manualSedotanIds ?? this.manualSedotanIds,
       isLoading: isLoading ?? this.isLoading,
       error: error,
+      // Seperti error, hanya berlaku untuk keadaan yang baru dibuat.
+      unreachable: unreachable,
       lastResponse: clearLastResponse ? null : (lastResponse ?? this.lastResponse),
     );
   }
@@ -473,42 +538,12 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
     String? paymentRef,
     String? customerName,
   }) {
-    final promo = state.selectedPromo;
-    final freeSelections = (promo == null) ? const <PromoFreeSelection>[] : state.promoFreeItems;
-
-    // Bonus gratis dikirim sebagai baris TAMBAHAN di items[] (agar product_id
-    // ada di order, syarat BE) lalu didaftarkan di promo_free_items supaya
-    // harganya dipotong jadi 0. Bonus tidak membawa extra topping.
-    final promoFreeItems = freeSelections
-        .map((p) => PromoFreeItem(
-              promoId: promo!.id,
-              productId: p.product.id,
-              variantId: p.variant?.id,
-              qty: p.qty,
-            ))
-        .toList();
-
-    final items = [
-      ...state.items.map((i) => i.toTransactionItem()),
-      ...freeSelections.map((p) => TransactionItem(
-            productId: p.product.id,
-            variantId: p.variant?.id,
-            quantity: p.qty,
-          )),
-    ];
-
-    final plastics = state.plastics.map((p) => p.toSelection()).toList();
-    final sedotans = state.sedotans.map((s) => s.toSelection()).toList();
-
-    // Yang menentukan stok dan total. Metode bayar, nominal, dan nama pembeli
-    // sengaja tidak ikut: mengubahnya bukan berarti pesanannya lain.
-    final cart = jsonEncode({
-      'items': items.map((i) => i.toJson()).toList(),
-      'promo_free_items': promoFreeItems.map((p) => p.toJson()).toList(),
-      'plastics': plastics.map((p) => p.toJson()).toList(),
-      'sedotans': sedotans.map((s) => s.toJson()).toList(),
-      'discount': discount,
-    });
+    final lines = saleLinesOf(state);
+    final items = lines.items;
+    final promoFreeItems = lines.promoFreeItems;
+    final plastics = lines.plastics;
+    final sedotans = lines.sedotans;
+    final cart = _cartSignature(lines, discount);
     // QRIS senilai Rp0 langsung dicatat lunas oleh server, tanpa QR.
     final makesQr = paymentMethod.toLowerCase() == 'qris' && state.total > 0;
 
@@ -524,6 +559,32 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
       customerName: customerName,
       idempotencyKey: _attemptKeyFor(cart, makesQr: makesQr),
     );
+  }
+
+  /// Sidik isi keranjang: yang menentukan stok dan total. Metode bayar,
+  /// nominal, dan nama pembeli sengaja tidak ikut — mengubahnya bukan berarti
+  /// pesanannya lain.
+  String _cartSignature(SaleLines lines, int discount) => jsonEncode({
+        'items': lines.items.map((i) => i.toJson()).toList(),
+        'promo_free_items': lines.promoFreeItems.map((p) => p.toJson()).toList(),
+        'plastics': lines.plastics.map((p) => p.toJson()).toList(),
+        'sedotans': lines.sedotans.map((s) => s.toJson()).toList(),
+        'discount': discount,
+      });
+
+  /// Idempotency key untuk menyimpan keranjang ini sebagai penjualan offline.
+  ///
+  /// Key yang sama dengan percobaan online atas keranjang ini bila ada: kalau
+  /// percobaan itu ternyata sudah tercatat di server, kiriman offline-nya
+  /// dikenali sebagai penjualan yang sama dan tidak dicatat dua kali.
+  String offlineKey({int discount = 0}) =>
+      _attemptKeyFor(_cartSignature(saleLinesOf(state), discount), makesQr: false);
+
+  /// Penjualan sudah aman tersimpan di HP: kosongkan keranjang, dan anggap
+  /// percobaan bayarnya selesai.
+  void completeOffline(ProductTransactionResponse response) {
+    _dropAttemptKey();
+    state = ProductTransactionState(lastResponse: response);
   }
 
   /// Idempotency key untuk percobaan bayar ini.
@@ -592,7 +653,11 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
       state = ProductTransactionState(lastResponse: response); // reset cart on success
     } catch (e) {
       _dropAttemptKeyIfRejected(e);
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        error: e.toString(),
+        unreachable: e is TransactionSubmitException && e.unreachable,
+      );
     }
   }
 

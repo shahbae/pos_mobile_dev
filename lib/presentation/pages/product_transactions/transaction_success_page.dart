@@ -2,15 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/data/models/product_transaction_model.dart';
+import 'package:pos_mobile/data/models/receipt_model.dart';
 import 'package:pos_mobile/data/services/printer_prefs.dart';
 import 'package:pos_mobile/data/repositories/receipt_repository.dart';
 import 'package:pos_mobile/presentation/providers/printer_provider.dart';
 import 'package:pos_mobile/presentation/pages/transactions/receipt_page.dart';
+import 'package:pos_mobile/utils/currency.dart';
 
 class TransactionSuccessPage extends ConsumerStatefulWidget {
   final ProductTransactionResponse response;
 
-  const TransactionSuccessPage({super.key, required this.response});
+  /// Nota penjualan offline, disusun di HP. Bila diisi, penjualannya belum
+  /// sampai ke server: layar mengatakannya, dan nota dicetak dari sini tanpa
+  /// meminta apa pun ke server.
+  final Receipt? localReceipt;
+
+  const TransactionSuccessPage({super.key, required this.response, this.localReceipt});
 
   @override
   ConsumerState<TransactionSuccessPage> createState() => _TransactionSuccessPageState();
@@ -41,7 +48,9 @@ class _TransactionSuccessPageState extends ConsumerState<TransactionSuccessPage>
     if (!mounted) return;
     setState(() => _attempted = true);
     try {
-      final receipt = await ref.read(receiptProvider(widget.response.invoiceNumber).future);
+      final local = widget.localReceipt;
+      final Receipt receipt =
+          local ?? await ref.read(receiptProvider(widget.response.invoiceNumber).future);
       await ref.read(printerProvider.notifier).connectAndPrint(mac: mac, name: name, receipt: receipt);
     } catch (e) {
       if (mounted) {
@@ -68,7 +77,12 @@ class _TransactionSuccessPageState extends ConsumerState<TransactionSuccessPage>
   void _openManualPrint() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => ReceiptPage(invoiceNo: widget.response.invoiceNumber)),
+      MaterialPageRoute(
+        builder: (_) => ReceiptPage(
+          invoiceNo: widget.response.invoiceNumber,
+          receipt: widget.localReceipt,
+        ),
+      ),
     );
   }
 
@@ -100,19 +114,21 @@ class _TransactionSuccessPageState extends ConsumerState<TransactionSuccessPage>
                             child: const Icon(Icons.check_circle_rounded, color: Colors.green, size: 100),
                           ),
                           const SizedBox(height: 32),
-                          const Text(
-                            "Transaksi Berhasil!",
-                            style: TextStyle(
+                          Text(
+                            widget.localReceipt != null ? "Tersimpan di HP" : "Transaksi Berhasil!",
+                            style: const TextStyle(
                               color: AppTheme.textPrimary,
                               fontSize: 28,
                               fontWeight: FontWeight.w800,
                             ),
                           ),
                           const SizedBox(height: 12),
-                          const Text(
-                            "Pembayaran telah diterima dan pesanan Anda sedang diproses.",
+                          Text(
+                            widget.localReceipt != null
+                                ? "Jaringan sedang putus. Penjualan ini aman tersimpan di HP dan akan terkirim sendiri begitu tersambung."
+                                : "Pembayaran telah diterima dan pesanan Anda sedang diproses.",
                             textAlign: TextAlign.center,
-                            style: TextStyle(
+                            style: const TextStyle(
                               color: AppTheme.textSecondary,
                               fontSize: 16,
                               height: 1.5,
@@ -136,9 +152,9 @@ class _TransactionSuccessPageState extends ConsumerState<TransactionSuccessPage>
                             ),
                             child: Column(
                               children: [
-                                const Text(
-                                  "NOMOR INVOICE",
-                                  style: TextStyle(
+                                Text(
+                                  widget.localReceipt != null ? "NOMOR NOTA" : "NOMOR INVOICE",
+                                  style: const TextStyle(
                                     color: AppTheme.textSecondary,
                                     fontSize: 13,
                                     fontWeight: FontWeight.w800,
@@ -160,6 +176,22 @@ class _TransactionSuccessPageState extends ConsumerState<TransactionSuccessPage>
                                     ),
                                   ),
                                 ),
+                                // Tanpa jaringan, printer pun bisa ikut mati:
+                                // nomor antrean dan kembalian harus terbaca
+                                // di layar, bukan hanya di kertas.
+                                if (widget.localReceipt != null) ...[
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'Antrean ${widget.localReceipt!.queueNo}  ·  '
+                                    'Kembalian ${formatRupiah(widget.localReceipt!.change)}',
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      color: AppTheme.textPrimary,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),

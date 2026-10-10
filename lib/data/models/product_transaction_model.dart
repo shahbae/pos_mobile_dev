@@ -5,11 +5,17 @@ class ToppingSelection {
   final int toppingId;
   final int qty;
 
-  ToppingSelection({required this.toppingId, required this.qty});
+  /// Harga satu topping yang ditagih. Hanya diisi untuk penjualan offline,
+  /// tempat harga di HP menjadi harga resminya; penjualan online selalu
+  /// memakai harga server.
+  final int? price;
+
+  ToppingSelection({required this.toppingId, required this.qty, this.price});
 
   Map<String, dynamic> toJson() => {
         'topping_id': toppingId,
         'qty': qty,
+        if (price != null) 'price': price,
       };
 }
 
@@ -96,6 +102,9 @@ class TransactionItem {
   final List<ToppingSelection> freeToppings; // include di harga, tidak menambah subtotal
   final List<ToppingSelection> extraToppings; // berbayar
 
+  /// Harga satuan yang ditagih. Hanya diisi untuk penjualan offline.
+  final int? unitPrice;
+
   TransactionItem({
     required this.productId,
     this.variantId,
@@ -103,6 +112,7 @@ class TransactionItem {
     this.tumblerQty = 0,
     this.freeToppings = const [],
     this.extraToppings = const [],
+    this.unitPrice,
   });
 
   Map<String, dynamic> toJson() {
@@ -110,6 +120,7 @@ class TransactionItem {
       'product_id': productId,
       if (variantId != null) 'variant_id': variantId,
       'qty': quantity,
+      if (unitPrice != null) 'unit_price': unitPrice,
       if (tumblerQty > 0) 'tumbler_qty': tumblerQty,
       if (freeToppings.isNotEmpty)
         'free_toppings': freeToppings.map((t) => t.toJson()).toList(),
@@ -156,7 +167,25 @@ class TransactionSubmitException implements Exception {
   /// tercatat, jadi percobaan berikutnya wajib memakai idempotency key yang sama.
   final bool rejected;
 
-  const TransactionSubmitException(this.message, {required this.rejected});
+  /// true → tidak ada jawaban sama sekali (timeout, koneksi putus): server tak
+  /// terjangkau. Beda dari 5xx, yang berarti server hidup tetapi gagal.
+  final bool unreachable;
+
+  /// Status HTTP jawaban server; null bila tidak ada jawaban.
+  final int? statusCode;
+
+  const TransactionSubmitException(
+    this.message, {
+    required this.rejected,
+    this.unreachable = false,
+    this.statusCode,
+  });
+
+  /// true → server menolak ISI permintaannya (400, 409, 422): mengirim ulang
+  /// hal yang sama tidak akan pernah berhasil. Penolakan lain — sesi habis
+  /// (401), tidak berwenang (403), terlalu sering (429) — bukan soal isinya
+  /// dan bisa berhasil nanti.
+  bool get payloadRejected => statusCode == 400 || statusCode == 409 || statusCode == 422;
 
   @override
   String toString() => message;
@@ -172,11 +201,15 @@ class ProductTransactionResponse {
   /// key yang sama dibalas dengan transaksi yang SUDAH tercatat.
   final String? paymentMethod;
 
+  /// Nomor antrean yang diberikan server; 0 bila tidak ada di response.
+  final int queueNo;
+
   ProductTransactionResponse({
     required this.invoiceNumber,
     required this.saleId,
     required this.success,
     this.paymentMethod,
+    this.queueNo = 0,
   });
 
   factory ProductTransactionResponse.fromJson(Map<String, dynamic> json) {
@@ -202,6 +235,7 @@ class ProductTransactionResponse {
       saleId: data['sale_id'] ?? json['sale_id'] ?? 0,
       success: json['success'] ?? false,
       paymentMethod: data['payment_method']?.toString(),
+      queueNo: (data['queue_no'] as num?)?.toInt() ?? 0,
     );
   }
 }

@@ -6,6 +6,7 @@ import 'package:pos_mobile/data/models/shift_model.dart';
 import 'package:pos_mobile/data/repositories/shift_repository.dart';
 import 'package:pos_mobile/presentation/pages/shifts/shift_page.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
+import 'package:pos_mobile/presentation/providers/offline_provider.dart';
 import 'package:pos_mobile/presentation/providers/shift_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
@@ -20,6 +21,10 @@ Future<bool> ensureActiveShift(BuildContext context, WidgetRef ref) async {
 
   final shift = await _fetchCurrentShift(context, ref);
   if (shift != null && shift.isOpen) return true;
+  if (!context.mounted) return false;
+  // Server tak terjangkau dan HP ini masih ingat shift yang terbuka: kasir
+  // boleh masuk, penjualannya dicatat ke shift itu.
+  if (shift == null && _serverUnreachable && await _hasSavedShift(ref)) return true;
   if (!context.mounted) return false;
 
   final goOpen = await showDialog<bool>(
@@ -57,11 +62,27 @@ Future<bool> ensureActiveShift(BuildContext context, WidgetRef ref) async {
   return after != null && after.isOpen;
 }
 
+/// true bila pengecekan shift terakhir gagal karena server tidak menjawab —
+/// beda dari "server bilang tidak ada shift".
+bool _serverUnreachable = false;
+
+Future<bool> _hasSavedShift(WidgetRef ref) async {
+  try {
+    return (await ref.read(offlineProvider.notifier).session()).hasShift;
+  } catch (_) {
+    return false;
+  }
+}
+
 /// Ambil shift aktif sambil menampilkan loading singkat; null bila gagal/ kosong.
 Future<ShiftModel?> _fetchCurrentShift(BuildContext context, WidgetRef ref) async {
+  _serverUnreachable = false;
   try {
     return await ref.read(shiftRepositoryProvider).getCurrent();
   } catch (e) {
+    _serverUnreachable = true;
+    // Shift tersimpan akan dipakai; pesan galat hanya bila tidak ada.
+    if (await _hasSavedShift(ref)) return null;
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Gagal memeriksa shift: $e'),
