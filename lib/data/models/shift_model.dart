@@ -10,6 +10,9 @@ class ShiftModel {
   final num? difference; // selisih kas (dari BE bila tersedia)
   final List<ShiftPayment> payments;
   final String status; // open / closed
+  /// Yang membuka shift. Absen pulang ditolak selama shift miliknya masih
+  /// buka (revisi 17 Okt 2026); shift orang lain di cabang yang sama tidak.
+  final int? cashierId;
   final DateTime? openedAt;
   final DateTime? closedAt;
 
@@ -24,6 +27,7 @@ class ShiftModel {
     required this.difference,
     required this.payments,
     required this.status,
+    this.cashierId,
     required this.openedAt,
     required this.closedAt,
   });
@@ -72,6 +76,7 @@ class ShiftModel {
           : _num(data['difference'] ?? data['cash_difference']),
       payments: pays.map((e) => ShiftPayment.fromJson(e as Map<String, dynamic>)).toList(),
       status: (data['status'] ?? (data['closed_at'] == null ? 'open' : 'closed')).toString(),
+      cashierId: data['cashier_id'] is num ? (data['cashier_id'] as num).toInt() : int.tryParse('${data['cashier_id'] ?? ''}'),
       openedAt: DateTime.tryParse(data['opened_at']?.toString() ?? ''),
       closedAt: DateTime.tryParse(data['closed_at']?.toString() ?? ''),
     );

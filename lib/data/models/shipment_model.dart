@@ -28,6 +28,13 @@ class Shipment {
   /// Ditampilkan sebagai konteks, bukan sesuatu yang outlet putuskan.
   final double totalCost;
 
+  /// Naik tiap kali gudang mengubah isi kiriman sebelum diterima (revisi 17
+  /// Okt 2026). Dikirim balik saat menerima: server menolak bila isi yang
+  /// dilihat di layar ini sudah bukan isi yang sekarang.
+  final int revision;
+  final String? editReason;
+  final String? editedAt;
+
   /// Hanya terisi dari endpoint detail; daftar mengirimnya kosong.
   final List<ShipmentLine> lines;
 
@@ -42,8 +49,14 @@ class Shipment {
     this.receivedAt,
     this.rejectedReason,
     this.totalCost = 0,
+    this.revision = 0,
+    this.editReason,
+    this.editedAt,
     this.lines = const [],
   });
+
+  /// Isinya pernah diubah gudang setelah berangkat.
+  bool get wasEdited => revision > 0;
 
   /// Sedang di jalan — sudah keluar gudang, belum jadi stok outlet. Ini
   /// satu-satunya status yang menunggu tindakan outlet.
@@ -80,6 +93,11 @@ class Shipment {
       receivedAt: j['received_at']?.toString(),
       rejectedReason: j['rejected_reason']?.toString(),
       totalCost: _toDouble(j['total_cost']),
+      revision: _toInt(j['revision']),
+      editReason: (j['edit_reason']?.toString().isNotEmpty ?? false)
+          ? j['edit_reason'].toString()
+          : null,
+      editedAt: j['edited_at']?.toString(),
       lines: rawLines
           .map((e) => ShipmentLine.fromJson(e as Map<String, dynamic>))
           .toList(),

@@ -202,6 +202,14 @@ bool isAttendanceOnly(String? role) {
   return f.length == 1 && f.contains(AppFeature.attendance);
 }
 
+/// Aplikasi terkunci mengikuti absensi (revisi 17 Okt 2026): sebelum absen
+/// masuk dan sesudah absen pulang, yang terbuka hanya halaman Absensi.
+///
+/// Berlaku untuk setiap role yang ikut absen. Owner tidak absen, jadi tidak
+/// terkunci. Role absensi-saja sudah mendarat di halaman Absensi.
+bool requiresAttendanceGate(String? role) =>
+    hasFeature(role, AppFeature.attendance) && !isAttendanceOnly(role);
+
 /// Boleh memilih cabang saat check-in absensi.
 /// BE hanya membaca field `branch_id` untuk owner & supervisor; untuk role lain
 /// cabang selalu diambil dari token (docs/api-finance-absensi-fe.md §2), jadi

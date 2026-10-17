@@ -8,6 +8,8 @@ import 'package:pos_mobile/core/utils/location_helper.dart';
 import 'package:pos_mobile/data/models/attendance_model.dart';
 import 'package:pos_mobile/data/models/branch_model.dart';
 import 'package:pos_mobile/data/repositories/attendance_repository.dart';
+import 'package:pos_mobile/data/repositories/shift_repository.dart';
+import 'package:pos_mobile/presentation/providers/attendance_gate_provider.dart';
 import 'package:pos_mobile/presentation/providers/attendance_provider.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/branch_provider.dart';
@@ -19,10 +21,14 @@ import 'package:pos_mobile/theme/app_theme.dart';
 ///
 /// [isRoot] true bila halaman ini dipakai sebagai layar utama (tanpa tombol
 /// kembali + ada aksi logout) — dipakai role absensi-saja seperti `finance`.
-/// Role lain membukanya dari menu Pengaturan.
+/// Role lain membukanya dari menu Pengaturan — atau mendarat di sini karena
+/// aplikasi terkunci sebelum absen masuk ([gateNotice], revisi 17 Okt 2026).
 class AttendancePage extends ConsumerStatefulWidget {
   final bool isRoot;
-  const AttendancePage({super.key, this.isRoot = false});
+
+  /// Penjelasan kenapa hanya halaman ini yang terbuka. Null = dibuka biasa.
+  final String? gateNotice;
+  const AttendancePage({super.key, this.isRoot = false, this.gateNotice});
 
   @override
   ConsumerState<AttendancePage> createState() => _AttendancePageState();
@@ -68,12 +74,13 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
               ),
               data: (att) => _Content(
                 att: att,
+                gateNotice: widget.gateNotice,
                 selectedBranchId: _selectedBranchId,
                 onBranchChanged: (id) => setState(() => _selectedBranchId = id),
                 selectedShift: _selectedShift,
                 onShiftChanged: (s) => setState(() => _selectedShift = s),
                 onCheckIn: _submitting ? null : () => _checkIn(att),
-                onCheckOut: _submitting ? null : () => _checkOut(),
+                onCheckOut: _submitting ? null : () => _checkOut(att),
               ),
             ),
           ),
@@ -133,11 +140,59 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     }, successMsg: 'Absen masuk berhasil.');
   }
 
-  Future<void> _checkOut() async {
+  /// Shift yang dibuka orang ini dan masih berjalan, atau null. Gagal
+  /// memeriksa → null: server tetap menolak absen pulang bila shiftnya buka.
+  Future<bool> _ownShiftStillOpen(AttendanceModel? att) async {
+    if (!canOperateShift(ref.read(authProvider).role)) return false;
+    try {
+      final shift = await ref.read(shiftRepositoryProvider).getCurrent();
+      if (shift == null || !shift.isOpen) return false;
+      return shift.cashierId == null || att == null || shift.cashierId == att.userId;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _checkOut(AttendanceModel? att) async {
+    // Revisi 17 Okt 2026: sesudah absen pulang aplikasi terkunci, jadi shift
+    // yang masih buka tidak akan bisa ditutup lagi. Ditahan di sini, sebelum
+    // foto diambil; server menolaknya juga.
+    setState(() {
+      _submitting = true;
+      _progress = 'Memeriksa shift…';
+    });
+    final shiftOpen = await _ownShiftStillOpen(att);
+    if (!mounted) return;
+    setState(() {
+      _submitting = false;
+      _progress = '';
+    });
+    if (shiftOpen) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Tutup shift dulu'),
+          content: const Text(
+              'Shift yang kamu buka masih berjalan. Tutup shift dan serahkan '
+              'setoran dulu, baru absen pulang — sesudah absen pulang aplikasi '
+              'terkunci sampai besok.'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx), child: const Text('Mengerti')),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final gated = requiresAttendanceGate(ref.read(authProvider).role);
     final yakin = await confirmAction(
       context,
       title: 'Absen pulang sekarang?',
-      message: 'Jam pulang dicatat saat ini juga dan hanya bisa diubah oleh owner.',
+      message: gated
+          ? 'Jam pulang dicatat saat ini juga. Sesudah itu aplikasi terkunci '
+              'sampai besok.'
+          : 'Jam pulang dicatat saat ini juga dan hanya bisa diubah oleh owner.',
       confirmLabel: 'Ya, absen pulang',
     );
     if (!yakin || !mounted) return;
@@ -157,20 +212,29 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
             longitude: pos.longitude,
           );
       return true;
-    }, successMsg: 'Absen pulang berhasil.');
+    }, successMsg: 'Absen pulang berhasil.', afterSuccess: () {
+      // Dibuka dari menu: kembali ke layar paling bawah, yang kini sudah
+      // berganti jadi layar terkunci.
+      if (gated && !widget.isRoot && mounted) {
+        Navigator.of(context).popUntil((r) => r.isFirst);
+      }
+    });
   }
 
   /// Menjalankan aksi absensi dengan overlay & error handling seragam.
   /// [action] mengembalikan true bila benar-benar terkirim (false = dibatalkan).
   Future<void> _run(Future<bool> Function() action,
-      {required String successMsg}) async {
+      {required String successMsg, VoidCallback? afterSuccess}) async {
     setState(() => _submitting = true);
     try {
       final done = await action();
       if (!mounted) return;
       if (done) {
         ref.invalidate(attendanceTodayProvider);
+        // Penguncian aplikasi ikut membaca ulang (revisi 17 Okt 2026).
+        ref.invalidate(attendanceGateProvider);
         _snack(successMsg);
+        afterSuccess?.call();
       }
     } catch (e) {
       if (mounted) _snack('$e', error: true);
@@ -205,6 +269,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
 
 class _Content extends ConsumerWidget {
   final AttendanceModel? att;
+  final String? gateNotice;
   final int? selectedBranchId;
   final ValueChanged<int?> onBranchChanged;
   final String selectedShift;
@@ -214,6 +279,7 @@ class _Content extends ConsumerWidget {
 
   const _Content({
     required this.att,
+    this.gateNotice,
     required this.selectedBranchId,
     required this.onBranchChanged,
     required this.selectedShift,
@@ -235,6 +301,10 @@ class _Content extends ConsumerWidget {
     final children = <Widget>[
       _DateHeader(dateLabel: today),
       const SizedBox(height: 16),
+      if (gateNotice != null) ...[
+        _InfoBanner(icon: Icons.lock_outline, text: gateNotice!, warning: true),
+        const SizedBox(height: 12),
+      ],
     ];
 
     if (att == null) {
