@@ -45,7 +45,9 @@ class _ShipmentDetailPageState extends ConsumerState<ShipmentDetailPage> {
       ),
     );
     if (ok != true) return;
-    await _run(() => ref.read(shipmentRepositoryProvider).receive(sh.id));
+    await _run(() => ref
+        .read(shipmentRepositoryProvider)
+        .receive(sh.id, revision: sh.revision));
   }
 
   Future<void> _reject(Shipment sh) async {
@@ -104,6 +106,11 @@ class _ShipmentDetailPageState extends ConsumerState<ShipmentDetailPage> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
+      // Isi kiriman berubah di gudang: muat ulang supaya yang tampil adalah
+      // isi yang sekarang, bukan yang hampir diterima.
+      if (e.toString().contains('diubah gudang')) {
+        ref.invalidate(shipmentDetailProvider(widget.shipmentId));
+      }
       _snack(e.toString());
     }
   }
@@ -204,6 +211,23 @@ class _ShipmentDetailPageState extends ConsumerState<ShipmentDetailPage> {
           if (sh.receivedAt != null)
             _kv(sh.isReceived ? 'Diterima' : 'Diputuskan',
                 fmtShipmentDate(sh.receivedAt!)),
+          // Revisi 17 Okt 2026: gudang boleh mengubah isi sebelum diterima.
+          if (sh.wasEdited) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                'Isi kiriman ini diubah gudang'
+                '${sh.editedAt != null ? ' (${fmtShipmentDate(sh.editedAt!)})' : ''}'
+                '${sh.editReason != null ? ': ${sh.editReason}' : '.'}',
+                style: const TextStyle(fontSize: 13, color: AppTheme.textPrimary),
+              ),
+            ),
+          ],
           if (sh.isOnTheWay) ...[
             const SizedBox(height: 10),
             Container(

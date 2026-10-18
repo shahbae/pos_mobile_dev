@@ -91,6 +91,10 @@ class AttendanceRepository {
         .toLowerCase();
     if (raw != null) {
       if (raw.contains('already checked out')) return 'Anda sudah absen pulang hari ini.';
+      // Revisi 17 Okt 2026: absen pulang hanya sesudah shift ditutup.
+      if (raw.contains('tutup shift')) {
+        return 'Tutup shift dulu sebelum absen pulang.';
+      }
       if (raw.contains('not checked in')) return 'Anda belum absen masuk hari ini.';
       if (raw.contains('branch is not active')) return 'Cabang sedang tidak aktif.';
       // Bukan masalah role: user belum di-assign cabang oleh owner.

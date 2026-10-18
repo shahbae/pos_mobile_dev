@@ -46,9 +46,16 @@ class ShipmentRepository {
   /// seluruhnya atau menolak seluruhnya.
   ///
   /// Stok outlet naik di sini, dan permintaan aslinya jadi selesai.
-  Future<void> receive(int id) async {
+  ///
+  /// [revision] = revisi yang sedang dilihat. Gudang boleh mengubah isi
+  /// kiriman sebelum diterima (revisi 17 Okt 2026); server menolak (409) bila
+  /// layar ini memuat isi yang lama.
+  Future<void> receive(int id, {int? revision}) async {
     try {
-      await api.dio.post('/shipments/$id/receive');
+      await api.dio.post(
+        '/shipments/$id/receive',
+        data: {if (revision != null) 'revision': revision},
+      );
     } on DioException catch (e) {
       throw _msg(e, 'Gagal menerima kiriman');
     }
@@ -81,6 +88,12 @@ class ShipmentRepository {
     if (statusCode == 404) {
       return 'Kiriman tidak ditemukan di cabang yang sedang aktif. '
           'Pindah cabang dulu kalau ini milik cabang lain.';
+    }
+    // Isi kiriman diubah gudang sesudah layar ini dimuat: pesan server sudah
+    // menyuruh memuat ulang, jangan ditimpa "sudah diputuskan".
+    if (statusCode == 409 && (lower?.contains('diubah gudang') ?? false)) {
+      return 'Isi kiriman ini baru saja diubah gudang. Periksa isi yang baru '
+          'di layar ini sebelum menerima.';
     }
     if (statusCode == 409) {
       return 'Kiriman ini sudah diputuskan sebelumnya — mungkin rekan kerja '

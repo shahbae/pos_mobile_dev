@@ -12,6 +12,7 @@ import 'package:pos_mobile/presentation/pages/attendance/attendance_page.dart';
 import 'package:pos_mobile/presentation/pages/dashboard/dashboard_page.dart';
 import 'package:pos_mobile/presentation/pages/login_page.dart';
 import 'package:pos_mobile/presentation/widgets/app_update_gate.dart';
+import 'package:pos_mobile/presentation/widgets/attendance_gate.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -41,10 +42,15 @@ class MyApp extends ConsumerWidget {
         //
         // Pembaruan ditawarkan sesudah login, bukan di halaman login: orang
         // yang sedang berusaha masuk tidak perlu disodori dialog lebih dulu.
+        //
+        // Role yang ikut absen terkunci mengikuti absensinya (revisi 17 Okt
+        // 2026): belum absen masuk / sudah absen pulang → hanya Absensi.
         page = AppUpdateGate(
           child: isAttendanceOnly(auth.role)
               ? const AttendancePage(isRoot: true)
-              : const DashboardPage(),
+              : requiresAttendanceGate(auth.role)
+                  ? const AttendanceGate(child: DashboardPage())
+                  : const DashboardPage(),
         );
         break;
 
