@@ -16,7 +16,13 @@ class AuthState {
   final AuthStatus status;
   final bool loading;
   final String? error;
+
+  /// Role utama (`users.role`), dipakai untuk menu.
   final String? role;
+
+  /// Seluruh role yang dipegang (multi-role). Kosong bila server/token belum
+  /// mengirimnya — pakai [held], yang jatuh ke [role].
+  final List<String> roles;
   final int? branchId;
 
   const AuthState({
@@ -24,14 +30,18 @@ class AuthState {
     this.loading = false,
     this.error,
     this.role,
+    this.roles = const [],
     this.branchId,
   });
+
+  Set<String> get held => heldRoles(role, roles);
 
   AuthState copyWith({
     AuthStatus? status,
     bool? loading,
     Object? error = _noChange,
     Object? role = _noChange,
+    List<String>? roles,
     Object? branchId = _noChange,
   }) {
     return AuthState(
@@ -39,6 +49,7 @@ class AuthState {
       loading: loading ?? this.loading,
       error: error == _noChange ? this.error : error as String?,
       role: role == _noChange ? this.role : role as String?,
+      roles: roles ?? this.roles,
       branchId: branchId == _noChange ? this.branchId : branchId as int?,
     );
   }
@@ -62,7 +73,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
     _storageSub = SecureStorage.changes.listen((_) async {
       final hasAccess = await SecureStorage.getAccessToken() != null;
       if (!hasAccess && state.status != AuthStatus.unauthenticated) {
-        state = state.copyWith(status: AuthStatus.unauthenticated, role: null);
+        state = state.copyWith(
+          status: AuthStatus.unauthenticated,
+          role: null,
+          roles: const [],
+        );
       }
     });
     _init();
@@ -91,6 +106,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  List<String> _extractRolesFromToken(String token) {
+    try {
+      final raw = JwtDecoder.decode(token)['roles'];
+      if (raw is! List) return const [];
+      return [
+        for (final r in raw)
+          if (r is String && r.trim().isNotEmpty) r.trim().toLowerCase(),
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
+
   int? _extractBranchIdFromToken(String token) {
     try {
       final claims = JwtDecoder.decode(token);
@@ -105,16 +133,20 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   /// Ambil role & branch dari `GET /me` (otoritatif). Bila gagal (mis. jaringan),
   /// jatuh balik ke klaim JWT supaya app tetap bisa menentukan akses.
-  Future<({String? role, int? branchId})> _resolveIdentity(String token) async {
+  Future<({String? role, List<String> roles, int? branchId})> _resolveIdentity(
+    String token,
+  ) async {
     try {
       final me = await repo.getMe();
       return (
         role: me.role ?? _extractRoleFromToken(token),
+        roles: me.roles.isNotEmpty ? me.roles : _extractRolesFromToken(token),
         branchId: me.branchId ?? _extractBranchIdFromToken(token),
       );
     } catch (_) {
       return (
         role: _extractRoleFromToken(token),
+        roles: _extractRolesFromToken(token),
         branchId: _extractBranchIdFromToken(token),
       );
     }
@@ -124,7 +156,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final token = await SecureStorage.getAccessToken();
     if (token == null) return;
     final identity = await _resolveIdentity(token);
-    state = state.copyWith(role: identity.role, branchId: identity.branchId);
+    state = state.copyWith(
+      role: identity.role,
+      roles: identity.roles,
+      branchId: identity.branchId,
+    );
   }
 
   Future<void> _init() async {
@@ -135,7 +171,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
         if (kDebugMode) {
           debugPrint('Auth init | no access token | unauthenticated');
         }
-        state = state.copyWith(status: AuthStatus.unauthenticated, role: null);
+        state = state.copyWith(
+          status: AuthStatus.unauthenticated,
+          role: null,
+          roles: const [],
+        );
         return;
       }
 
@@ -145,7 +185,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
           debugPrint('Auth init | rememberMe=false | clearing tokens');
         }
         await SecureStorage.clear();
-        state = state.copyWith(status: AuthStatus.unauthenticated, role: null);
+        state = state.copyWith(
+          status: AuthStatus.unauthenticated,
+          role: null,
+          roles: const [],
+        );
         return;
       }
 
@@ -194,13 +238,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
         state = state.copyWith(
           status: AuthStatus.unauthenticated,
           role: null,
+          roles: const [],
           error: accessDeniedMessage(role),
         );
         return;
       }
 
       // Success
-      state = state.copyWith(status: AuthStatus.authenticated, role: role, branchId: branchId);
+      state = state.copyWith(
+        status: AuthStatus.authenticated,
+        role: role,
+        roles: identity.roles,
+        branchId: branchId,
+      );
     } catch (e) {
       // Fail-safe → jangan bikin app stuck
       await logout();
@@ -222,7 +272,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       final accessToken = await SecureStorage.getAccessToken();
       final identity = accessToken == null
-          ? (role: null, branchId: null)
+          ? (role: null, roles: const <String>[], branchId: null)
           : await _resolveIdentity(accessToken);
       final role = identity.role;
       final branchId = identity.branchId;
@@ -234,6 +284,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
           status: AuthStatus.unauthenticated,
           loading: false,
           role: null,
+          roles: const [],
           error: accessDeniedMessage(role),
         );
         return;
@@ -243,6 +294,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         status: AuthStatus.authenticated,
         loading: false,
         role: role,
+        roles: identity.roles,
         branchId: branchId,
       );
 
@@ -264,7 +316,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
     try {
       await repo.logout();
     } finally {
-      state = state.copyWith(status: AuthStatus.unauthenticated, role: null);
+      state = state.copyWith(
+        status: AuthStatus.unauthenticated,
+        role: null,
+        roles: const [],
+      );
     }
   }
 

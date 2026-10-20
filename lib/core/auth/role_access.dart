@@ -202,13 +202,34 @@ bool isAttendanceOnly(String? role) {
   return f.length == 1 && f.contains(AppFeature.attendance);
 }
 
-/// Aplikasi terkunci mengikuti absensi (revisi 17 Okt 2026): sebelum absen
-/// masuk dan sesudah absen pulang, yang terbuka hanya halaman Absensi.
+/// Seluruh role yang dipegang user, huruf kecil. `roles` dari `/me` atau token;
+/// kosong (token sebelum multi-role) → jatuh ke role utama.
+Set<String> heldRoles(String? role, Iterable<String> roles) {
+  final held = {
+    for (final r in roles)
+      if (r.trim().isNotEmpty) r.trim().toLowerCase(),
+  };
+  final primary = role?.trim().toLowerCase();
+  if (held.isEmpty && primary != null && primary.isNotEmpty) held.add(primary);
+  return held;
+}
+
+/// Role yang membebaskan dari kunci absensi, apa pun role lain yang ikut
+/// dipegang.
+const _attendanceGateExempt = {'owner', 'supervisor', 'leader'};
+
+/// Aplikasi terkunci mengikuti absensi: sebelum absen masuk dan sesudah absen
+/// pulang, yang terbuka hanya halaman Absensi.
 ///
-/// Berlaku untuk setiap role yang ikut absen. Owner tidak absen, jadi tidak
-/// terkunci. Role absensi-saja sudah mendarat di halaman Absensi.
-bool requiresAttendanceGate(String? role) =>
-    hasFeature(role, AppFeature.attendance) && !isAttendanceOnly(role);
+/// Hanya kasir (hotfix 19 Okt 2026; revisi 17 Okt mengunci semua yang ikut
+/// absen). Owner, supervisor dan leader bebas — juga kalau dia sekaligus kasir.
+/// Karena itu yang dibaca seluruh role, bukan role utama: finance mengalahkan
+/// leader di urutan role utama, jadi finance + leader + kasir akan terbaca
+/// "finance" dan aturannya meleset.
+bool requiresAttendanceGate(Iterable<String> held) {
+  final roles = held.map((r) => r.trim().toLowerCase()).toSet();
+  return roles.contains('kasir') && roles.intersection(_attendanceGateExempt).isEmpty;
+}
 
 /// Boleh memilih cabang saat check-in absensi.
 /// BE hanya membaca field `branch_id` untuk owner & supervisor; untuk role lain

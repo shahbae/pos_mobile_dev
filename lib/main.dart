@@ -43,12 +43,13 @@ class MyApp extends ConsumerWidget {
         // Pembaruan ditawarkan sesudah login, bukan di halaman login: orang
         // yang sedang berusaha masuk tidak perlu disodori dialog lebih dulu.
         //
-        // Role yang ikut absen terkunci mengikuti absensinya (revisi 17 Okt
-        // 2026): belum absen masuk / sudah absen pulang → hanya Absensi.
+        // Kasir terkunci mengikuti absensinya: belum absen masuk / sudah absen
+        // pulang → hanya Absensi. Owner, supervisor & leader bebas (hotfix
+        // 19 Okt 2026), dibaca dari seluruh role yang dipegang.
         page = AppUpdateGate(
           child: isAttendanceOnly(auth.role)
               ? const AttendancePage(isRoot: true)
-              : requiresAttendanceGate(auth.role)
+              : requiresAttendanceGate(auth.held)
                   ? const AttendanceGate(child: DashboardPage())
                   : const DashboardPage(),
         );

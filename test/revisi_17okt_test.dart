@@ -53,13 +53,13 @@ void main() {
   });
 
   group('siapa yang terkunci', () {
-    test('semua yang ikut absen; owner tidak', () {
-      for (final r in ['kasir', 'leader', 'supervisor', 'produksi']) {
-        expect(requiresAttendanceGate(r), isTrue, reason: r);
+    // Hotfix 19 Okt 2026: hanya kasir. Kasus multi-role di
+    // test/absen_hanya_kasir_test.dart.
+    test('hanya kasir', () {
+      expect(requiresAttendanceGate({'kasir'}), isTrue);
+      for (final r in ['owner', 'supervisor', 'leader', 'produksi', 'finance']) {
+        expect(requiresAttendanceGate({r}), isFalse, reason: r);
       }
-      expect(requiresAttendanceGate('owner'), isFalse);
-      // Absensi-saja sudah mendarat di halaman Absensi.
-      expect(requiresAttendanceGate('finance'), isFalse);
     });
 
     test('status dari absensi hari ini', () {
