@@ -185,7 +185,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       return;
     }
 
-    final gated = requiresAttendanceGate(ref.read(authProvider).role);
+    final gated = requiresAttendanceGate(ref.read(authProvider).held);
     final yakin = await confirmAction(
       context,
       title: 'Absen pulang sekarang?',
