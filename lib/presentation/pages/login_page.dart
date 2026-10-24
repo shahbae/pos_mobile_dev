@@ -37,19 +37,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             constraints: const BoxConstraints(maxWidth: 420),
             child: Column(
               children: [
-                // ICON BADGE
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surface,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.black12),
-                  ),
-                  child: Icon(
-                    Icons.point_of_sale,
-                    color: Theme.of(context).colorScheme.primary,
-                    size: 48,
-                  ),
+                // LOGO — gambar yang sama dengan ikon di layar HP, supaya
+                // jelas app mana yang sedang dibuka.
+                Image.asset(
+                  'lib/images/logo_app.png',
+                  width: 140,
+                  height: 140,
+                  semanticLabel: 'Logo Es Teh Candi Point of Sale',
                 ),
 
                 const SizedBox(height: 20),
