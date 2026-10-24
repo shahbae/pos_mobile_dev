@@ -14,6 +14,10 @@ class AppReleaseInfo {
   final String downloadUrl;
   final String pageUrl;
 
+  /// versionCode terendah yang masih boleh dipakai. Di bawahnya, pembaruan
+  /// wajib dan dialognya tidak bisa ditutup. 0 = tidak ada yang wajib.
+  final int minVersionCode;
+
   const AppReleaseInfo({
     required this.version,
     required this.versionCode,
@@ -23,6 +27,7 @@ class AppReleaseInfo {
     required this.releaseNotes,
     required this.downloadUrl,
     required this.pageUrl,
+    this.minVersionCode = 0,
   });
 
   factory AppReleaseInfo.fromJson(Map<String, dynamic> json) {
@@ -37,6 +42,7 @@ class AppReleaseInfo {
       releaseNotes: (json['release_notes'] ?? '').toString().trim(),
       downloadUrl: (json['download_url'] ?? '').toString(),
       pageUrl: (json['page_url'] ?? '').toString(),
+      minVersionCode: _asInt(json['min_version_code']),
     );
   }
 

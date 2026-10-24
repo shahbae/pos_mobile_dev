@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+import 'package:pos_mobile/data/services/app_identity.dart';
 import 'package:pos_mobile/data/services/secure_storage.dart';
 
 class ApiService {
@@ -46,6 +47,7 @@ class ApiService {
           if (token != null) {
             options.headers['Authorization'] = 'Bearer $token';
           }
+          options.headers.addAll(AppIdentity.headers);
 
           debugPrint('[API] ${options.method} ${options.path} token=${token != null ? 'YES' : 'NO'}');
           return handler.next(options);
@@ -53,6 +55,12 @@ class ApiService {
 
         onError: (e, handler) async {
           final req = e.requestOptions;
+
+          // 426: versi ini di bawah rilis wajib. Penjaga pembaruan yang
+          // memunculkan dialognya; permintaan ini tetap gagal seperti biasa.
+          if (e.response?.statusCode == 426) {
+            AppIdentity.upgradeRequired.value++;
+          }
 
           // Hanya tangani 401. Lewati bila:
           // - request ini sudah pernah di-retry (hindari loop tak berujung), atau

@@ -9,15 +9,22 @@ import 'package:pos_mobile/presentation/providers/app_update_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
 /// Menawarkan pembaruan ke pengguna: unduh, verifikasi, lalu serahkan ke
-/// pemasang Android. Selalu bisa ditutup — pembaruan di sini bersifat anjuran,
-/// dan kasir yang sedang melayani antrean tidak boleh terkunci olehnya.
+/// pemasang Android.
+///
+/// Pembaruan biasa selalu bisa ditutup — kasir yang sedang melayani antrean
+/// tidak boleh terkunci olehnya. Pembaruan [mandatory] (rilis wajib, 24 Okt
+/// 2026) tidak bisa ditutup sama sekali: tanpa "Nanti saja", tanpa tombol
+/// kembali, tanpa ketuk di luar. Server sudah menolak versi ini, jadi tidak ada
+/// yang bisa dikerjakan di baliknya.
 Future<void> showAppUpdateDialog(
   BuildContext context,
-  AppReleaseInfo release,
-) {
+  AppReleaseInfo release, {
+  bool mandatory = false,
+}) {
   return showDialog<void>(
     context: context,
-    builder: (_) => _AppUpdateDialog(release: release),
+    barrierDismissible: !mandatory,
+    builder: (_) => _AppUpdateDialog(release: release, mandatory: mandatory),
   );
 }
 
@@ -25,8 +32,9 @@ enum _Phase { idle, downloading, installing, failed }
 
 class _AppUpdateDialog extends ConsumerStatefulWidget {
   final AppReleaseInfo release;
+  final bool mandatory;
 
-  const _AppUpdateDialog({required this.release});
+  const _AppUpdateDialog({required this.release, required this.mandatory});
 
   @override
   ConsumerState<_AppUpdateDialog> createState() => _AppUpdateDialogState();
@@ -87,7 +95,15 @@ class _AppUpdateDialogState extends ConsumerState<_AppUpdateDialog> {
       // punya kabar lain untuk disampaikan. Apakah pemasangannya jadi atau
       // tidak, aplikasi ini tidak akan tahu — ia dimatikan saat APK-nya
       // ditimpa.
-      if (mounted) Navigator.of(context).pop();
+      //
+      // Pembaruan wajib tetap terbuka: bila pemasangan dibatalkan, orangnya
+      // kembali ke dialog ini, bukan ke aplikasi yang sudah ditolak server.
+      if (!mounted) return;
+      if (widget.mandatory) {
+        setState(() => _phase = _Phase.idle);
+      } else {
+        Navigator.of(context).pop();
+      }
     } on DioException catch (e) {
       if (CancelToken.isCancel(e)) {
         if (mounted) setState(() => _phase = _Phase.idle);
@@ -130,7 +146,7 @@ class _AppUpdateDialogState extends ConsumerState<_AppUpdateDialog> {
       // Menutup dialog di tengah unduhan akan meninggalkan unduhan yang tidak
       // ada yang memantau. Tombol Batal yang membatalkannya, bukan tombol
       // kembali.
-      canPop: !_busy,
+      canPop: !widget.mandatory && !_busy,
       child: AlertDialog(
         backgroundColor: AppTheme.cardLight,
         shape: RoundedRectangleBorder(
@@ -152,10 +168,10 @@ class _AppUpdateDialogState extends ConsumerState<_AppUpdateDialog> {
               ),
             ),
             const SizedBox(width: 12),
-            const Expanded(
+            Expanded(
               child: Text(
-                'Pembaruan tersedia',
-                style: TextStyle(
+                widget.mandatory ? 'Wajib perbarui aplikasi' : 'Pembaruan tersedia',
+                style: const TextStyle(
                   fontWeight: FontWeight.w900,
                   fontSize: 16,
                   color: AppTheme.textPrimary,
@@ -177,6 +193,14 @@ class _AppUpdateDialogState extends ConsumerState<_AppUpdateDialog> {
                   color: AppTheme.textPrimary,
                 ),
               ),
+              if (widget.mandatory) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Versi aplikasi di HP ini sudah tidak berlaku. Perbarui dulu '
+                  'untuk melanjutkan.',
+                  style: AppTheme.body.copyWith(fontSize: 12),
+                ),
+              ],
               if (release.releaseNotes.isNotEmpty) ...[
                 const SizedBox(height: 10),
                 Container(
@@ -277,10 +301,11 @@ class _AppUpdateDialogState extends ConsumerState<_AppUpdateDialog> {
             onPressed: _openInBrowser,
             child: const Text('Buka di browser'),
           ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Tutup'),
-          ),
+          if (!widget.mandatory)
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Tutup'),
+            ),
           FilledButton(
             onPressed: _start,
             child: const Text('Coba lagi'),
@@ -289,10 +314,18 @@ class _AppUpdateDialogState extends ConsumerState<_AppUpdateDialog> {
 
       case _Phase.idle:
         return [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Nanti saja'),
-          ),
+          // Wajib: tidak ada jalan keluar selain memperbarui. Browser tetap
+          // ditawarkan, untuk HP yang pemasangan dari dalam aplikasinya gagal.
+          if (widget.mandatory)
+            TextButton(
+              onPressed: _openInBrowser,
+              child: const Text('Buka di browser'),
+            )
+          else
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Nanti saja'),
+            ),
           FilledButton(
             onPressed: _start,
             child: const Text('Perbarui Sekarang'),

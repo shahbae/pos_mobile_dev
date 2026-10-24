@@ -30,6 +30,10 @@ class AppUpdateStatus {
   bool get hasUpdate =>
       latest != null && latest!.versionCode > installedCode;
 
+  /// Versi terpasang sudah di bawah rilis wajib: dialognya tidak boleh ditutup.
+  bool get mustUpdate =>
+      latest != null && installedCode < latest!.minVersionCode;
+
   String get installedLabel => '$installedVersion ($installedCode)';
 }
 
