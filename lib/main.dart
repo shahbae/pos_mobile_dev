@@ -6,6 +6,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
 
 import 'package:pos_mobile/core/auth/role_access.dart';
+import 'package:pos_mobile/data/services/app_identity.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/pages/attendance/attendance_page.dart';
@@ -22,6 +23,8 @@ void main() async {
   await dotenv.load(fileName: appFlavor == 'prod' ? '.env.prod' : '.env');
   await initializeDateFormatting('id_ID', null);
   Intl.defaultLocale = 'id_ID';
+  // Sebelum permintaan API pertama: setiap permintaan membawa versi app ini.
+  await AppIdentity.load();
 
   runApp(const ProviderScope(child: MyApp()));
 }
@@ -40,13 +43,15 @@ class MyApp extends ConsumerWidget {
         // Role absensi-saja (finance) langsung mendarat di halaman Absensi;
         // tidak ada dashboard/menu lain untuknya.
         //
-        // Pembaruan ditawarkan sesudah login, bukan di halaman login: orang
-        // yang sedang berusaha masuk tidak perlu disodori dialog lebih dulu.
+        // Pembaruan biasa ditawarkan sesudah login, bukan di halaman login:
+        // orang yang sedang berusaha masuk tidak perlu disodori dialog lebih
+        // dulu. Pembaruan WAJIB muncul di keduanya (lihat AppUpdateGate).
         //
         // Kasir terkunci mengikuti absensinya: belum absen masuk / sudah absen
         // pulang → hanya Absensi. Owner, supervisor & leader bebas (hotfix
         // 19 Okt 2026), dibaca dari seluruh role yang dipegang.
         page = AppUpdateGate(
+          offerOptional: true,
           child: isAttendanceOnly(auth.role)
               ? const AttendancePage(isRoot: true)
               : requiresAttendanceGate(auth.held)
@@ -56,7 +61,7 @@ class MyApp extends ConsumerWidget {
         break;
 
       case AuthStatus.unauthenticated:
-        page = const LoginPage();
+        page = const AppUpdateGate(child: LoginPage());
         break;
 
       case AuthStatus.unknown:
