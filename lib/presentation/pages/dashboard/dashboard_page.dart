@@ -6,6 +6,7 @@ import 'package:pos_mobile/presentation/pages/dashboard/tabs/stock_tab.dart';
 import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/dashboard_index_provider.dart';
+import 'package:pos_mobile/presentation/providers/duty_provider.dart';
 
 import 'package:pos_mobile/presentation/pages/dashboard/tabs/home_tab.dart';
 import 'package:pos_mobile/presentation/pages/dashboard/tabs/sales_tab.dart';
@@ -27,8 +28,8 @@ class _TabSpec {
 class DashboardPage extends ConsumerWidget {
   const DashboardPage({super.key});
 
-  // Apakah role punya menu apa pun di tab Stok?
-  static bool _showStockTab(String? role) {
+  // Apakah fitur hari ini memuat menu apa pun di tab Stok?
+  static bool _showStockTab(Set<AppFeature> features) {
     const stockish = {
       AppFeature.products,
       AppFeature.stockMaterial,
@@ -40,22 +41,22 @@ class DashboardPage extends ConsumerWidget {
       AppFeature.shipment,
       AppFeature.expenses,
     };
-    return featuresForRole(role).any(stockish.contains);
+    return features.any(stockish.contains);
   }
 
-  static bool _showReportTab(String? role) =>
-      hasFeature(role, AppFeature.reports) ||
-      hasFeature(role, AppFeature.stockAlerts) ||
-      hasFeature(role, AppFeature.transactions);
+  static bool _showReportTab(Set<AppFeature> features) =>
+      features.contains(AppFeature.reports) ||
+      features.contains(AppFeature.stockAlerts) ||
+      features.contains(AppFeature.transactions);
 
-  /// Daftar tab yang terlihat untuk role ini (urut: Beranda, Stok, Laporan, Pengaturan).
-  List<_TabSpec> _visibleTabs(String? role) {
+  /// Daftar tab yang terlihat hari ini (urut: Beranda, Stok, Laporan, Pengaturan).
+  List<_TabSpec> _visibleTabs(Set<AppFeature> features) {
     return [
-      if (hasFeature(role, AppFeature.dashboard))
+      if (features.contains(AppFeature.dashboard))
         const _TabSpec(0, Icons.dashboard_outlined, Icons.dashboard, 'Beranda'),
-      if (_showStockTab(role))
+      if (_showStockTab(features))
         const _TabSpec(2, Icons.inventory_2_outlined, Icons.inventory_2, 'Stok'),
-      if (_showReportTab(role))
+      if (_showReportTab(features))
         const _TabSpec(3, Icons.bar_chart_outlined, Icons.bar_chart, 'Laporan'),
       const _TabSpec(4, Icons.settings_outlined, Icons.settings, 'Pengaturan'),
     ];
@@ -63,9 +64,14 @@ class DashboardPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final role = ref.watch(authProvider).role;
-    final tabs = _visibleTabs(role);
-    final showFab = hasFeature(role, AppFeature.pos);
+    // Fitur role, dikurangi menu kasir untuk karyawan yang hari ini bertugas
+    // penyaji saja (Tahap 1 SDM).
+    final features = ref.watch(todayFeaturesProvider);
+    final tabs = _visibleTabs(features);
+    final showFab = features.contains(AppFeature.pos);
+    // Spanduk penjualan offline mengikuti role, bukan tugas hari ini: antrean
+    // di HP ini tetap harus terlihat walau hari ini ia bertugas penyaji.
+    final showOfflineBanner = hasFeature(ref.watch(authProvider).role, AppFeature.pos);
 
     final rawIndex = ref.watch(dashboardIndexProvider);
     // Pastikan index aktif termasuk tab yang terlihat; kalau tidak → tab pertama.
@@ -126,7 +132,7 @@ class DashboardPage extends ConsumerWidget {
           children: [
             // Selalu terlihat di semua tab: selama spanduk ini ada, masih ada
             // penjualan yang hanya tersimpan di HP ini.
-            if (showFab) const OfflineBanner(),
+            if (showOfflineBanner) const OfflineBanner(),
             Expanded(
               child: Row(
                 children: [

@@ -6,7 +6,7 @@ import 'package:pos_mobile/presentation/pages/reports/payments_report_page.dart'
 import 'package:pos_mobile/presentation/pages/reports/stock_alerts_report_page.dart';
 import 'package:pos_mobile/presentation/pages/transactions/transaction_history_page.dart';
 import 'package:pos_mobile/core/auth/role_access.dart';
-import 'package:pos_mobile/presentation/providers/auth_provider.dart';
+import 'package:pos_mobile/presentation/providers/duty_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
 class ReportTab extends ConsumerWidget {
@@ -16,11 +16,12 @@ class ReportTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final bottomInset = MediaQuery.of(context).padding.bottom;
     const accent = Color(0xFF22C55E);
-    final role = ref.watch(authProvider).role;
-    final canReports = hasFeature(role, AppFeature.reports);
-    final canLeaderReport = hasFeature(role, AppFeature.leaderReport);
-    final canStockAlerts = hasFeature(role, AppFeature.stockAlerts);
-    final canTransactions = hasFeature(role, AppFeature.transactions);
+    // Karyawan bertugas penyaji tidak mendapat riwayat penjualan (Tahap 1 SDM).
+    final features = ref.watch(todayFeaturesProvider);
+    final canReports = features.contains(AppFeature.reports);
+    final canLeaderReport = features.contains(AppFeature.leaderReport);
+    final canStockAlerts = features.contains(AppFeature.stockAlerts);
+    final canTransactions = features.contains(AppFeature.transactions);
 
     return ListView(
       padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + bottomInset + 96),

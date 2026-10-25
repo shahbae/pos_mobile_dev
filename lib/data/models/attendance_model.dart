@@ -22,9 +22,98 @@ class AttendanceShift {
   }
 }
 
-/// Satu row absensi = satu karyawan per hari.
+/// Tugas di jadwal outlet (Tahap 1 SDM). Gudang dan SPV keliling tanpa tugas.
+class ScheduleDuty {
+  static const String cashier = 'cashier';
+  static const String server = 'server';
+  static const String both = 'both';
+
+  static String label(String? value) {
+    switch (value) {
+      case cashier:
+        return 'Kasir';
+      case server:
+        return 'Penyaji';
+      case both:
+        return 'Kasir & penyaji';
+      default:
+        return value ?? '';
+    }
+  }
+
+  /// Tugas yang memegang POS dan laci.
+  static bool holdsCashier(String? value) => value == cashier || value == both;
+}
+
+/// "07:00" → "07.00", cara jam ditulis di layar app ini.
+String clockLabel(String? hhmm) => hhmm == null ? '' : hhmm.replaceAll(':', '.');
+
+/// Jadwal yang ditempeli absen (`schedule` di respons absen).
+class AttendanceSchedule {
+  final int scheduleId;
+  final int? shiftCodeId;
+  final String shiftName;
+  final String shortName;
+  final String? duty;
+  final String? startTime;
+  final String? endTime;
+  final String? checkoutLimit;
+
+  const AttendanceSchedule({
+    required this.scheduleId,
+    required this.shiftName,
+    this.shiftCodeId,
+    this.shortName = '',
+    this.duty,
+    this.startTime,
+    this.endTime,
+    this.checkoutLimit,
+  });
+
+  /// "07.00–15.00", kosong bila kode shiftnya belum punya jam.
+  String get hours => startTime == null || endTime == null
+      ? ''
+      : '${clockLabel(startTime)}–${clockLabel(endTime)}';
+
+  factory AttendanceSchedule.fromJson(Map<String, dynamic> json) {
+    return AttendanceSchedule(
+      scheduleId: AttendanceModel._toInt(json['schedule_id']) ?? 0,
+      shiftCodeId: AttendanceModel._toInt(json['shift_code_id']),
+      shiftName: json['shift_name']?.toString() ?? '',
+      shortName: json['short_name']?.toString() ?? '',
+      duty: json['duty']?.toString(),
+      startTime: json['start_time']?.toString(),
+      endTime: json['end_time']?.toString(),
+      checkoutLimit: json['checkout_limit']?.toString(),
+    );
+  }
+}
+
+/// Tanda lembur pada satu absen.
+class AttendanceOvertime {
+  final int? markedBy;
+  final String markedByName;
+  final DateTime? markedAt;
+
+  /// Absen pulang − jam selesai shift, menit penuh. Null selama belum pulang.
+  final int? minutes;
+
+  const AttendanceOvertime({this.markedBy, this.markedByName = '', this.markedAt, this.minutes});
+
+  factory AttendanceOvertime.fromJson(Map<String, dynamic> json) {
+    return AttendanceOvertime(
+      markedBy: AttendanceModel._toInt(json['marked_by']),
+      markedByName: json['marked_by_name']?.toString() ?? '',
+      markedAt: AttendanceModel._toDate(json['marked_at']),
+      minutes: AttendanceModel._toInt(json['minutes']),
+    );
+  }
+}
+
+/// Satu row absensi. Tanpa jadwal: satu per hari. Dengan jadwal (Tahap 1 SDM):
+/// satu per baris jadwal, jadi dobel shift = dua row di tanggal yang sama.
 /// Check-in membuat row, check-out meng-update row yang sama.
-/// Lihat docs/api-attendance.md untuk shape lengkap.
+/// Lihat docs/api-attendance.md dan be-pos docs/api-absensi-jadwal-fe.md.
 class AttendanceModel {
   final int id;
   final int userId;
@@ -52,6 +141,15 @@ class AttendanceModel {
   final DateTime? correctedAt;
   final DateTime? createdAt;
 
+  // Jadwal (Tahap 1 SDM). Null = absen tanpa jadwal.
+  final int? scheduleId;
+  final int? lateMinutes;
+
+  /// Pulang lewat batas absen pulang tanpa lembur.
+  final bool checkoutPastLimit;
+  final AttendanceSchedule? schedule;
+  final AttendanceOvertime? overtime;
+
   const AttendanceModel({
     required this.id,
     required this.userId,
@@ -72,7 +170,17 @@ class AttendanceModel {
     this.correctedBy,
     this.correctedAt,
     this.createdAt,
+    this.scheduleId,
+    this.lateMinutes,
+    this.checkoutPastLimit = false,
+    this.schedule,
+    this.overtime,
   });
+
+  /// Nama shift untuk layar: dari jadwal bila ada, kalau tidak dari label lama.
+  String get shiftLabel => schedule?.shiftName.isNotEmpty == true
+      ? schedule!.shiftName
+      : AttendanceShift.label(shift);
 
   /// Sudah check-in hari ini.
   bool get hasCheckedIn => checkInAt != null;
@@ -101,6 +209,15 @@ class AttendanceModel {
       correctedBy: _toInt(json['corrected_by']),
       correctedAt: _toDate(json['corrected_at']),
       createdAt: _toDate(json['created_at']),
+      scheduleId: _toInt(json['schedule_id']),
+      lateMinutes: _toInt(json['late_minutes']),
+      checkoutPastLimit: json['checkout_past_limit'] == true,
+      schedule: json['schedule'] is Map
+          ? AttendanceSchedule.fromJson(Map<String, dynamic>.from(json['schedule']))
+          : null,
+      overtime: json['overtime'] is Map
+          ? AttendanceOvertime.fromJson(Map<String, dynamic>.from(json['overtime']))
+          : null,
     );
   }
 
