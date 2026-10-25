@@ -14,7 +14,9 @@ class ProfileModel {
   final String? birthDate;
   final String? nik;
   final String? joinedAt;
-  final String? primaryBranchName;
+  /// Hanya leader: cabang yang dipimpin. Selain leader, cabang kerja
+  /// mengikuti jadwal dan tidak ada di profil.
+  final String? leadBranchName;
   final String? bankName;
   final String? bankAccount;
   final String? emergencyContactName;
@@ -32,7 +34,7 @@ class ProfileModel {
     this.birthDate,
     this.nik,
     this.joinedAt,
-    this.primaryBranchName,
+    this.leadBranchName,
     this.bankName,
     this.bankAccount,
     this.emergencyContactName,
@@ -40,7 +42,7 @@ class ProfileModel {
   });
 
   factory ProfileModel.fromJson(Map<String, dynamic> json) {
-    final primary = json['primary_branch'];
+    final lead = json['lead_branch'];
     return ProfileModel(
       id: _toInt(json['id']) ?? 0,
       name: json['name']?.toString() ?? '',
@@ -55,7 +57,7 @@ class ProfileModel {
       birthDate: _str(json['birth_date']),
       nik: _str(json['nik']),
       joinedAt: _str(json['joined_at']),
-      primaryBranchName: primary is Map ? _str(primary['name']) : null,
+      leadBranchName: lead is Map ? _str(lead['name']) : null,
       bankName: _str(json['bank_name']),
       bankAccount: _str(json['bank_account']),
       emergencyContactName: _str(json['emergency_contact_name']),
