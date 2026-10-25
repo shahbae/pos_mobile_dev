@@ -262,7 +262,7 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
                   _Row('NIK', p.nik ?? '-'),
                   _Row('Tanggal lahir', _date(p.birthDate)),
                   _Row('Mulai kerja', _date(p.joinedAt)),
-                  _Row('Cabang utama', p.primaryBranchName ?? '-'),
+                  if (p.leadBranchName != null) _Row('Cabang yang dipimpin', p.leadBranchName!),
                   _Row('Bank', p.bankName ?? '-'),
                   _Row('No. rekening', p.bankAccount ?? '-'),
                   const SizedBox(height: 8),

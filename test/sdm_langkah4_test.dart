@@ -537,7 +537,20 @@ void main() {
       expect(_button(tester, 'Simpan').onPressed, isNotNull);
       await tester.scrollUntilVisible(find.text('3201010101010001'), 200, scrollable: find.byType(Scrollable).first);
       expect(find.text('14 Juli 2026'), findsOneWidget);
+      // Bukan leader: tidak ada baris cabang (cabang utama dihapus 25 Okt).
+      expect(find.text('Cabang utama'), findsNothing);
+      expect(find.text('Cabang yang dipimpin'), findsNothing);
       await tester.scrollUntilVisible(find.text('Ganti password'), 200, scrollable: find.byType(Scrollable).first);
     });
+  });
+
+  test('profil leader membawa cabang yang dipimpin', () {
+    final leader = ProfileModel.fromJson({
+      'id': 4, 'name': 'Rina', 'roles': ['leader'],
+      'lead_branch': {'id': 2, 'name': 'Karangampel'},
+    });
+    expect(leader.leadBranchName, 'Karangampel');
+    final crew = ProfileModel.fromJson({'id': 6, 'name': 'Citra', 'lead_branch': null, 'primary_branch': {'id': 1, 'name': 'Pusat'}});
+    expect(crew.leadBranchName, isNull, reason: 'primary_branch lama tidak dibaca lagi');
   });
 }
