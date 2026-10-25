@@ -163,6 +163,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
     );
   }
 
+  /// Minta token baru supaya cabang di token dihitung ulang. Dipakai kasir
+  /// yang terkunci karena belum terjadwal: begitu leader mengisi jadwal hari
+  /// ini, cabangnya baru muncul di token sesudah login atau refresh (Tahap 1
+  /// SDM). Gagal tidak mengeluarkan user; mengembalikan apakah token berganti.
+  Future<bool> refreshSession() async {
+    final outcome = await repo.tryRefreshToken();
+    if (outcome != RefreshOutcome.refreshed) return false;
+    await reloadFromToken();
+    return true;
+  }
+
   Future<void> _init() async {
     try {
       final hasToken = await SecureStorage.hasTokens();

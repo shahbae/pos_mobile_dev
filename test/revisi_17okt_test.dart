@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 
 import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/data/models/attendance_model.dart';
+import 'package:pos_mobile/data/models/my_day_model.dart';
 import 'package:pos_mobile/data/models/shift_model.dart';
 import 'package:pos_mobile/data/models/shipment_model.dart';
 import 'package:pos_mobile/presentation/pages/shipments/shipment_detail_page.dart';
@@ -30,8 +31,8 @@ AttendanceModel _att({bool checkedOut = false}) => AttendanceModel.fromJson({
 Widget _gate(AttendanceGateStatus s) => ProviderScope(
       overrides: [
         attendanceGateProvider.overrideWith((ref) async => s),
-        // Halaman Absensi membaca status hari ini sendiri.
-        attendanceTodayProvider.overrideWith((ref) async => null),
+        // Halaman Absensi membaca hari saya sendiri (Tahap 1 SDM).
+        myDayProvider.overrideWith((ref) async => MyDay.fromToday(null)),
       ],
       child: MaterialApp(
         theme: AppTheme.lightTheme,

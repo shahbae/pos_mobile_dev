@@ -17,8 +17,12 @@ void main() {
     });
 
     test('role lain mendapat pesan umum', () {
-      expect(canAccessApp('karyawan'), isFalse);
-      expect(accessDeniedMessage('karyawan'), startsWith('Akses ditolak'));
+      expect(canAccessApp('admin_produksi'), isFalse);
+      expect(accessDeniedMessage('admin_produksi'), startsWith('Akses ditolak'));
+    });
+
+    test('karyawan boleh masuk (Tahap 1 SDM)', () {
+      expect(canAccessApp('karyawan'), isTrue);
     });
   });
 }

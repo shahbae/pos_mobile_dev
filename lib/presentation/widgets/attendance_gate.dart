@@ -3,13 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:pos_mobile/presentation/pages/attendance/attendance_page.dart';
 import 'package:pos_mobile/presentation/providers/attendance_gate_provider.dart';
+import 'package:pos_mobile/presentation/providers/attendance_provider.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
 /// Mengunci aplikasi mengikuti absensi hari ini (revisi 17 Okt 2026).
 ///
 /// Belum absen masuk → halaman Absensi saja. Sudah absen pulang → layar
-/// terkunci sampai besok. Di antaranya → [child]. Diperiksa ulang tiap
+/// terkunci sampai besok, kecuali masih ada shift lagi hari ini (dobel shift,
+/// Tahap 1 SDM): kembali ke halaman Absensi. Di antaranya → [child]. Diperiksa ulang tiap
 /// aplikasi kembali ke depan, supaya pergantian hari dan pembatalan absen
 /// pulang oleh supervisor terbaca tanpa harus menutup aplikasi.
 class AttendanceGate extends ConsumerStatefulWidget {
@@ -37,6 +39,9 @@ class _AttendanceGateState extends ConsumerState<AttendanceGate>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      // Kunci dihitung dari hari saya; membaca ulang hari saya ikut menilai
+      // ulang kunci dan tugas kasir/penyaji.
+      ref.invalidate(myDayProvider);
       ref.invalidate(attendanceGateProvider);
     }
   }
@@ -119,7 +124,10 @@ class CheckedOutLockPage extends ConsumerWidget {
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed: () => ref.invalidate(attendanceGateProvider),
+            onPressed: () {
+              ref.invalidate(myDayProvider);
+              ref.invalidate(attendanceGateProvider);
+            },
             icon: const Icon(Icons.refresh),
             label: const Text('Muat ulang'),
           ),

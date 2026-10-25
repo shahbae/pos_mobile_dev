@@ -5,6 +5,7 @@ import 'package:pos_mobile/presentation/widgets/offline_hold.dart';
 import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/branch_provider.dart';
+import 'package:pos_mobile/presentation/providers/duty_provider.dart';
 import 'package:pos_mobile/presentation/widgets/branch_switch_sheet.dart';
 import 'package:pos_mobile/presentation/widgets/app_version_card.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
@@ -12,6 +13,10 @@ import '../../../pages/shifts/shift_page.dart';
 import '../../../pages/settings/printer_settings_page.dart';
 import '../../../pages/settings/qris_settings_page.dart';
 import '../../../pages/attendance/attendance_page.dart';
+import '../../../pages/attendance/leave_out_list_page.dart';
+import '../../../pages/attendance/on_duty_page.dart';
+import '../../../pages/profile/profile_page.dart';
+import '../../../pages/schedules/my_schedule_page.dart';
 import '../../../pages/kitchen/kitchen_display_page.dart';
 
 class SettingTab extends ConsumerWidget {
@@ -23,7 +28,8 @@ class SettingTab extends ConsumerWidget {
     final auth = ref.watch(authProvider);
     final role = auth.role;
     final canAttend = hasFeature(role, AppFeature.attendance);
-    final canShift = hasFeature(role, AppFeature.shift);
+    // Shift kasir ditutup untuk karyawan yang hari ini bertugas penyaji.
+    final canShift = ref.watch(todayFeaturesProvider).contains(AppFeature.shift);
     final canMonitorKitchen = hasFeature(role, AppFeature.kitchenDisplay);
     final currentBranch = ref.watch(currentBranchProvider);
     final accent = theme.colorScheme.primary;
@@ -116,6 +122,45 @@ class SettingTab extends ConsumerWidget {
             },
           ),
         ],
+        if (canAttend) ...[
+          const SizedBox(height: 16),
+          _SettingMenuCard(
+            title: "Jadwal Saya",
+            subtitle: "Shift, tugas, dan lokasi kerja",
+            icon: Icons.calendar_month_outlined,
+            color: accent,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const MySchedulePage()),
+            ),
+          ),
+        ],
+        if (canMarkOvertime(auth.held)) ...[
+          const SizedBox(height: 16),
+          _SettingMenuCard(
+            title: "Yang Bertugas & Lembur",
+            subtitle: "Siapa yang sudah absen masuk, tandai lembur",
+            icon: Icons.groups_outlined,
+            color: accent,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const OnDutyPage()),
+            ),
+          ),
+        ],
+        if (canSeeLeaveOuts(auth.held)) ...[
+          const SizedBox(height: 16),
+          _SettingMenuCard(
+            title: "Izin Keluar",
+            subtitle: "Riwayat keluar sebentar dari outlet",
+            icon: Icons.directions_walk,
+            color: accent,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const LeaveOutListPage()),
+            ),
+          ),
+        ],
         if (canShift) ...[
           const SizedBox(height: 16),
           _SettingMenuCard(
@@ -179,6 +224,17 @@ class SettingTab extends ConsumerWidget {
             },
           ),
         ],
+        const SizedBox(height: 16),
+        _SettingMenuCard(
+          title: "Profil",
+          subtitle: "Data diri, foto, ganti password",
+          icon: Icons.person_outline,
+          color: accent,
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ProfilePage()),
+          ),
+        ),
         const SizedBox(height: 16),
         const AppVersionCard(),
         const SizedBox(height: 16),

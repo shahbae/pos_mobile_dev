@@ -139,12 +139,15 @@ Set<AppFeature> featuresForRole(String? role) {
       // POS + shift + absensi + riwayat transaksi + dashboard adaptif.
       // CATATAN: matriks (baris 243) menandai GET /transactions ❌ untuk
       // karyawan, tapi per arahan user karyawan boleh akses transaksi.
-      // TANPA audit stok: BE 2026-08-08 §3 mencabut seluruh akses opname
-      // karyawan (sebelumnya boleh input per revisi 2026-08-03 §4).
+      // + audit stok (Tahap 1 SDM): karyawan bertugas kasir menggantikan role
+      // kasir, termasuk opname. BE baru membukanya saat role kasir dimigrasi
+      // ke karyawan (langkah 7). Hari yang ia bertugas penyaji saja, menu
+      // kasir ditutup lewat [cashierDutyFeatures].
       return {
         AppFeature.dashboard,
         AppFeature.pos,
         AppFeature.transactions,
+        AppFeature.stockAudit,
         AppFeature.shift,
         AppFeature.attendance,
         AppFeature.kitchenDisplay,
@@ -168,10 +171,12 @@ Set<AppFeature> featuresForRole(String? role) {
 ///
 /// `finance` dikeluarkan (revisi 18 Sep 2026): finance kini absen di gudang
 /// lewat app Gudang, dengan lokasi gudang. Dulu dia masuk ke sini hanya untuk
-/// absensi. Selain lima role ini (mis. karyawan) ditolak masuk.
+/// absensi. `karyawan` masuk sejak Tahap 1 SDM: role kasir akan dimigrasi ke
+/// karyawan, dan tugas kasir/penyajinya diambil dari jadwal.
 const allowedAppRoles = {
   'owner',
   'kasir',
+  'karyawan',
   'supervisor',
   'leader',
   'produksi',
@@ -221,15 +226,70 @@ const _attendanceGateExempt = {'owner', 'supervisor', 'leader'};
 /// Aplikasi terkunci mengikuti absensi: sebelum absen masuk dan sesudah absen
 /// pulang, yang terbuka hanya halaman Absensi.
 ///
-/// Hanya kasir (hotfix 19 Okt 2026; revisi 17 Okt mengunci semua yang ikut
-/// absen). Owner, supervisor dan leader bebas — juga kalau dia sekaligus kasir.
-/// Karena itu yang dibaca seluruh role, bukan role utama: finance mengalahkan
-/// leader di urutan role utama, jadi finance + leader + kasir akan terbaca
-/// "finance" dan aturannya meleset.
+/// Hanya kasir dan karyawan (hotfix 19 Okt 2026; revisi 17 Okt mengunci semua
+/// yang ikut absen; karyawan sejak Tahap 1 SDM). Owner, supervisor dan leader
+/// bebas — juga kalau dia sekaligus kasir. Karena itu yang dibaca seluruh role,
+/// bukan role utama: finance mengalahkan leader di urutan role utama, jadi
+/// finance + leader + kasir akan terbaca "finance" dan aturannya meleset.
 bool requiresAttendanceGate(Iterable<String> held) {
-  final roles = held.map((r) => r.trim().toLowerCase()).toSet();
-  return roles.contains('kasir') && roles.intersection(_attendanceGateExempt).isEmpty;
+  final roles = _norm(held);
+  return (roles.contains('kasir') || roles.contains('karyawan')) &&
+      roles.intersection(_attendanceGateExempt).isEmpty;
 }
+
+Set<String> _norm(Iterable<String> held) => held.map((r) => r.trim().toLowerCase()).toSet();
+
+/// Owner & supervisor: hak penuh di semua cabang.
+bool isOwnerLevel(Iterable<String> held) =>
+    _norm(held).intersection(const {'owner', 'supervisor'}).isNotEmpty;
+
+/// Karyawan yang menunya mengikuti tugas hari ini (Tahap 1 SDM). Cerminan
+/// `dutyGated` di BE: memegang karyawan, tanpa kasir dan tanpa role lain.
+/// Kasir lama tidak diperiksa tugasnya sampai rolenya dimigrasi.
+bool isDutyGated(Iterable<String> held) {
+  final roles = _norm(held);
+  return roles.contains('karyawan') &&
+      roles.intersection(const {
+        'kasir',
+        'owner',
+        'supervisor',
+        'finance',
+        'leader',
+        'admin_produksi',
+        'produksi',
+      }).isEmpty;
+}
+
+/// Menu kasir: ditutup untuk karyawan yang hari ini hanya bertugas penyaji.
+/// Monitoring pesanan tetap terbuka untuk semua tugas.
+const cashierDutyFeatures = {
+  AppFeature.pos,
+  AppFeature.shift,
+  AppFeature.stockAudit,
+  AppFeature.transactions,
+};
+
+/// Fitur hari ini: fitur role utama, dikurangi menu kasir bila [cashierDuty]
+/// false (tugas hari ini di cabang ini hanya penyaji). Null = tidak diketahui
+/// atau tidak ada jadwal di cabang ini → tidak dikurangi; server tetap menolak
+/// bila memang tidak boleh.
+Set<AppFeature> featuresForToday(String? role, Iterable<String> held, {bool? cashierDuty}) {
+  final f = featuresForRole(role);
+  if (cashierDuty == false && isDutyGated(held)) return f.difference(cashierDutyFeatures);
+  return f;
+}
+
+/// Boleh menandai lembur: leader (outletnya, termasuk dirinya), SPV, owner.
+bool canMarkOvertime(Iterable<String> held) =>
+    _norm(held).intersection(const {'owner', 'supervisor', 'leader'}).isNotEmpty;
+
+/// Boleh membaca riwayat izin keluar: owner, SPV (semua), leader (cabangnya).
+bool canSeeLeaveOuts(Iterable<String> held) => canMarkOvertime(held);
+
+/// Boleh mencatat izin keluar dari outlet (yang sedang bertugas).
+bool canLeaveOut(Iterable<String> held) => _norm(held)
+    .intersection(const {'owner', 'supervisor', 'leader', 'kasir', 'karyawan'})
+    .isNotEmpty;
 
 /// Boleh memilih cabang saat check-in absensi.
 /// BE hanya membaca field `branch_id` untuk owner & supervisor; untuk role lain
@@ -281,13 +341,15 @@ bool canManageExpense(String? role) {
 /// Boleh membuat / mengubah / menghapus draft audit stok.
 /// Revisi BE 2026-08-03 §4 memisahkan input dari persetujuan: Owner,
 /// Supervisor, Leader, Kasir boleh menginput hitung fisik. Finance read-only;
-/// Karyawan & Produksi tanpa akses (karyawan dicabut per BE 2026-08-08 §3).
+/// Produksi tanpa akses. Karyawan (dicabut per BE 2026-08-08 §3) kembali di
+/// Tahap 1 SDM untuk hari ia bertugas kasir — lihat [featuresForToday].
 bool canCreateAudit(String? role) {
   switch (role?.toLowerCase()) {
     case 'owner':
     case 'supervisor':
     case 'leader':
     case 'kasir':
+    case 'karyawan':
       return true;
     default:
       return false;

@@ -14,7 +14,7 @@ import 'package:pos_mobile/presentation/pages/sedotan_stock/sedotan_stock_page.d
 import 'package:pos_mobile/presentation/pages/sedotan_stock/sedotan_stock_movement_page.dart';
 import 'package:pos_mobile/presentation/pages/expenses/expense_list_page.dart';
 import 'package:pos_mobile/core/auth/role_access.dart';
-import 'package:pos_mobile/presentation/providers/auth_provider.dart';
+import 'package:pos_mobile/presentation/providers/duty_provider.dart';
 import 'package:pos_mobile/presentation/providers/shipment_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
@@ -26,7 +26,8 @@ class StockTab extends ConsumerWidget {
     final theme = Theme.of(context);
     final accent = theme.colorScheme.primary;
     final bottomInset = MediaQuery.of(context).padding.bottom;
-    final features = featuresForRole(ref.watch(authProvider).role);
+    // Karyawan bertugas penyaji tidak mendapat opname (Tahap 1 SDM).
+    final features = ref.watch(todayFeaturesProvider);
     // Kiriman yang sudah sampai tapi belum ditekan terima berarti stoknya belum
     // bertambah — kasir bisa menolak pesanan padahal bahannya ada di gudang
     // toko. Angkanya ditaruh di menunya supaya tidak perlu ada yang ingat

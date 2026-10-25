@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -7,17 +9,26 @@ import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/core/utils/location_helper.dart';
 import 'package:pos_mobile/data/models/attendance_model.dart';
 import 'package:pos_mobile/data/models/branch_model.dart';
+import 'package:pos_mobile/data/models/leave_out_model.dart';
+import 'package:pos_mobile/data/models/my_day_model.dart';
 import 'package:pos_mobile/data/repositories/attendance_repository.dart';
 import 'package:pos_mobile/data/repositories/shift_repository.dart';
 import 'package:pos_mobile/presentation/providers/attendance_gate_provider.dart';
 import 'package:pos_mobile/presentation/providers/attendance_provider.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/branch_provider.dart';
+import 'package:pos_mobile/presentation/providers/branch_scope.dart';
 import 'package:pos_mobile/presentation/widgets/confirm_dialog.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
+final _clock = DateFormat('HH.mm', 'id_ID');
+
 /// Halaman absensi karyawan: check-in / check-out dengan selfie + GPS.
-/// Status hari ini menentukan tombol mana yang tampil.
+///
+/// Tahap 1 SDM: isinya mengikuti jadwal hari ini (`GET /attendance/me/day`).
+/// Ada shift yang jendelanya terbuka → absen masuk menempel ke shift itu, tanpa
+/// memilih shift. Tanpa jadwal → memilih shift seperti dulu. Dobel shift →
+/// absen masuk/pulang per shift.
 ///
 /// [isRoot] true bila halaman ini dipakai sebagai layar utama (tanpa tombol
 /// kembali + ada aksi logout) — dipakai role absensi-saja seperti `finance`.
@@ -40,9 +51,30 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
   int? _selectedBranchId;
   String _selectedShift = AttendanceShift.shift1;
 
+  /// Menilai ulang status shift tiap 30 detik, supaya tombol absen masuk
+  /// menyala sendiri saat jendelanya dibuka.
+  Timer? _ticker;
+
+  /// Cabang token dihitung ulang paling banyak sekali otomatis per halaman.
+  bool _sessionRetried = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final todayAsync = ref.watch(attendanceTodayProvider);
+    final dayAsync = ref.watch(myDayProvider);
 
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
@@ -65,23 +97,34 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       body: Stack(
         children: [
           RefreshIndicator(
-            onRefresh: () async => ref.invalidate(attendanceTodayProvider),
-            child: todayAsync.when(
+            onRefresh: () async {
+              refreshMyDay(ref);
+              try {
+                await ref.read(myDayProvider.future);
+              } catch (_) {}
+            },
+            child: dayAsync.when(
               loading: () => const _Loading(),
               error: (e, _) => _ErrorView(
                 message: '$e',
-                onRetry: () => ref.invalidate(attendanceTodayProvider),
+                onRetry: () => refreshMyDay(ref),
               ),
-              data: (att) => _Content(
-                att: att,
-                gateNotice: widget.gateNotice,
-                selectedBranchId: _selectedBranchId,
-                onBranchChanged: (id) => setState(() => _selectedBranchId = id),
-                selectedShift: _selectedShift,
-                onShiftChanged: (s) => setState(() => _selectedShift = s),
-                onCheckIn: _submitting ? null : () => _checkIn(att),
-                onCheckOut: _submitting ? null : () => _checkOut(att),
-              ),
+              data: (day) {
+                _maybeRecoverBranch(day);
+                return _Content(
+                  day: day,
+                  gateNotice: widget.gateNotice,
+                  selectedBranchId: _selectedBranchId,
+                  onBranchChanged: (id) => setState(() => _selectedBranchId = id),
+                  selectedShift: _selectedShift,
+                  onShiftChanged: (s) => setState(() => _selectedShift = s),
+                  onCheckIn: _submitting ? null : () => _checkIn(day),
+                  onCheckOut: _submitting ? null : () => _checkOut(day),
+                  onReloadSession: _submitting ? null : () => _reloadSession(),
+                  onStartLeaveOut: _submitting ? null : (colleagues) => _startLeaveOut(colleagues),
+                  onEndLeaveOut: _submitting ? null : (id) => _endLeaveOut(id),
+                );
+              },
             ),
           ),
           if (_submitting) _OverlayProgress(label: _progress),
@@ -90,23 +133,76 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     );
   }
 
-  Future<void> _checkIn(AttendanceModel? att) async {
+  /// Kasir yang tadinya tanpa jadwal: begitu jadwal hari ini terisi, cabangnya
+  /// baru muncul di token sesudah refresh. Dicoba sekali otomatis.
+  void _maybeRecoverBranch(MyDay day) {
+    final auth = ref.read(authProvider);
+    if (_sessionRetried || auth.branchId != null || isOwnerLevel(auth.held)) return;
+    final scheduledAtBranch = day.shifts.any((s) =>
+        s.location.isBranch &&
+        const {MyDayShiftStatus.upcoming, MyDayShiftStatus.open, MyDayShiftStatus.checkedIn}
+            .contains(s.status));
+    if (!scheduledAtBranch) return;
+    _sessionRetried = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _reloadSession(silent: true);
+    });
+  }
+
+  Future<void> _reloadSession({bool silent = false}) async {
+    setState(() {
+      _submitting = true;
+      _progress = 'Memuat ulang jadwal…';
+    });
+    try {
+      final changed = await ref.read(authProvider.notifier).refreshSession();
+      if (!mounted) return;
+      if (changed) {
+        // Cabang di token baru: semua data cabang dimuat ulang, termasuk hari
+        // saya dan daftar cabang yang boleh dibuka.
+        ref.invalidate(branchListProvider);
+        ref.read(branchScopeProvider.notifier).state++;
+      } else {
+        refreshMyDay(ref);
+        if (!silent) {
+          _snack('Belum bisa memuat ulang. Keluar lalu masuk lagi supaya jadwal '
+              'hari ini terbaca.', error: true);
+        }
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _submitting = false;
+          _progress = '';
+        });
+      }
+    }
+  }
+
+  Future<void> _checkIn(MyDay day) async {
     final auth = ref.read(authProvider);
     final canChooseBranch = canChooseAttendanceBranch(auth.role);
+    final current = day.currentShift;
 
     // Untuk role selain owner/supervisor, BE mengabaikan `branch_id` dan
     // memakai cabang dari token — kirim null, tapi pastikan user memang punya
     // cabang supaya tidak kena `403 no branch assigned`.
+    //
+    // Owner/supervisor wajib mengirim cabang. Kalau absennya menempel ke
+    // jadwal di cabang tertentu, server memakai cabang jadwal itu.
     final int? branchId;
     if (canChooseBranch) {
-      branchId = _selectedBranchId ?? auth.branchId;
+      branchId = current != null && current.location.isBranch
+          ? current.location.id
+          : _selectedBranchId ?? auth.branchId;
       if (branchId == null) {
         _snack('Pilih cabang terlebih dahulu.', error: true);
         return;
       }
     } else {
       if (auth.branchId == null) {
-        _snack(kNoBranchAssignedMsg, error: true);
+        _snack(requiresAttendanceGate(auth.held) ? kNoScheduleTodayMsg : kNoBranchAssignedMsg,
+            error: true);
         return;
       }
       branchId = null;
@@ -115,7 +211,10 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     final yakin = await confirmAction(
       context,
       title: 'Absen masuk sekarang?',
-      message: 'Jam masuk dicatat saat ini juga dan hanya bisa diubah oleh owner.',
+      message: current == null
+          ? 'Jam masuk dicatat saat ini juga dan hanya bisa diubah oleh owner.'
+          : '${current.title}${current.location.name.isEmpty ? '' : ' di ${current.location.name}'}. '
+              'Jam masuk dicatat saat ini juga dan hanya bisa diubah oleh owner.',
       confirmLabel: 'Ya, absen masuk',
     );
     if (!yakin || !mounted) return;
@@ -123,21 +222,31 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     await _run(() async {
       setState(() => _progress = 'Mengambil foto…');
       final photo = await _takeSelfie();
-      if (photo == null) return false;
+      if (photo == null) return null;
 
       setState(() => _progress = 'Mendeteksi lokasi…');
       final pos = await LocationHelper.getCurrentPosition();
 
       setState(() => _progress = 'Menyimpan absen masuk…');
-      await ref.read(attendanceRepositoryProvider).checkIn(
+      return ref.read(attendanceRepositoryProvider).checkIn(
             photoPath: photo.path,
             branchId: branchId,
-            shift: _selectedShift,
+            // Shift hanya untuk absen tanpa jadwal.
+            shift: current == null ? _selectedShift : null,
             latitude: pos.latitude,
             longitude: pos.longitude,
           );
-      return true;
-    }, successMsg: 'Absen masuk berhasil.');
+    }, successMsg: 'Absen masuk berhasil.', afterSuccess: (att) async {
+      // Dobel shift di dua outlet: absen shift kedua tercatat di outlet
+      // jadwalnya, dan cabang di token ikut pindah ke sana.
+      final target = att.branchId;
+      if (canChooseBranch || target == null || target == ref.read(authProvider).branchId) return;
+      try {
+        await ref.read(branchSwitchProvider.notifier).switchBranch(target);
+      } catch (e) {
+        if (mounted) _snack('Absen tercatat, tapi gagal pindah cabang: $e', error: true);
+      }
+    });
   }
 
   /// Shift yang dibuka orang ini dan masih berjalan, atau null. Gagal
@@ -153,7 +262,8 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     }
   }
 
-  Future<void> _checkOut(AttendanceModel? att) async {
+  Future<void> _checkOut(MyDay day) async {
+    final att = day.openAttendance;
     // Revisi 17 Okt 2026: sesudah absen pulang aplikasi terkunci, jadi shift
     // yang masih buka tidak akan bisa ditutup lagi. Ditahan di sini, sebelum
     // foto diambil; server menolaknya juga.
@@ -173,9 +283,8 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
         builder: (ctx) => AlertDialog(
           title: const Text('Tutup shift dulu'),
           content: const Text(
-              'Shift yang kamu buka masih berjalan. Tutup shift dan serahkan '
-              'setoran dulu, baru absen pulang — sesudah absen pulang aplikasi '
-              'terkunci sampai besok.'),
+              'Shift kasir yang kamu buka masih berjalan. Tutup shift dan serahkan '
+              'setoran dulu, baru absen pulang.'),
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(ctx), child: const Text('Mengerti')),
@@ -186,13 +295,17 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     }
 
     final gated = requiresAttendanceGate(ref.read(authProvider).held);
+    final next = day.hasNextShift;
     final yakin = await confirmAction(
       context,
       title: 'Absen pulang sekarang?',
-      message: gated
-          ? 'Jam pulang dicatat saat ini juga. Sesudah itu aplikasi terkunci '
-              'sampai besok.'
-          : 'Jam pulang dicatat saat ini juga dan hanya bisa diubah oleh owner.',
+      message: !gated
+          ? 'Jam pulang dicatat saat ini juga dan hanya bisa diubah oleh owner.'
+          : next
+              ? 'Jam pulang dicatat saat ini juga. Aplikasi terbuka lagi setelah '
+                  'kamu absen masuk shift berikutnya.'
+              : 'Jam pulang dicatat saat ini juga. Sesudah itu aplikasi terkunci '
+                  'sampai besok.',
       confirmLabel: 'Ya, absen pulang',
     );
     if (!yakin || !mounted) return;
@@ -200,41 +313,95 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     await _run(() async {
       setState(() => _progress = 'Mengambil foto…');
       final photo = await _takeSelfie();
-      if (photo == null) return false;
+      if (photo == null) return null;
 
       setState(() => _progress = 'Mendeteksi lokasi…');
       final pos = await LocationHelper.getCurrentPosition();
 
       setState(() => _progress = 'Menyimpan absen pulang…');
-      await ref.read(attendanceRepositoryProvider).checkOut(
+      return ref.read(attendanceRepositoryProvider).checkOut(
             photoPath: photo.path,
             latitude: pos.latitude,
             longitude: pos.longitude,
           );
-      return true;
-    }, successMsg: 'Absen pulang berhasil.', afterSuccess: () {
+    }, successMsg: 'Absen pulang berhasil.', afterSuccess: (_) async {
       // Dibuka dari menu: kembali ke layar paling bawah, yang kini sudah
-      // berganti jadi layar terkunci.
+      // berganti jadi layar terkunci (atau Absensi, bila masih ada shift).
       if (gated && !widget.isRoot && mounted) {
         Navigator.of(context).popUntil((r) => r.isFirst);
       }
     });
   }
 
+  Future<void> _startLeaveOut(List<OnDutyModel> colleagues) async {
+    final input = await showModalBottomSheet<_LeaveOutInput>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _LeaveOutSheet(colleagues: colleagues),
+    );
+    if (input == null || !mounted) return;
+    setState(() {
+      _submitting = true;
+      _progress = 'Mencatat izin keluar…';
+    });
+    try {
+      await ref
+          .read(attendanceRepositoryProvider)
+          .startLeaveOut(reason: input.reason, handoverUserId: input.handoverUserId);
+      if (!mounted) return;
+      ref.invalidate(onDutyProvider);
+      _snack('Izin keluar tercatat. Tekan "Saya sudah kembali" begitu kembali.');
+    } catch (e) {
+      if (mounted) _snack('$e', error: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _submitting = false;
+          _progress = '';
+        });
+      }
+    }
+  }
+
+  Future<void> _endLeaveOut(int id) async {
+    setState(() {
+      _submitting = true;
+      _progress = 'Mencatat kembali…';
+    });
+    try {
+      await ref.read(attendanceRepositoryProvider).endLeaveOut(id);
+      if (!mounted) return;
+      ref.invalidate(onDutyProvider);
+      _snack('Selamat bekerja lagi. Jam kembali tercatat.');
+    } catch (e) {
+      if (mounted) _snack('$e', error: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _submitting = false;
+          _progress = '';
+        });
+      }
+    }
+  }
+
   /// Menjalankan aksi absensi dengan overlay & error handling seragam.
-  /// [action] mengembalikan true bila benar-benar terkirim (false = dibatalkan).
-  Future<void> _run(Future<bool> Function() action,
-      {required String successMsg, VoidCallback? afterSuccess}) async {
+  /// [action] mengembalikan absen yang tersimpan, atau null bila dibatalkan.
+  Future<void> _run(Future<AttendanceModel?> Function() action,
+      {required String successMsg,
+      Future<void> Function(AttendanceModel att)? afterSuccess}) async {
     setState(() => _submitting = true);
     try {
-      final done = await action();
+      final att = await action();
       if (!mounted) return;
-      if (done) {
+      if (att != null) {
+        await afterSuccess?.call(att);
+        if (!mounted) return;
+        // Penguncian aplikasi dan tugas hari ini ikut membaca ulang.
+        refreshMyDay(ref);
         ref.invalidate(attendanceTodayProvider);
-        // Penguncian aplikasi ikut membaca ulang (revisi 17 Okt 2026).
         ref.invalidate(attendanceGateProvider);
         _snack(successMsg);
-        afterSuccess?.call();
       }
     } catch (e) {
       if (mounted) _snack('$e', error: true);
@@ -268,7 +435,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
 }
 
 class _Content extends ConsumerWidget {
-  final AttendanceModel? att;
+  final MyDay day;
   final String? gateNotice;
   final int? selectedBranchId;
   final ValueChanged<int?> onBranchChanged;
@@ -276,9 +443,12 @@ class _Content extends ConsumerWidget {
   final ValueChanged<String> onShiftChanged;
   final VoidCallback? onCheckIn;
   final VoidCallback? onCheckOut;
+  final VoidCallback? onReloadSession;
+  final ValueChanged<List<OnDutyModel>>? onStartLeaveOut;
+  final ValueChanged<int>? onEndLeaveOut;
 
   const _Content({
-    required this.att,
+    required this.day,
     this.gateNotice,
     required this.selectedBranchId,
     required this.onBranchChanged,
@@ -286,6 +456,9 @@ class _Content extends ConsumerWidget {
     required this.onShiftChanged,
     required this.onCheckIn,
     required this.onCheckOut,
+    required this.onReloadSession,
+    required this.onStartLeaveOut,
+    required this.onEndLeaveOut,
   });
 
   @override
@@ -295,8 +468,12 @@ class _Content extends ConsumerWidget {
 
     final auth = ref.watch(authProvider);
     final canChooseBranch = canChooseAttendanceBranch(auth.role);
+    final open = day.openAttendance;
+    final current = open == null ? day.currentShift : null;
+    final next = open == null && current == null ? day.nextShift : null;
+    final serverNow = day.serverNow;
     // Cabang wajib ada untuk role yang cabangnya diambil dari token.
-    final noBranch = !canChooseBranch && auth.branchId == null;
+    final noBranch = !canChooseBranch && auth.branchId == null && open == null;
 
     final children = <Widget>[
       _DateHeader(dateLabel: today),
@@ -305,28 +482,102 @@ class _Content extends ConsumerWidget {
         _InfoBanner(icon: Icons.lock_outline, text: gateNotice!, warning: true),
         const SizedBox(height: 12),
       ],
+      if (noBranch) ...[
+        _InfoBanner(
+          icon: Icons.event_busy_outlined,
+          text: requiresAttendanceGate(auth.held) ? kNoScheduleTodayMsg : kNoBranchAssignedMsg,
+          warning: true,
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: onReloadSession,
+          icon: const Icon(Icons.refresh),
+          label: const Text('Muat ulang'),
+        ),
+        const SizedBox(height: 16),
+      ],
+      if (day.shifts.isNotEmpty) ...[
+        const _SectionLabel('Jadwal hari ini'),
+        const SizedBox(height: 8),
+        for (final s in day.shifts) ...[
+          _ShiftTile(shift: s, status: s.statusAt(serverNow)),
+          const SizedBox(height: 8),
+        ],
+        const SizedBox(height: 8),
+      ],
+      for (final a in day.attendances) ...[
+        _AttendanceCard(att: a),
+        const SizedBox(height: 12),
+      ],
     ];
 
-    if (att == null) {
-      // Belum check-in hari ini.
+    if (open != null) {
       children.addAll([
-        if (noBranch)
-          const _InfoBanner(
-            icon: Icons.store_mall_directory_outlined,
-            text: kNoBranchAssignedMsg,
-            warning: true,
-          )
-        else
-          const _InfoBanner(
-            icon: Icons.fingerprint,
-            text: 'Anda belum absen hari ini. Tekan tombol di bawah untuk absen masuk.',
+        _InfoBanner(
+          icon: Icons.timer_outlined,
+          text: 'Kamu sedang bekerja (${open.shiftLabel}). Jangan lupa absen pulang '
+              'saat selesai bekerja.',
+        ),
+        const SizedBox(height: 16),
+        if (open.branchId != null && canLeaveOut(auth.held)) ...[
+          _LeaveOutBox(
+            attendance: open,
+            branchId: isOwnerLevel(auth.held) ? open.branchId : null,
+            onStart: onStartLeaveOut,
+            onEnd: onEndLeaveOut,
+          ),
+          const SizedBox(height: 16),
+        ],
+        _ActionButton(label: 'Absen Pulang', icon: Icons.logout, onPressed: onCheckOut),
+      ]);
+    } else if (current != null) {
+      children.addAll([
+        _InfoBanner(
+          icon: Icons.fingerprint,
+          text: 'Absen masuk ${current.shiftCode.name}'
+              '${current.location.name.isEmpty ? '' : ' di ${current.location.name}'}. '
+              'Shift dan tugas diambil dari jadwal.',
+        ),
+        const SizedBox(height: 16),
+        if (canChooseBranch && current.location.isRoving) ...[
+          _BranchPicker(selected: selectedBranchId ?? auth.branchId, onChanged: onBranchChanged),
+          const SizedBox(height: 16),
+        ],
+        _ActionButton(
+          label: 'Absen Masuk',
+          icon: Icons.login,
+          onPressed: noBranch ? null : onCheckIn,
+        ),
+      ]);
+    } else if (next != null) {
+      children.addAll([
+        _InfoBanner(
+          icon: Icons.schedule,
+          text: next.opensAt == null
+              ? 'Absen masuk ${next.shiftCode.name} belum dibuka.'
+              : 'Absen masuk ${next.shiftCode.name} dibuka jam '
+                  '${_clock.format(next.opensAt!.toLocal())}.',
+        ),
+        const SizedBox(height: 16),
+        const _ActionButton(label: 'Absen Masuk', icon: Icons.login, onPressed: null),
+      ]);
+    } else if (!day.hasAttendance) {
+      // Tanpa jadwal hari ini (atau shiftnya sudah lewat): memilih shift
+      // seperti dulu. Di cabang yang wajib jadwal, server yang menolaknya.
+      final missed = day.shifts.isNotEmpty;
+      children.addAll([
+        if (!noBranch)
+          _InfoBanner(
+            icon: missed ? Icons.warning_amber_rounded : Icons.fingerprint,
+            text: missed
+                ? 'Shift di jadwal hari ini sudah lewat tanpa absen. Hubungi leader '
+                    'bila jadwalnya keliru.'
+                : 'Anda belum absen hari ini. Pilih shift, lalu tekan Absen Masuk.',
+            warning: missed,
           ),
         const SizedBox(height: 16),
         if (canChooseBranch) ...[
-          _BranchPicker(
-            selected: selectedBranchId ?? auth.branchId,
-            onChanged: onBranchChanged,
-          ),
+          _BranchPicker(selected: selectedBranchId ?? auth.branchId, onChanged: onBranchChanged),
           const SizedBox(height: 16),
         ],
         _ShiftPicker(selected: selectedShift, onChanged: onShiftChanged),
@@ -338,49 +589,309 @@ class _Content extends ConsumerWidget {
         ),
       ]);
     } else {
-      children.add(_CheckCard(
-        title: 'Absen Masuk',
-        time: att!.checkInAt,
-        status: att!.checkInStatus,
-        shift: att!.shift,
-        photoUrl: att!.checkInPhotoUrl,
+      children.add(const _InfoBanner(
+        icon: Icons.check_circle_outline,
+        text: 'Absensi hari ini sudah lengkap. Sampai jumpa besok!',
+        success: true,
       ));
-      if (att!.hasCheckedOut) {
-        children.addAll([
-          const SizedBox(height: 12),
-          _CheckCard(
-            title: 'Absen Pulang',
-            time: att!.checkOutAt,
-            status: att!.checkOutStatus,
-            photoUrl: att!.checkOutPhotoUrl,
-          ),
-          const SizedBox(height: 16),
-          const _InfoBanner(
-            icon: Icons.check_circle_outline,
-            text: 'Absensi hari ini sudah lengkap. Sampai jumpa besok!',
-            success: true,
-          ),
-        ]);
-      } else {
-        children.addAll([
-          const SizedBox(height: 16),
-          const _InfoBanner(
-            icon: Icons.timer_outlined,
-            text: 'Anda sudah absen masuk. Jangan lupa absen pulang saat selesai bekerja.',
-          ),
-          const SizedBox(height: 16),
-          _ActionButton(
-            label: 'Absen Pulang',
-            icon: Icons.logout,
-            onPressed: onCheckOut,
-          ),
-        ]);
-      }
     }
 
     return ListView(
       padding: EdgeInsets.fromLTRB(20, 20, 20, 24 + bottomInset),
       children: children,
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  final String text;
+  const _SectionLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) => Text(text,
+      style: const TextStyle(
+          fontSize: 13, fontWeight: FontWeight.w800, color: AppTheme.textPrimary));
+}
+
+/// Satu shift di jadwal hari ini beserta statusnya.
+class _ShiftTile extends StatelessWidget {
+  final MyDayShift shift;
+  final MyDayShiftStatus status;
+  const _ShiftTile({required this.shift, required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final (String label, Color color) = switch (status) {
+      MyDayShiftStatus.upcoming => (
+          shift.opensAt == null
+              ? 'Belum dibuka'
+              : 'Dibuka ${_clock.format(shift.opensAt!.toLocal())}',
+          AppTheme.textSecondary
+        ),
+      MyDayShiftStatus.open => ('Bisa absen masuk', AppTheme.brandBlue),
+      MyDayShiftStatus.checkedIn => ('Sedang bekerja', AppTheme.brandGreenDark),
+      MyDayShiftStatus.done => ('Selesai', AppTheme.brandGreenDark),
+      MyDayShiftStatus.missed => ('Terlewat', AppTheme.danger),
+      MyDayShiftStatus.absent => ('Alpa', AppTheme.danger),
+    };
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTheme.borderLight),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.event_note_outlined, color: AppTheme.textSecondary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(shift.title,
+                    style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w800, color: AppTheme.textPrimary)),
+                if (shift.location.name.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(shift.location.name,
+                      style: const TextStyle(fontSize: 12.5, color: AppTheme.textSecondary)),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          _Pill(text: label, color: color),
+        ],
+      ),
+    );
+  }
+}
+
+/// Satu absen: jam masuk & pulang, plus tanda telat, lewat batas, dan lembur.
+class _AttendanceCard extends StatelessWidget {
+  final AttendanceModel att;
+  const _AttendanceCard({required this.att});
+
+  @override
+  Widget build(BuildContext context) {
+    String time(DateTime? t) => t == null ? '-' : _clock.format(t.toLocal());
+    final late = att.lateMinutes ?? 0;
+    final ot = att.overtime;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppTheme.borderLight),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _PhotoThumb(url: att.checkInPhotoUrl),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(att.shiftLabel,
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w800, color: AppTheme.textSecondary)),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Expanded(child: _Stamp(label: 'Masuk', value: time(att.checkInAt))),
+                    Expanded(child: _Stamp(label: 'Pulang', value: time(att.checkOutAt))),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _StatusChip(status: att.checkInStatus),
+                    if (att.schedule?.duty != null)
+                      _Pill(
+                          text: ScheduleDuty.label(att.schedule!.duty),
+                          color: AppTheme.brandGreenDark),
+                    if (late > 0) _Pill(text: 'Telat $late menit', color: const Color(0xFFD97706)),
+                    if (att.checkoutPastLimit)
+                      const _Pill(text: 'Pulang lewat batas', color: Color(0xFFD97706)),
+                    if (ot != null)
+                      _Pill(
+                        text: ot.minutes == null ? 'Lembur' : 'Lembur ${ot.minutes} menit',
+                        color: AppTheme.brandBlue,
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Stamp extends StatelessWidget {
+  final String label;
+  final String value;
+  const _Stamp({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+        Text(value,
+            style: const TextStyle(
+                fontSize: 24, fontWeight: FontWeight.w900, color: AppTheme.textPrimary)),
+      ],
+    );
+  }
+}
+
+/// Izin keluar sebentar dari outlet selama bertugas. Status "sedang keluar"
+/// dibaca dari daftar yang sedang bertugas di outlet ini.
+class _LeaveOutBox extends ConsumerWidget {
+  final AttendanceModel attendance;
+
+  /// Cabang yang dibaca; null = cabang token.
+  final int? branchId;
+  final ValueChanged<List<OnDutyModel>>? onStart;
+  final ValueChanged<int>? onEnd;
+
+  const _LeaveOutBox({
+    required this.attendance,
+    required this.branchId,
+    required this.onStart,
+    required this.onEnd,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final duty = ref.watch(onDutyProvider(branchId));
+    return duty.when(
+      loading: () => const LinearProgressIndicator(),
+      // Gagal membaca: tombolnya tetap ada; server yang menolak bila perlu.
+      error: (_, _) => OutlinedButton.icon(
+        onPressed: onStart == null ? null : () => onStart!(const []),
+        icon: const Icon(Icons.directions_walk),
+        label: const Text('Izin keluar sebentar'),
+      ),
+      data: (rows) {
+        OnDutyModel? me;
+        for (final r in rows) {
+          if (r.attendanceId == attendance.id) me = r;
+        }
+        final leaveId = me?.leaveOutId;
+        if (leaveId != null) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const _InfoBanner(
+                icon: Icons.directions_walk,
+                text: 'Kamu sedang izin keluar. Tekan tombol di bawah begitu kembali '
+                    'ke outlet.',
+                warning: true,
+              ),
+              const SizedBox(height: 8),
+              FilledButton.icon(
+                onPressed: onEnd == null ? null : () => onEnd!(leaveId),
+                icon: const Icon(Icons.keyboard_return),
+                label: const Text('Saya sudah kembali'),
+              ),
+            ],
+          );
+        }
+        final colleagues = [
+          for (final r in rows)
+            if (r.attendanceId != attendance.id && r.userId != attendance.userId) r,
+        ];
+        return OutlinedButton.icon(
+          onPressed: onStart == null ? null : () => onStart!(colleagues),
+          icon: const Icon(Icons.directions_walk),
+          label: const Text('Izin keluar sebentar'),
+        );
+      },
+    );
+  }
+}
+
+class _LeaveOutInput {
+  final String reason;
+  final int? handoverUserId;
+  const _LeaveOutInput(this.reason, this.handoverUserId);
+}
+
+class _LeaveOutSheet extends StatefulWidget {
+  final List<OnDutyModel> colleagues;
+  const _LeaveOutSheet({required this.colleagues});
+
+  @override
+  State<_LeaveOutSheet> createState() => _LeaveOutSheetState();
+}
+
+class _LeaveOutSheetState extends State<_LeaveOutSheet> {
+  final _reason = TextEditingController();
+  int? _handover;
+
+  @override
+  void dispose() {
+    _reason.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final inset = MediaQuery.of(context).viewInsets.bottom;
+    final ready = _reason.text.trim().isNotEmpty;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + inset),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text('Izin keluar sebentar',
+              style: TextStyle(
+                  fontSize: 17, fontWeight: FontWeight.w800, color: AppTheme.textPrimary)),
+          const SizedBox(height: 4),
+          const Text('Jam keluar dicatat sekarang. Leader bisa melihat catatannya.',
+              style: TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _reason,
+            autofocus: true,
+            maxLength: 255,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(
+              labelText: 'Alasan',
+              hintText: 'mis. beli es batu',
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<int?>(
+            initialValue: _handover,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Serah tugas ke (boleh kosong)'),
+            items: [
+              const DropdownMenuItem<int?>(value: null, child: Text('Tanpa serah tugas')),
+              for (final c in widget.colleagues)
+                DropdownMenuItem<int?>(value: c.userId, child: Text(c.userName)),
+            ],
+            onChanged: (v) => setState(() => _handover = v),
+          ),
+          const SizedBox(height: 20),
+          FilledButton(
+            onPressed: ready
+                ? () => Navigator.pop(context, _LeaveOutInput(_reason.text.trim(), _handover))
+                : null,
+            child: const Text('Catat keluar'),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -514,74 +1025,6 @@ class _ShiftPicker extends StatelessWidget {
           }).toList(),
         ),
       ],
-    );
-  }
-}
-
-class _CheckCard extends StatelessWidget {
-  final String title;
-  final DateTime? time;
-  final String? status;
-  final String? shift;
-  final String? photoUrl;
-
-  const _CheckCard({
-    required this.title,
-    required this.time,
-    required this.status,
-    this.shift,
-    required this.photoUrl,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final timeLabel =
-        time != null ? DateFormat('HH:mm', 'id_ID').format(time!.toLocal()) : '-';
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppTheme.borderLight),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _PhotoThumb(url: photoUrl),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title,
-                    style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        color: AppTheme.textSecondary)),
-                const SizedBox(height: 2),
-                Text(timeLabel,
-                    style: const TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w900,
-                        color: AppTheme.textPrimary)),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _StatusChip(status: status),
-                    if (shift != null && shift!.isNotEmpty)
-                      _Pill(
-                        text: AttendanceShift.label(shift),
-                        color: AppTheme.brandGreenDark,
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
