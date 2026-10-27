@@ -286,6 +286,26 @@ bool canMarkOvertime(Iterable<String> held) =>
 /// Boleh membaca riwayat izin keluar: owner, SPV (semua), leader (cabangnya).
 bool canSeeLeaveOuts(Iterable<String> held) => canMarkOvertime(held);
 
+/// Punya slip gaji & boleh mengajukan pinjaman (Tahap 2 SDM): semua role
+/// kecuali owner — owner bukan karyawan. Cermin `Request` di loan_service.go
+/// dan `/me/payslips` di BE. Owner yang juga memegang role lain tetap ikut.
+bool canUsePayroll(Iterable<String> held) => _norm(held)
+    .intersection(const {
+      'supervisor',
+      'leader',
+      'finance',
+      'kasir',
+      'karyawan',
+      'produksi',
+      'admin_produksi',
+    })
+    .isNotEmpty;
+
+/// Boleh menyerahkan pinjaman tunai dari laci (`loanCashier` di BE). Karyawan
+/// penyaji tetap ditolak BE (RequireCashierDuty); menunya ikut [AppFeature.shift].
+bool canHandOutLoan(Iterable<String> held) =>
+    _norm(held).intersection(const {'owner', 'leader', 'kasir', 'karyawan'}).isNotEmpty;
+
 /// Boleh mencatat izin keluar dari outlet (yang sedang bertugas).
 bool canLeaveOut(Iterable<String> held) => _norm(held)
     .intersection(const {'owner', 'supervisor', 'leader', 'kasir', 'karyawan'})

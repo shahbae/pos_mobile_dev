@@ -6,6 +6,7 @@ import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/branch_provider.dart';
 import 'package:pos_mobile/presentation/providers/duty_provider.dart';
+import 'package:pos_mobile/presentation/providers/payroll_provider.dart';
 import 'package:pos_mobile/presentation/widgets/branch_switch_sheet.dart';
 import 'package:pos_mobile/presentation/widgets/app_version_card.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
@@ -18,6 +19,9 @@ import '../../../pages/attendance/on_duty_page.dart';
 import '../../../pages/profile/profile_page.dart';
 import '../../../pages/schedules/my_schedule_page.dart';
 import '../../../pages/kitchen/kitchen_display_page.dart';
+import '../../../pages/payroll/cash_loan_page.dart';
+import '../../../pages/payroll/my_loans_page.dart';
+import '../../../pages/payroll/payslip_list_page.dart';
 
 class SettingTab extends ConsumerWidget {
   const SettingTab({super.key});
@@ -176,6 +180,25 @@ class SettingTab extends ConsumerWidget {
             },
           ),
         ],
+        // Serah pinjaman tunai: ikut menu Shift Kasir — yang menyerahkan harus
+        // memegang laci shift yang sedang buka (BE menolak penyaji dan yang
+        // belum buka shift).
+        if (canShift && canHandOutLoan(auth.held) && auth.branchId != null) ...[
+          const SizedBox(height: 16),
+          _SettingMenuCard(
+            title: "Pinjaman Tunai",
+            subtitle: switch (ref.watch(cashPendingLoansProvider).valueOrNull?.length) {
+              null || 0 => "Serahkan pinjaman karyawan dari laci",
+              final n => "$n menunggu diserahkan dari laci",
+            },
+            icon: Icons.payments_outlined,
+            color: accent,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const CashLoanPage()),
+            ),
+          ),
+        ],
         if (canManageBranchQris(role) && auth.branchId != null) ...[
           const SizedBox(height: 16),
           _SettingMenuCard(
@@ -222,6 +245,30 @@ class SettingTab extends ConsumerWidget {
                 MaterialPageRoute(builder: (_) => const OfflineQueuePage()),
               );
             },
+          ),
+        ],
+        if (canUsePayroll(auth.held)) ...[
+          const SizedBox(height: 16),
+          _SettingMenuCard(
+            title: "Slip Gaji",
+            subtitle: "Rincian gaji tiap bulan, PDF, komplain",
+            icon: Icons.receipt_long_outlined,
+            color: accent,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const PayslipListPage()),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _SettingMenuCard(
+            title: "Pinjaman",
+            subtitle: "Ajukan pinjaman dan lihat statusnya",
+            icon: Icons.request_quote_outlined,
+            color: accent,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const MyLoansPage()),
+            ),
           ),
         ],
         const SizedBox(height: 16),

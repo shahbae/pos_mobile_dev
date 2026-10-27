@@ -8,9 +8,11 @@ import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/core/utils/currency_input_formatter.dart';
 import 'package:pos_mobile/data/models/shift_model.dart';
 import 'package:pos_mobile/data/repositories/shift_repository.dart';
+import 'package:pos_mobile/presentation/pages/payroll/cash_loan_page.dart';
 import 'package:pos_mobile/presentation/pages/shifts/shift_list_page.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/branch_provider.dart';
+import 'package:pos_mobile/presentation/providers/payroll_provider.dart';
 import 'package:pos_mobile/presentation/providers/shift_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/utils/currency.dart';
@@ -62,8 +64,12 @@ class ShiftPage extends ConsumerWidget {
                       children: [
                         if (shift == null)
                           _NoShiftCard(onOpen: () => _openShift(context, ref))
-                        else
+                        else ...[
+                          // Pinjaman tunai yang menunggu: uangnya keluar dari laci
+                          // shift ini, jadi diingatkan di sini sebelum tutup shift.
+                          if (canHandOutLoan(ref.watch(authProvider).held)) const _CashLoanBanner(),
                           _ActiveShiftCard(shift: shift, onClose: () => _closeShift(context, ref, shift)),
+                        ],
                       ],
                     ),
                   ),
@@ -357,6 +363,41 @@ class _NoShiftCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CashLoanBanner extends ConsumerWidget {
+  const _CashLoanBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final n = ref.watch(cashPendingLoansProvider).valueOrNull?.length ?? 0;
+    if (n == 0) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Material(
+        color: const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CashLoanPage())),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                const Icon(Icons.payments_outlined, color: Color(0xFF2563EB)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text('$n pinjaman tunai menunggu diserahkan dari laci',
+                      style: const TextStyle(fontWeight: FontWeight.w700, color: AppTheme.textPrimary)),
+                ),
+                const Icon(Icons.chevron_right, color: AppTheme.textSecondary),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
