@@ -13,6 +13,7 @@ import 'package:pos_mobile/data/models/leave_out_model.dart';
 import 'package:pos_mobile/data/models/my_day_model.dart';
 import 'package:pos_mobile/data/repositories/attendance_repository.dart';
 import 'package:pos_mobile/data/repositories/shift_repository.dart';
+import 'package:pos_mobile/presentation/pages/payroll/payroll_widgets.dart';
 import 'package:pos_mobile/presentation/providers/attendance_gate_provider.dart';
 import 'package:pos_mobile/presentation/providers/attendance_provider.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
@@ -84,6 +85,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
         automaticallyImplyLeading: !widget.isRoot,
         actions: widget.isRoot
             ? [
+                if (canUsePayroll(ref.watch(authProvider).held)) const PayrollMenuButton(),
                 IconButton(
                   tooltip: 'Logout',
                   icon: const Icon(Icons.logout),

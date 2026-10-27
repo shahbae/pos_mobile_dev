@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/presentation/pages/attendance/attendance_page.dart';
+import 'package:pos_mobile/presentation/pages/payroll/payroll_widgets.dart';
 import 'package:pos_mobile/presentation/providers/attendance_gate_provider.dart';
 import 'package:pos_mobile/presentation/providers/attendance_provider.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
@@ -85,6 +87,7 @@ class CheckedOutLockPage extends ConsumerWidget {
         centerTitle: true,
         automaticallyImplyLeading: false,
         actions: [
+          if (canUsePayroll(ref.watch(authProvider).held)) const PayrollMenuButton(),
           IconButton(
             tooltip: 'Logout',
             icon: const Icon(Icons.logout),
