@@ -3,11 +3,12 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite/sqflite.dart';
 
+import 'package:pos_mobile/core/promo_engine.dart';
+
 import 'package:pos_mobile/data/local/catalog_store.dart';
 import 'package:pos_mobile/data/local/kasir_local_db.dart';
 import 'package:pos_mobile/data/models/plastic_model.dart';
 import 'package:pos_mobile/data/models/pos_catalog_model.dart';
-import 'package:pos_mobile/data/models/promo_model.dart';
 import 'package:pos_mobile/data/models/sedotan_model.dart';
 import 'package:pos_mobile/data/models/topping_model.dart';
 import 'package:pos_mobile/data/repositories/pos_catalog_repository.dart';
@@ -49,18 +50,34 @@ class PosCatalogState {
   /// tetap dipakai, jadi ini tanda "belum tentu terbaru", bukan "tidak ada".
   final String? error;
 
-  const PosCatalogState({this.catalog, this.refreshing = false, this.error});
+  /// Batas diskon manual akun ini (persen dari subtotal) dan pemakaian promo
+  /// berkuota, dari jawaban server terakhir — atau yang diingat HP bila
+  /// server belum menjawab sejak aplikasi dibuka.
+  final int discountLimitPct;
+  final Map<int, PromoUsage> promoUsage;
+
+  const PosCatalogState({
+    this.catalog,
+    this.refreshing = false,
+    this.error,
+    this.discountLimitPct = 0,
+    this.promoUsage = const {},
+  });
 
   PosCatalogState copyWith({
     PosCatalog? catalog,
     bool? refreshing,
     String? error,
     bool clearError = false,
+    int? discountLimitPct,
+    Map<int, PromoUsage>? promoUsage,
   }) {
     return PosCatalogState(
       catalog: catalog ?? this.catalog,
       refreshing: refreshing ?? this.refreshing,
       error: clearError ? null : (error ?? this.error),
+      discountLimitPct: discountLimitPct ?? this.discountLimitPct,
+      promoUsage: promoUsage ?? this.promoUsage,
     );
   }
 
@@ -95,6 +112,9 @@ final posCatalogProvider =
     // server terjangkau lagi.
     onAnswer: (fetch) => ref.read(offlineProvider.notifier).onCatalogAnswer(fetch),
     onFailure: () => ref.read(offlineProvider.notifier).onRequestFailed(),
+    // Batas diskon dan pemakaian promo yang terakhir diingat, untuk checkout
+    // sebelum server menjawab (atau selama tak terjangkau).
+    loadRemembered: () => ref.read(offlineProvider.notifier).session(),
   );
   notifier.start();
   return notifier;
@@ -115,6 +135,9 @@ class PosCatalogNotifier extends StateNotifier<PosCatalogState> {
   /// Dipanggil tiap permintaan ke server gagal.
   final FutureOr<void> Function()? onFailure;
 
+  /// Sesi yang diingat HP; dibaca sekali saat mulai.
+  final Future<OfflineSession> Function()? loadRemembered;
+
   Timer? _timer;
   Future<void>? _refreshing;
 
@@ -124,6 +147,7 @@ class PosCatalogNotifier extends StateNotifier<PosCatalogState> {
     required this.branchId,
     this.onAnswer,
     this.onFailure,
+    this.loadRemembered,
     this.checkInterval = posCatalogCheckInterval,
     // Lahir dalam keadaan "sedang memuat": sebelum potret lokal terbaca, layar
     // harus menunggu, bukan menampilkan "produk tidak ditemukan".
@@ -132,6 +156,7 @@ class PosCatalogNotifier extends StateNotifier<PosCatalogState> {
   /// Muat potret lokal, perbarui dari server, lalu mulai pengecekan berkala.
   Future<void> start() async {
     await _loadLocal();
+    await _loadRemembered();
     if (!mounted) return;
     await refresh();
     if (!mounted) return;
@@ -161,6 +186,20 @@ class PosCatalogNotifier extends StateNotifier<PosCatalogState> {
     }
   }
 
+  Future<void> _loadRemembered() async {
+    final load = loadRemembered;
+    if (load == null) return;
+    try {
+      final s = await load();
+      if (!mounted || _answered) return;
+      state = state.copyWith(discountLimitPct: s.discountLimitPct, promoUsage: s.promoUsage);
+    } catch (_) {}
+  }
+
+  /// Server sudah menjawab sejak notifier ini lahir; yang diingat HP tidak
+  /// boleh lagi menimpa jawabannya.
+  bool _answered = false;
+
   /// Tanyakan versi terbaru ke server; unduh penuh hanya bila berubah.
   ///
   /// Panggilan yang datang saat pertanyaan sebelumnya belum dijawab ikut
@@ -176,8 +215,14 @@ class PosCatalogNotifier extends StateNotifier<PosCatalogState> {
       final fetch = await repo.fetch(version: state.catalog?.version);
       _tell(() => onAnswer?.call(fetch));
       if (!mounted) return;
+      _answered = true;
       if (fetch.unchanged || fetch.catalog == null) {
-        state = state.copyWith(refreshing: false, clearError: true);
+        state = state.copyWith(
+          refreshing: false,
+          clearError: true,
+          discountLimitPct: fetch.discountLimitPct,
+          promoUsage: fetch.promoUsage,
+        );
         return;
       }
       // Sampai di sini katalog baru sudah terbaca utuh, baru boleh menggantikan
@@ -192,7 +237,13 @@ class PosCatalogNotifier extends StateNotifier<PosCatalogState> {
         }
       }
       if (!mounted) return;
-      state = state.copyWith(catalog: fetch.catalog, refreshing: false, clearError: true);
+      state = state.copyWith(
+        catalog: fetch.catalog,
+        refreshing: false,
+        clearError: true,
+        discountLimitPct: fetch.discountLimitPct,
+        promoUsage: fetch.promoUsage,
+      );
     } catch (e) {
       _tell(() => onFailure?.call());
       if (!mounted) return;
@@ -228,13 +279,4 @@ final posPlasticsProvider = Provider.autoDispose<AsyncValue<List<Plastic>>>((ref
 /// Sedotan aktif untuk bagian sedotan di checkout.
 final posSedotansProvider = Provider.autoDispose<AsyncValue<List<Sedotan>>>((ref) {
   return ref.watch(posCatalogProvider).pick((c) => c.sedotans);
-});
-
-/// Promo yang berlaku hari ini, untuk checkout.
-///
-/// Katalog membawa promo untuk semua hari; penyaringan per hari dilakukan di
-/// sini dengan jam HP, dan ikut dihitung ulang tiap katalog dicek ke server —
-/// jadi tablet yang menyala melewati tengah malam berganti promo sendiri.
-final posPromosProvider = Provider.autoDispose<AsyncValue<List<Promo>>>((ref) {
-  return ref.watch(posCatalogProvider).pick((c) => c.promosToday);
 });

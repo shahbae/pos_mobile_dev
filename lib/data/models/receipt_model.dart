@@ -12,6 +12,9 @@ class Receipt {
   final List<ReceiptSedotan> sedotans;
   final num subtotal;
   final num discount;
+
+  /// Alasan diskon manual; null bila tanpa diskon manual.
+  final String? discountReason;
   final num promoDiscount;
   final List<ReceiptPromo> promos;
   final num tax;
@@ -36,6 +39,12 @@ class Receipt {
 
   final ReceiptStore store;
 
+  /// `allowance` untuk pesanan jatah karyawan; `sale` untuk penjualan biasa.
+  final String saleType;
+
+  /// Penerima pesanan jatah; null untuk penjualan biasa.
+  final String? recipientName;
+
   Receipt({
     required this.invoiceNo,
     required this.createdAt,
@@ -46,6 +55,7 @@ class Receipt {
     this.sedotans = const [],
     required this.subtotal,
     required this.discount,
+    this.discountReason,
     this.promoDiscount = 0,
     this.promos = const [],
     required this.tax,
@@ -58,7 +68,12 @@ class Receipt {
     this.queueNo = 0,
     this.estimatedReadyAt,
     required this.store,
+    this.saleType = 'sale',
+    this.recipientName,
   });
+
+  /// Pesanan jatah: tidak dibayar, tidak masuk omzet. Nota bertanda JATAH.
+  bool get isAllowance => saleType == 'allowance';
 
   /// Pembayaran tunai. BE bisa mengirim 'cash'/'CASH', UI lama kirim 'tunai'.
   bool get isCashPayment {
@@ -96,6 +111,7 @@ class Receipt {
         'sedotans': [for (final s in sedotans) {'name': s.name, 'qty': s.qty}],
         'subtotal': subtotal,
         'discount': discount,
+        if (discountReason != null) 'discount_reason': discountReason,
         'promo_discount': promoDiscount,
         'promos': [for (final p in promos) {'name': p.name, 'discount': p.discount}],
         'tax': tax,
@@ -107,6 +123,8 @@ class Receipt {
         'estimated_prep_minutes': estimatedPrepMinutes,
         'estimated_ready_at': estimatedReadyAt?.toUtc().toIso8601String(),
         'queue_no': queueNo,
+        'sale_type': saleType,
+        if (recipientName != null) 'recipient_name': recipientName,
         'store': {
           'name': store.name,
           'address': store.address,
@@ -134,6 +152,7 @@ class Receipt {
       sedotans: sedotansJson.map((s) => ReceiptSedotan.fromJson(s as Map<String, dynamic>)).toList(),
       subtotal: _num(data['subtotal']),
       discount: _num(data['discount']),
+      discountReason: _text(data['discount_reason']),
       promoDiscount: _num(data['promo_discount']),
       promos: promosJson.map((p) => ReceiptPromo.fromJson(p as Map<String, dynamic>)).toList(),
       tax: _num(data['tax']),
@@ -147,6 +166,8 @@ class Receipt {
       estimatedReadyAt:
           DateTime.tryParse(data['estimated_ready_at']?.toString() ?? ''),
       store: ReceiptStore.fromJson((data['store'] as Map<String, dynamic>?) ?? const {}),
+      saleType: _text(data['sale_type']) ?? 'sale',
+      recipientName: _text(data['recipient_name']),
     );
   }
 }
@@ -289,6 +310,12 @@ String _cleanNote(dynamic v) {
       .replaceAll(RegExp(r'[ \t]+\n'), '\n')
       .replaceAll(RegExp(r'\n{2,}'), '\n')
       .trim();
+}
+
+/// Teks yang tidak kosong, atau null.
+String? _text(dynamic v) {
+  final t = v?.toString().trim();
+  return (t == null || t.isEmpty) ? null : t;
 }
 
 num _num(dynamic v) {

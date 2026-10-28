@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:pos_mobile/core/promo_engine.dart';
 import 'package:pos_mobile/data/local/outbox_store.dart';
 import 'package:pos_mobile/data/models/pos_catalog_model.dart';
 import 'package:pos_mobile/data/models/product_transaction_model.dart';
@@ -35,12 +36,19 @@ class OfflineSession {
   /// Jam server dikurangi jam HP, dalam milidetik, saat terakhir terhubung.
   final int clockOffsetMs;
 
+  /// Batas diskon manual akun ini dan pemakaian promo berkuota, menurut
+  /// jawaban katalog terakhir. Dipakai checkout saat server tak terjangkau.
+  final int discountLimitPct;
+  final Map<int, PromoUsage> promoUsage;
+
   const OfflineSession({
     this.shiftId = 0,
     this.shiftName = '',
     this.cashierId = 0,
     this.cashierName = '',
     this.clockOffsetMs = 0,
+    this.discountLimitPct = 0,
+    this.promoUsage = const {},
   });
 
   bool get hasShift => shiftId > 0;
@@ -52,6 +60,8 @@ class OfflineSession {
         'cashier_id': cashierId,
         'cashier_name': cashierName,
         'clock_offset_ms': clockOffsetMs,
+        'discount_limit_pct': discountLimitPct,
+        'promo_usage': promoUsageToJson(promoUsage),
       };
 
   factory OfflineSession.fromJson(Map<String, dynamic> j) => OfflineSession(
@@ -60,6 +70,8 @@ class OfflineSession {
         cashierId: (j['cashier_id'] as num?)?.toInt() ?? 0,
         cashierName: j['cashier_name']?.toString() ?? '',
         clockOffsetMs: (j['clock_offset_ms'] as num?)?.toInt() ?? 0,
+        discountLimitPct: (j['discount_limit_pct'] as num?)?.toInt() ?? 0,
+        promoUsage: promoUsageFromJson(j['promo_usage']),
       );
 }
 
@@ -161,6 +173,8 @@ class OfflineNotifier extends StateNotifier<OfflineState> {
           cashierId: fetch.cashierId > 0 ? fetch.cashierId : previous.cashierId,
           cashierName: fetch.cashierId > 0 ? fetch.cashierName : previous.cashierName,
           clockOffsetMs: fetch.clockOffset?.inMilliseconds ?? previous.clockOffsetMs,
+          discountLimitPct: fetch.discountLimitPct,
+          promoUsage: fetch.promoUsage,
         );
         await store.setMeta(_sessionKey(id), jsonEncode(next.toJson()));
         if (fetch.shift != null) {
@@ -233,6 +247,7 @@ class OfflineNotifier extends StateNotifier<OfflineState> {
   Future<OfflineSale> record({
     required ProductTransactionNotifier cart,
     required PosCatalog? catalog,
+    PricingResult? pricing,
     required int paid,
     String? customerName,
   }) async {
@@ -256,7 +271,8 @@ class OfflineNotifier extends StateNotifier<OfflineState> {
     final occurredAt = _now().add(Duration(milliseconds: s.clockOffsetMs));
     final deviceId = await store.deviceId();
     final cartState = cart.state;
-    final key = cart.offlineKey();
+    final priced = pricing ?? basicPricing(cart.state);
+    final key = cart.offlineKey(pricing: priced);
     final context = OfflineSaleContext(
       shiftId: s.shiftId,
       cashierId: s.cashierId,
@@ -271,9 +287,10 @@ class OfflineNotifier extends StateNotifier<OfflineState> {
       shiftId: s.shiftId,
       idempotencyKey: key,
       occurredAt: occurredAt,
-      total: cartState.total.toInt(),
+      total: priced.total,
       build: (numbers) => buildOfflineSale(
         cart: cartState,
+        pricing: priced,
         context: context,
         numbers: numbers,
         idempotencyKey: key,

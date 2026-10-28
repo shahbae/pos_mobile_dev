@@ -1,6 +1,8 @@
 import 'dart:convert';
 
+import 'package:pos_mobile/core/promo_engine.dart';
 import 'package:pos_mobile/data/local/catalog_store.dart';
+import 'package:pos_mobile/data/models/discount_reason_model.dart';
 import 'package:pos_mobile/data/models/plastic_model.dart';
 import 'package:pos_mobile/data/models/product_model.dart';
 import 'package:pos_mobile/data/models/product_variant_model.dart';
@@ -13,7 +15,9 @@ import 'package:pos_mobile/data/models/topping_model.dart';
 /// Naikkan setiap cara membaca isi katalog berubah (field baru yang wajib,
 /// arti field berubah). Potret lama di HP lalu dibuang dan diunduh ulang,
 /// alih-alih dibaca dengan cara yang salah.
-const posCatalogSchema = 1;
+///
+/// 2: `promo_rules` dan `discount_reasons` (Tahap 3).
+const posCatalogSchema = 2;
 
 /// Info toko untuk kepala nota.
 class PosCatalogStoreInfo {
@@ -64,6 +68,14 @@ class PosCatalog {
   /// Promo aktif dengan SEMUA harinya; pakai [promosOn] untuk hari tertentu.
   final List<Promo> promos;
 
+  /// Promo bentuk mesin promo (beli X gratis Y dan persen) di kanal kasir
+  /// untuk cabang ini. Server lama yang belum mengirimnya: promo lama dibaca
+  /// sebagai beli X gratis Y khusus XL, sama dengan migrasi di server.
+  final List<Promo> promoRules;
+
+  /// Alasan diskon manual yang aktif.
+  final List<DiscountReason> discountReasons;
+
   final Map<int, List<Promo>> _promosByDay = {};
 
   PosCatalog({
@@ -76,6 +88,8 @@ class PosCatalog {
     required this.plastics,
     required this.sedotans,
     required this.promos,
+    this.promoRules = const [],
+    this.discountReasons = const [],
   });
 
   /// Baca isi katalog. Melempar bila bentuknya tidak seperti yang diharapkan —
@@ -98,6 +112,12 @@ class PosCatalog {
       plastics: list('plastics').map(Plastic.fromJson).where((p) => p.isActive).toList(),
       sedotans: list('sedotans').map(Sedotan.fromJson).where((s) => s.isActive).toList(),
       promos: list('promos').map(Promo.fromJson).where((p) => p.isActive).toList(),
+      promoRules: j['promo_rules'] is List
+          ? list('promo_rules').map(Promo.fromJson).where((p) => p.isActive).toList()
+          : list('promos').map(Promo.legacyXL).where((p) => p.isActive).toList(),
+      discountReasons: j['discount_reasons'] is List
+          ? list('discount_reasons').map(DiscountReason.fromJson).where((r) => r.isActive).toList()
+          : const [],
     );
   }
 
@@ -202,6 +222,14 @@ class PosCatalogFetch {
   final int cashierId;
   final String cashierName;
 
+  /// Batas diskon manual akun ini (persen dari subtotal). Di luar versi
+  /// katalog karena bergantung pada siapa yang login.
+  final int discountLimitPct;
+
+  /// Pemakaian promo berkuota saat ini. Di luar versi katalog karena berubah
+  /// tiap ada penjualan.
+  final Map<int, PromoUsage> promoUsage;
+
   final PosCatalog? catalog;
 
   /// Isi yang sama dalam bentuk siap simpan.
@@ -215,6 +243,8 @@ class PosCatalogFetch {
     this.shift,
     this.cashierId = 0,
     this.cashierName = '',
+    this.discountLimitPct = 0,
+    this.promoUsage = const {},
     this.catalog,
     this.stored,
   });
@@ -233,6 +263,8 @@ class PosCatalogFetch {
     final cashier = data['cashier'];
     final cashierId = cashier is Map ? (cashier['id'] as num?)?.toInt() ?? 0 : 0;
     final cashierName = cashier is Map ? cashier['name']?.toString() ?? '' : '';
+    final discountLimitPct = (data['discount_limit_pct'] as num?)?.toInt() ?? 0;
+    final promoUsage = promoUsageFromJson(data['promo_usage']);
 
     if (unchanged) {
       return PosCatalogFetch(
@@ -243,6 +275,8 @@ class PosCatalogFetch {
         shift: shift is Map ? PosCatalogShift.fromJson(Map<String, dynamic>.from(shift)) : null,
         cashierId: cashierId,
         cashierName: cashierName,
+        discountLimitPct: discountLimitPct,
+        promoUsage: promoUsage,
       );
     }
 
@@ -257,8 +291,10 @@ class PosCatalogFetch {
         'plastics',
         'sedotans',
         'promos',
+        'promo_rules',
+        'discount_reasons',
       ])
-        key: data[key],
+        if (data.containsKey(key)) key: data[key],
     };
     return PosCatalogFetch(
       version: version,
@@ -268,6 +304,8 @@ class PosCatalogFetch {
       shift: shift is Map ? PosCatalogShift.fromJson(Map<String, dynamic>.from(shift)) : null,
       cashierId: cashierId,
       cashierName: cashierName,
+      discountLimitPct: discountLimitPct,
+      promoUsage: promoUsage,
       catalog: PosCatalog.fromContent(content, version: version, fetchedAt: fetchedAt),
       stored: StoredCatalog(
         schema: posCatalogSchema,
@@ -278,3 +316,21 @@ class PosCatalogFetch {
     );
   }
 }
+
+/// Baca `promo_usage` (`[{promo_id, total, today}]`) menjadi peta per promo.
+Map<int, PromoUsage> promoUsageFromJson(dynamic raw) {
+  if (raw is! List) return const {};
+  return {
+    for (final e in raw)
+      if (e is Map && e['promo_id'] is num)
+        (e['promo_id'] as num).toInt(): PromoUsage(
+          total: (e['total'] as num?)?.toInt() ?? 0,
+          today: (e['today'] as num?)?.toInt() ?? 0,
+        ),
+  };
+}
+
+/// Kebalikan [promoUsageFromJson], untuk disimpan di HP.
+List<Map<String, int>> promoUsageToJson(Map<int, PromoUsage> usage) => [
+      for (final e in usage.entries) {'promo_id': e.key, 'total': e.value.total, 'today': e.value.today},
+    ];

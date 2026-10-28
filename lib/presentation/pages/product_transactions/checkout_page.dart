@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:pos_mobile/core/promo_engine.dart';
+import 'package:pos_mobile/data/models/allowance_model.dart';
+import 'package:pos_mobile/data/models/product_model.dart';
 import 'package:pos_mobile/data/models/product_variant_model.dart';
 import 'package:pos_mobile/data/models/promo_model.dart';
 import 'package:pos_mobile/data/models/plastic_model.dart';
@@ -10,18 +13,21 @@ import 'package:pos_mobile/data/models/qris_payment_model.dart';
 import 'package:pos_mobile/data/models/receipt_model.dart';
 import 'package:pos_mobile/presentation/pages/product_transactions/qris_payment_page.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
+import 'package:pos_mobile/presentation/providers/allowance_provider.dart';
+import 'package:pos_mobile/presentation/providers/checkout_pricing_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_pagination_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_transaction_provider.dart';
 import 'package:pos_mobile/presentation/providers/offline_provider.dart';
 import 'package:pos_mobile/presentation/providers/pos_catalog_provider.dart';
 import 'package:pos_mobile/presentation/providers/transaction_refresh.dart';
 import 'package:pos_mobile/presentation/pages/product_transactions/transaction_success_page.dart';
+import 'package:pos_mobile/presentation/widgets/allowance_recipient_sheet.dart';
 import 'package:pos_mobile/presentation/widgets/free_item_picker_sheet.dart';
+import 'package:pos_mobile/presentation/widgets/manual_discount_sheet.dart';
 import 'package:pos_mobile/presentation/widgets/offline_banner.dart';
 import 'package:pos_mobile/presentation/widgets/topping_picker_sheet.dart';
 import 'package:pos_mobile/presentation/widgets/variant_picker_sheet.dart';
 import 'package:pos_mobile/utils/currency.dart';
-import 'package:pos_mobile/utils/xl_promo.dart';
 import 'package:pos_mobile/core/utils/currency_input_formatter.dart';
 
 /// Metode pembayaran sesuai BE: CASH | TRANSFER | QRIS | DEBIT | CREDIT | EWALLET
@@ -35,6 +41,8 @@ class _PayMethod {
 const _payMethods = <_PayMethod>[
   _PayMethod('CASH', 'Tunai', Icons.payments_outlined),
   _PayMethod('QRIS', 'QRIS', Icons.qr_code_2_outlined),
+  // Pesanan jatah karyawan (Tahap 3, F7): tidak dibayar, tidak masuk omzet.
+  _PayMethod('ALLOWANCE', 'Jatah', Icons.local_cafe_outlined),
   // Metode lain dinonaktifkan sementara — aktifkan kembali bila BE & alur siap.
   // _PayMethod('TRANSFER', 'Transfer', Icons.account_balance_outlined),
   // _PayMethod('DEBIT', 'Debit', Icons.credit_card_outlined),
@@ -63,11 +71,15 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
 
   bool get _isCash => _paymentMethod == 'CASH';
   bool get _isQris => _paymentMethod == 'QRIS';
+  bool get _isAllowance => _paymentMethod == 'ALLOWANCE';
+
+  /// Penerima pesanan jatah yang dipilih kasir.
+  AllowanceRecipient? _recipient;
 
   @override
   void initState() {
     super.initState();
-    _lastTotal = ref.read(productTransactionProvider).total;
+    _lastTotal = ref.read(checkoutPricingProvider).total;
     _paidAmountController.text = NumberFormat.decimalPattern('id_ID').format(_lastTotal);
     // Sedotan otomatis butuh master sedotan (penanda auto_for). Diteruskan ke
     // notifier setiap daftarnya termuat; microtask karena mengubah provider
@@ -110,10 +122,20 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     _paidAmountController.text = NumberFormat.decimalPattern('id_ID').format(total);
   }
 
-  Future<void> _submit(num total) async {
+  Future<void> _submit(CheckoutPricing pricing) async {
+    if (_isAllowance) {
+      await _submitAllowance();
+      return;
+    }
+    // Promo atau diskon yang pasti ditolak server tidak dikirim.
+    if (pricing.blockers.isNotEmpty) {
+      _toast(pricing.blockers.first, Colors.orange);
+      return;
+    }
+    final total = pricing.total;
     // QRIS pakai alur asinkron (buat QR → poll → lunas). Nominal = total otomatis.
     if (_isQris) {
-      await _submitQris();
+      await _submitQris(pricing);
       return;
     }
 
@@ -139,14 +161,14 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     // terkirim. Tunai langsung disimpan di HP, tanpa mencoba server dulu —
     // menunggu jawaban yang tidak akan datang hanya membuat antrean memanjang.
     if (_isCash && ref.read(offlineProvider).active) {
-      await _payOffline(paidValue, customerName);
+      await _payOffline(paidValue, customerName, pricing.result);
       return;
     }
 
     await ref.read(productTransactionProvider.notifier).submitTransaction(
           paymentMethod: _paymentMethod,
           paid: paidValue,
-          discount: 0,
+          pricing: pricing.result,
           paymentRef: _isCash ? null : _paymentRefController.text.trim(),
           customerName: customerName,
         );
@@ -162,14 +184,54 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       // penjualannya disimpan di HP dengan kunci yang sama: kalau ternyata
       // server sempat mencatatnya, kirimannya nanti dikenali dan tidak dobel.
       ref.read(offlineProvider.notifier).markUnreachable();
-      await _payOffline(paidValue, customerName, fallbackError: newState.error);
+      await _payOffline(paidValue, customerName, pricing.result, fallbackError: newState.error);
     } else if (newState.error != null) {
-      _toast("Gagal: ${newState.error}", Colors.red);
-      // Stok bisa berubah sejak katalog dimuat (mis. ditolak karena bahan habis).
-      // Muat ulang daftar produk agar penanda ketersediaan ikut ter-refresh.
-      if (newState.error!.toLowerCase().contains('habis')) {
-        ref.read(productPaginationProvider.notifier).loadAll();
-      }
+      _showRejection(newState);
+    }
+  }
+
+  /// Penolakan server atas pembayaran. Hitungan yang berbeda dengan server
+  /// (409: kuota promo habis di HP lain, jam HP meleset, katalog basi) memuat
+  /// ulang katalog supaya total di layar ikut benar sebelum kasir mengulang.
+  void _showRejection(ProductTransactionState state) {
+    _toast("Gagal: ${state.error}", Colors.red);
+    if (state.errorStatus == 409) {
+      ref.read(posCatalogProvider.notifier).refresh();
+    }
+    // Stok bisa berubah sejak katalog dimuat (mis. ditolak karena bahan habis).
+    // Muat ulang daftar produk agar penanda ketersediaan ikut ter-refresh.
+    if ((state.error ?? '').toLowerCase().contains('habis')) {
+      ref.read(productPaginationProvider.notifier).loadAll();
+    }
+  }
+
+  /// Catat pesanan jatah untuk penerima yang dipilih. Hanya online.
+  Future<void> _submitAllowance() async {
+    if (ref.read(offlineProvider).active) {
+      _toast("Jatah hanya bisa saat online: saldo jatah diperiksa server", Colors.orange);
+      return;
+    }
+    final recipient = _recipient;
+    if (recipient == null) {
+      _toast("Pilih dulu siapa yang menerima jatah", Colors.orange);
+      return;
+    }
+    final cart = ref.read(productTransactionProvider);
+    final toppingProblem = allowanceToppingProblem(cart);
+    if (toppingProblem != null) {
+      _toast(toppingProblem, Colors.orange);
+      return;
+    }
+    await ref.read(productTransactionProvider.notifier).submitAllowance(recipientUserId: recipient.userId);
+    if (!mounted) return;
+    final newState = ref.read(productTransactionProvider);
+    if (newState.lastResponse != null) {
+      ref.read(offlineProvider.notifier).observeQueueNo(newState.lastResponse!.queueNo);
+      _goToSuccess(newState.lastResponse!);
+    } else if (newState.error != null) {
+      _showRejection(newState);
+      // Saldo bisa berubah oleh kasir lain: muat ulang daftar penerima.
+      ref.invalidate(allowanceRecipientsProvider);
     }
   }
 
@@ -178,11 +240,12 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   /// [fallbackError] adalah galat percobaan online yang baru saja gagal;
   /// ditampilkan bila cabang ini ternyata tidak bisa berjualan offline, supaya
   /// kasir tetap tahu apa yang terjadi.
-  Future<void> _payOffline(int paid, String? customerName, {String? fallbackError}) async {
+  Future<void> _payOffline(int paid, String? customerName, PricingResult pricing, {String? fallbackError}) async {
     try {
       final sale = await ref.read(offlineProvider.notifier).record(
             cart: ref.read(productTransactionProvider.notifier),
             catalog: ref.read(posCatalogProvider).catalog,
+            pricing: pricing,
             paid: paid,
             customerName: customerName,
           );
@@ -201,7 +264,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   }
 
   /// Alur QRIS dinamis: charge → (QR page + polling) → lunas cetak struk.
-  Future<void> _submitQris() async {
+  Future<void> _submitQris(CheckoutPricing pricing) async {
     // QRIS butuh server untuk membuat dan mengonfirmasi QR-nya.
     if (ref.read(offlineProvider).active) {
       _toast("QRIS belum bisa dipakai: ${_qrisBlockedReason(ref.read(offlineProvider))}", Colors.orange);
@@ -212,15 +275,12 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
         ? null
         : _customerNameController.text.trim();
 
-    final result = await notifier.chargeQris(customerName: customerName);
+    final result = await notifier.chargeQris(pricing: pricing.result, customerName: customerName);
     if (!mounted) return;
 
     if (result == null) {
-      final err = ref.read(productTransactionProvider).error;
-      _toast("Gagal: ${err ?? 'tidak diketahui'}", Colors.red);
-      if ((err ?? '').toLowerCase().contains('habis')) {
-        ref.read(productPaginationProvider.notifier).loadAll();
-      }
+      final state = ref.read(productTransactionProvider);
+      _showRejection(state.error == null ? state.copyWith(error: 'tidak diketahui') : state);
       return;
     }
 
@@ -416,12 +476,24 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   @override
   Widget build(BuildContext context) {
     final cartState = ref.watch(productTransactionProvider);
-    final promosAsync = ref.watch(posPromosProvider);
+    final pricing = ref.watch(checkoutPricingProvider);
+    final catalogState = ref.watch(posCatalogProvider);
     final offline = ref.watch(offlineProvider);
+    // Pesanan jatah tanpa promo maupun diskon: harga menu + topping.
+    final num total = _isAllowance ? cartState.paidSubtotal : pricing.total;
+    final allowanceProblem = _isAllowance ? allowanceToppingProblem(cartState) : null;
+    final recipient = _recipient;
+    final blockers = _isAllowance
+        ? [
+            if (allowanceProblem != null) allowanceProblem,
+            if (recipient != null && recipient.balance < total)
+              'Sisa jatah ${recipient.name} ${formatRupiah(recipient.balance)}, pesanan ${formatRupiah(total)}',
+          ]
+        : pricing.blockers;
 
     // Jaga field "Jumlah Bayar" tetap sinkron dengan total saat berubah.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _syncPaidIfUntouched(cartState.total);
+      if (mounted) _syncPaidIfUntouched(total);
     });
 
     return Scaffold(
@@ -481,17 +553,19 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
             // ── Sedotan ──
             _sedotanSection(cartState),
 
-            // ── Promo ──
-            promosAsync.when(
-              data: (promos) => _promoSection(cartState, promos),
+            // ── Promo & diskon (tidak berlaku untuk jatah) ──
+            if (!_isAllowance) ...[
+              if (catalogState.catalog != null) ...[
+                _promoSection(cartState, pricing),
+                _discountSection(cartState, pricing),
+              ]
               // Sama seperti kemasan: kalau seksi ini diam-diam hilang saat
               // gagal dimuat, kasir mengira hari ini memang tidak ada promo.
-              loading: () => _sectionPlaceholder("Promo"),
-              error: (_, __) => _sectionError(
-                "Promo",
-                () => ref.read(posCatalogProvider.notifier).refresh(),
-              ),
-            ),
+              else if (catalogState.error != null && !catalogState.refreshing)
+                _sectionError("Promo", () => ref.read(posCatalogProvider.notifier).refresh())
+              else
+                _sectionPlaceholder("Promo"),
+            ],
 
             // ── Metode Pembayaran ──
             _sectionTitle("Metode Pembayaran", 18),
@@ -504,7 +578,8 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               crossAxisSpacing: 10,
               childAspectRatio: 2.8,
               children: _payMethods.map((m) {
-                // Selain tunai, semua metode butuh server.
+                // Selain tunai, semua metode butuh server — jatah juga, karena
+                // saldonya hanya diketahui server.
                 final blocked = offline.active && m.value != 'CASH';
                 return Opacity(
                   opacity: blocked ? 0.4 : 1,
@@ -517,13 +592,14 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                         _toast("${m.label} belum bisa dipakai: ${_qrisBlockedReason(offline)}", Colors.orange);
                         return;
                       }
+                      if (m.value == 'ALLOWANCE' && !_isAllowance) _enterAllowance(cartState);
                       setState(() {
                         _paymentMethod = m.value;
                         // Reset jumlah bayar ke total saat ganti metode —
                         // sekaligus mengembalikan sinkronisasi otomatis.
                         _paidTouched = false;
-                        _paidAmountController.text =
-                            NumberFormat.decimalPattern('id_ID').format(cartState.total);
+                        _paidAmountController.text = NumberFormat.decimalPattern('id_ID')
+                            .format(m.value == 'ALLOWANCE' ? cartState.paidSubtotal : pricing.total);
                       });
                     },
                   ),
@@ -531,7 +607,12 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               }).toList(),
             ),
 
-            if (!_isCash && !_isQris) ...[
+            if (_isAllowance) ...[
+              const SizedBox(height: 24),
+              _allowanceSection(),
+            ],
+
+            if (!_isCash && !_isQris && !_isAllowance) ...[
               const SizedBox(height: 24),
               _sectionTitle("Nomor Referensi", 18),
               const SizedBox(height: 12),
@@ -551,8 +632,12 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
             const SizedBox(height: 24),
 
             // ── Ringkasan biaya ──
-            _totalsCard(cartState),
-            if (!_isQris) ...[
+            _totalsCard(cartState, pricing),
+            if (blockers.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _blockerBox(blockers),
+            ],
+            if (!_isQris && !_isAllowance) ...[
             const SizedBox(height: 24),
 
             // ── Jumlah Bayar ──
@@ -609,17 +694,19 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
             ),
             const SizedBox(height: 12),
             if (_isCash) ...[
-              _quickCash(cartState.total),
+              _quickCash(total),
               const SizedBox(height: 12),
             ],
-            _changeCard(cartState.total),
+            _changeCard(total),
             ],
             const SizedBox(height: 40),
 
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: cartState.isLoading ? null : () => _submit(cartState.total),
+                onPressed: cartState.isLoading || blockers.isNotEmpty || (_isAllowance && _recipient == null)
+                    ? null
+                    : () => _submit(pricing),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.brandBlue,
                   padding: const EdgeInsets.symmetric(vertical: 20),
@@ -630,9 +717,13 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                 child: cartState.isLoading
                     ? const CircularProgressIndicator(color: Colors.white)
                     : Text(
-                        _isQris
-                            ? "Buat QR ${formatRupiah(cartState.total)}"
-                            : "Konfirmasi & Bayar ${formatRupiah(cartState.total)}",
+                        _isAllowance
+                            ? (_recipient == null
+                                ? "Pilih penerima jatah"
+                                : "Catat Jatah ${formatRupiah(total)} untuk ${_recipient!.name}")
+                            : _isQris
+                                ? "Buat QR ${formatRupiah(total)}"
+                                : "Konfirmasi & Bayar ${formatRupiah(total)}",
                         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
               ),
             ),
@@ -1087,10 +1178,19 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   }
 
   // ── Section promo ──
-  Widget _promoSection(ProductTransactionState cart, List<Promo> promos) {
+  /// Beli X gratis Y dipilih kasir; promo persen terpasang sendiri dari
+  /// katalog dan tampil di ringkasan biaya.
+  Widget _promoSection(ProductTransactionState cart, CheckoutPricing pricing) {
+    final selected = cart.selectedPromo;
+    // Promo yang sudah dipilih tetap tampil walau baru saja berhenti berlaku,
+    // supaya kasir bisa melihat alasannya dan melepasnya.
+    final promos = [
+      ...pricing.buyFreePromos,
+      if (selected != null && !pricing.buyFreePromos.any((p) => p.id == selected.id)) selected,
+    ];
+    final dropped = pricing.result.droppedPercent;
     if (promos.isEmpty) return const SizedBox.shrink();
 
-    final selected = cart.selectedPromo;
     final maxFree = selected?.maxFreeQty(cart.paidQty) ?? 0;
     final remaining = maxFree - cart.selectedFreeQty;
 
@@ -1109,7 +1209,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
             ...promos.map((p) => _promoChip(
                   "${p.name} (B${p.buyQty}G${p.freeQty})",
                   selected?.id == p.id,
-                  () => ref.read(productTransactionProvider.notifier).selectPromo(p),
+                  () => _selectBuyFree(p, cart),
                 )),
           ],
         ),
@@ -1140,7 +1240,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
-                onPressed: remaining > 0 ? _pickFreeItem : null,
+                onPressed: remaining > 0 ? () => _pickFreeItem(selected) : null,
                 icon: const Icon(Icons.add, size: 18),
                 label: const Text("Tambah item gratis"),
                 style: OutlinedButton.styleFrom(
@@ -1152,9 +1252,197 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               ),
             ),
           ],
+          if (dropped != null) ...[
+            const SizedBox(height: 8),
+            _infoBox(
+              'Promo "${dropped.name}" (hemat ${formatRupiah(dropped.discount)}) dilepas: '
+              'tidak bisa digabung dengan "${selected.name}". Pilih "Tanpa promo" untuk memakainya lagi.',
+            ),
+          ],
         ],
         const SizedBox(height: 24),
       ],
+    );
+  }
+
+  /// Pilih beli X gratis Y. Diskon manual tidak bisa ikut, dan promo persen
+  /// yang tidak boleh digabung akan dilepas — kasir diberi tahu keduanya.
+  void _selectBuyFree(Promo promo, ProductTransactionState cart) {
+    if (cart.manualDiscount != null) {
+      _toast("Diskon manual dilepas: tidak bisa bersama promo", Colors.orange);
+    }
+    ref.read(productTransactionProvider.notifier).selectPromo(promo);
+  }
+
+  // ── Section diskon manual ──
+  Widget _discountSection(ProductTransactionState cart, CheckoutPricing pricing) {
+    final discount = cart.manualDiscount;
+    // Akun tanpa batas diskon (atau belum ada alasan aktif) tidak melihat
+    // tombolnya sama sekali — kecuali diskon yang terlanjur dipasang.
+    if (!pricing.canDiscount && discount == null) return const SizedBox.shrink();
+    final notifier = ref.read(productTransactionProvider.notifier);
+    final blockedByPromo = pricing.hasPromo || (cart.selectedPromo != null && cart.promoFreeItems.isNotEmpty);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionTitle("Diskon", 18),
+        const SizedBox(height: 12),
+        if (discount != null)
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 8, 4, 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppTheme.borderLight),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        discount.isPercent ? "Diskon ${discount.value}%" : "Diskon ${formatRupiah(discount.value)}",
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                      ),
+                      Text(discount.reasonName,
+                          style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                    ],
+                  ),
+                ),
+                TextButton(
+                  onPressed: blockedByPromo ? null : () => _editDiscount(cart, pricing),
+                  child: const Text("Ubah"),
+                ),
+                IconButton(
+                  tooltip: "Hapus diskon",
+                  onPressed: notifier.clearManualDiscount,
+                  icon: const Icon(Icons.close, size: 18, color: AppTheme.danger),
+                ),
+              ],
+            ),
+          )
+        else if (blockedByPromo)
+          _infoBox("Diskon manual tidak bisa digabung dengan promo yang sedang terpasang.")
+        else
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => _editDiscount(cart, pricing),
+              icon: const Icon(Icons.percent, size: 18),
+              label: Text("Beri diskon (maks ${pricing.discountLimitPct}%)"),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.brandBlue,
+                side: const BorderSide(color: AppTheme.brandBlue),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  Future<void> _editDiscount(ProductTransactionState cart, CheckoutPricing pricing) async {
+    final result = await showManualDiscountSheet(
+      context,
+      subtotal: pricing.result.subtotal,
+      limitPct: pricing.discountLimitPct,
+      reasons: pricing.reasons,
+      initial: cart.manualDiscount,
+    );
+    if (result == null || !mounted) return;
+    ref.read(productTransactionProvider.notifier).setManualDiscount(result);
+  }
+
+  // ── Section jatah karyawan ──
+  /// Pindah ke mode jatah: promo dan diskon tidak berlaku di sana, jadi
+  /// dilepas dengan pemberitahuan.
+  void _enterAllowance(ProductTransactionState cart) {
+    final notifier = ref.read(productTransactionProvider.notifier);
+    final hadPromo = cart.selectedPromo != null || cart.manualDiscount != null;
+    notifier.selectPromo(null);
+    notifier.clearManualDiscount();
+    if (hadPromo) _toast("Promo dan diskon dilepas: tidak berlaku untuk jatah", Colors.orange);
+  }
+
+  Widget _allowanceSection() {
+    final r = _recipient;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionTitle("Penerima Jatah", 18),
+        const SizedBox(height: 12),
+        InkWell(
+          onTap: _pickRecipient,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: r == null ? AppTheme.brandBlue : AppTheme.borderLight),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.badge_outlined, color: AppTheme.brandBlue),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: r == null
+                      ? const Text("Pilih siapa yang menerima",
+                          style: TextStyle(color: AppTheme.brandBlue, fontWeight: FontWeight.w700))
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(r.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                            Text(
+                              "Sisa jatah ${formatRupiah(r.balance)}"
+                              "${r.atThisBranch || r.locationName.isEmpty ? '' : ' · absen di ${r.locationName}'}",
+                              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                            ),
+                          ],
+                        ),
+                ),
+                Text(r == null ? "" : "Ganti",
+                    style: const TextStyle(color: AppTheme.brandBlue, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        _infoBox("Jatah tidak dibayar dan tidak masuk omzet. Tanpa promo maupun diskon; "
+            "paling banyak $allowanceMaxToppings topping per minuman."),
+      ],
+    );
+  }
+
+  Future<void> _pickRecipient() async {
+    final picked = await showAllowanceRecipientPicker(context);
+    if (picked == null || !mounted) return;
+    setState(() => _recipient = picked);
+  }
+
+  /// Hal yang membuat pembayaran pasti ditolak server, ditampilkan di atas
+  /// tombol bayar (yang dimatikan selama daftar ini tidak kosong).
+  Widget _blockerBox(List<String> messages) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.danger.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.danger.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final m in messages)
+            Text(m, style: const TextStyle(fontSize: 13, color: AppTheme.danger, fontWeight: FontWeight.w600)),
+        ],
+      ),
     );
   }
 
@@ -1209,40 +1497,52 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   /// termurah yang dibeli (aturan BE `ErrPOSFreeItemNotCheapest`). Di bawah
   /// batas itu pelanggan bebas memilih, termasuk menu yang tidak dia pesan —
   /// jadi pembeli kopi/milkshake pun tetap kebagian teh gratis.
-  Future<void> _pickFreeItem() async {
-    final items = ref.read(productTransactionProvider).items;
+  ///
+  /// Cakupan promo (mis. "hanya XL") berlaku untuk semua item di keranjang dan
+  /// untuk bonusnya; aturannya dari promo itu sendiri, sama dengan server.
+  Future<void> _pickFreeItem(Promo promo) async {
+    final cart = ref.read(productTransactionProvider);
+    final items = cart.items;
     if (items.isEmpty) {
       _toast("Tambahkan item ke keranjang dulu.", Colors.orange);
       return;
     }
-    // Promo item gratis hanya berlaku bila SEMUA item di keranjang berukuran XL
-    // (deteksi dari nama produk atau nama varian).
-    final allXL =
-        items.every((i) => nameHasXL(i.product.name) || nameHasXL(i.variant?.name));
-    if (!allXL) {
-      _toast("Item gratis hanya untuk transaksi yang semua itemnya ukuran XL.",
-          Colors.orange);
+    final outOfScope = pricingLinesOf(cart).where((l) => !lineInScope(promo, l)).firstOrNull;
+    if (outOfScope != null) {
+      _toast('Promo "${promo.name}" hanya berlaku bila semua item di keranjang termasuk cakupannya; '
+          '${outOfScope.label} tidak termasuk.', Colors.orange);
       return;
     }
+    bool inScope(Product p, ProductVariant? v) => lineInScope(
+          promo,
+          PricingLine(
+            productId: p.id,
+            variantId: v?.id ?? 0,
+            categoryId: p.categoryId ?? 0,
+            productName: p.name,
+            variantName: v?.name ?? '',
+            qty: 1,
+            unitPrice: 0,
+          ),
+        );
     // Harga dasar item termurah di keranjang (harga variant/produk, tanpa topping).
     final cheapest =
         items.map((i) => i.unitPrice).reduce((a, b) => a < b ? a : b);
 
-    final product = await showFreeItemPicker(context, maxPrice: cheapest);
+    final product = await showFreeItemPicker(context, maxPrice: cheapest, inScope: inScope);
     if (product == null || !mounted) return;
 
-    // Varian bonus bebas selama masih XL, siap dibuat, dan ≤ batas harga.
-    // Variannya diambil dari katalog yang sudah dimuat — di situ sudah ada
-    // penanda siap per cabang, jadi tidak perlu memanggil API varian lagi dan
-    // menu yang bahannya habis tidak ikut ditawarkan.
+    // Varian bonus bebas selama masih dalam cakupan, siap dibuat, dan ≤ batas
+    // harga. Variannya diambil dari katalog yang sudah dimuat — di situ sudah
+    // ada penanda siap per cabang, jadi tidak perlu memanggil API varian lagi
+    // dan menu yang bahannya habis tidak ikut ditawarkan.
     ProductVariant? variant;
     if (product.hasVariants) {
       final variants = product.variants
-          .where((v) =>
-              nameHasXL(v.name) && v.ready && v.sellingPriceNum <= cheapest)
+          .where((v) => inScope(product, v) && v.ready && v.sellingPriceNum <= cheapest)
           .toList();
       if (variants.isEmpty) {
-        _toast("Tidak ada varian XL yang siap dan memenuhi batas harga.",
+        _toast("Tidak ada varian dalam cakupan promo yang siap dan memenuhi batas harga.",
             Colors.orange);
         return;
       }
@@ -1296,7 +1596,21 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     );
   }
 
-  Widget _totalsCard(ProductTransactionState cart) {
+  Widget _totalsCard(ProductTransactionState cart, CheckoutPricing pricing) {
+    final r = pricing.result;
+    if (_isAllowance) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppTheme.borderLight),
+        ),
+        child: _totalRow("Total jatah", formatRupiah(cart.paidSubtotal), bold: true),
+      );
+    }
+    final bonus = cart.selectedPromo != null && cart.promoFreeItems.isNotEmpty;
+    final manual = cart.manualDiscount;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1306,13 +1620,22 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       ),
       child: Column(
         children: [
-          _totalRow("Subtotal", formatRupiah(cart.subtotal)),
-          if (cart.promoDiscount > 0) ...[
+          _totalRow("Subtotal", formatRupiah(r.subtotal)),
+          if (bonus && r.freeDiscount > 0) ...[
             const SizedBox(height: 8),
-            _totalRow("Diskon Promo", "- ${formatRupiah(cart.promoDiscount)}", color: Colors.green),
+            _totalRow(cart.selectedPromo!.name, "- ${formatRupiah(r.freeDiscount)}", color: Colors.green),
+          ],
+          if (r.percent != null) ...[
+            const SizedBox(height: 8),
+            _totalRow("Promo ${r.percent!.name}", "- ${formatRupiah(r.percent!.discount)}", color: Colors.green),
+          ],
+          if (manual != null && r.manualDiscount > 0) ...[
+            const SizedBox(height: 8),
+            _totalRow("Diskon (${manual.reasonName})", "- ${formatRupiah(r.manualDiscount)}",
+                color: Colors.green),
           ],
           const Divider(height: 24, color: AppTheme.borderLight),
-          _totalRow("Total", formatRupiah(cart.total), bold: true),
+          _totalRow("Total", formatRupiah(r.total), bold: true),
         ],
       ),
     );
@@ -1324,9 +1647,14 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       fontWeight: bold ? FontWeight.w800 : FontWeight.w600,
       color: color ?? (bold ? AppTheme.textPrimary : AppTheme.textSecondary),
     );
+    // Nama promo dan alasan diskon diketik owner dan bisa panjang: labelnya
+    // yang mengalah, angkanya selalu utuh.
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [Text(label, style: style), Text(value, style: style)],
+      children: [
+        Expanded(child: Text(label, style: style, overflow: TextOverflow.ellipsis)),
+        const SizedBox(width: 12),
+        Text(value, style: style),
+      ],
     );
   }
 

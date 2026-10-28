@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:pos_mobile/core/promo_engine.dart';
 import 'package:pos_mobile/data/local/outbox_store.dart';
 import 'package:pos_mobile/data/models/pos_catalog_model.dart';
 import 'package:pos_mobile/data/models/receipt_model.dart';
@@ -42,8 +43,13 @@ String offlineClientRef(DateTime day, int seq) {
 ///
 /// Fungsi murni: angka yang sama selalu menghasilkan nota yang sama. Dipanggil
 /// di dalam transaksi penyimpanan, setelah nomor nota dan antrean dipesan.
+///
+/// [pricing] adalah hitungan yang ditunjukkan ke pembeli (promo persen, diskon
+/// manual; bawaannya [basicPricing]); totalnya menjadi total nota. Server
+/// menghitung ulang dan mencatat selisihnya, tidak menolak.
 OutboxDraft buildOfflineSale({
   required ProductTransactionState cart,
+  PricingResult? pricing,
   required OfflineSaleContext context,
   required OfflineNumbers numbers,
   required String idempotencyKey,
@@ -52,7 +58,9 @@ OutboxDraft buildOfflineSale({
 }) {
   final clientRef = offlineClientRef(context.occurredAt, numbers.noteSeq);
   final lines = saleLinesOf(cart, withPrices: true);
-  final total = cart.total.toInt();
+  pricing ??= basicPricing(cart);
+  final total = pricing.total;
+  final manual = cart.manualDiscount;
   final name = (customerName == null || customerName.trim().isEmpty) ? null : customerName.trim();
 
   final payload = <String, dynamic>{
@@ -61,6 +69,13 @@ OutboxDraft buildOfflineSale({
     'paid': paid,
     'discount': 0,
     'total': total,
+    'pricing_version': 2,
+    if (pricing.percent != null) 'percent_promo_id': pricing.percent!.id,
+    if (manual != null) ...{
+      'discount_kind': manual.kind,
+      'discount_value': manual.value,
+      'discount_reason_id': manual.reasonId,
+    },
     // Server membaca waktu dengan zona; jam lokal tanpa zona akan ditolak.
     'occurred_at': context.occurredAt.toUtc().toIso8601String(),
     'client_ref': clientRef,
@@ -80,6 +95,7 @@ OutboxDraft buildOfflineSale({
 
   final receipt = _receipt(
     cart: cart,
+    pricing: pricing,
     context: context,
     clientRef: clientRef,
     queueNo: numbers.queueNo,
@@ -97,6 +113,7 @@ OutboxDraft buildOfflineSale({
 
 Receipt _receipt({
   required ProductTransactionState cart,
+  required PricingResult pricing,
   required OfflineSaleContext context,
   required String clientRef,
   required int queueNo,
@@ -150,11 +167,14 @@ Receipt _receipt({
     ],
     plastics: [for (final p in cart.plastics) ReceiptPlastic(name: p.plastic.name, qty: p.qty)],
     sedotans: [for (final s in cart.sedotans) ReceiptSedotan(name: s.sedotan.name, qty: s.qty)],
-    subtotal: cart.subtotal,
-    discount: 0,
-    promoDiscount: cart.promoDiscount,
+    subtotal: pricing.subtotal,
+    discount: pricing.manualDiscount,
+    discountReason: pricing.manualDiscount > 0 ? cart.manualDiscount?.reasonName : null,
+    promoDiscount: pricing.promoDiscount,
     promos: [
       for (final b in bonuses) ReceiptPromo(name: promo!.name, discount: b.discountValue),
+      if (pricing.percent != null)
+        ReceiptPromo(name: pricing.percent!.name, discount: pricing.percent!.discount),
     ],
     tax: 0,
     total: total,

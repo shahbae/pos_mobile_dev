@@ -1,0 +1,263 @@
+{
+  "_tentang": "Kumpulan kasus mesin promo & diskon manual (Tahap 3, F8/F9). Dibaca tes Go (internal/services/promo_engine_test.go) dan tes Dart app kasir (test/fixtures/promo_cases.json, salinan berkas ini). Kasus baru ditambahkan DI SINI lalu disalin, jangan di salah satu tes saja. Uang dalam rupiah bulat; jam dalam WIB; days 0=Minggu … 6=Sabtu.",
+  "promo_templates": {
+    "persen15_juntikebon_malam": {
+      "id": 1, "name": "Diskon 15% malam", "kind": "percent", "percent": 15, "scope": "all",
+      "include_toppings": true, "days": [0, 1, 2, 3, 4, 5, 6], "start_time": "20:00", "end_time": "22:00",
+      "branch_ids": [12], "channel_pos": true, "active": true
+    }
+  },
+  "cases": [
+    {
+      "name": "F8-1 promo 15% jam 20.00-22.00 di Juntikebon terpasang jam 20.30 di Juntikebon",
+      "now": "2026-11-03T20:30:00+07:00", "branch_id": 12,
+      "lines": [{"product_id": 1, "variant_id": 11, "category_id": 1, "product_name": "Es Teh", "variant_name": "M", "qty": 1, "unit_price": 8000, "topping_amount": 3000}],
+      "promos": ["persen15_juntikebon_malam"],
+      "expect": {"subtotal": 11000, "percent_id": 1, "percent_discount": 1650, "total": 9350}
+    },
+    {
+      "name": "F8-1 promo yang sama tidak terpasang di Karangampel",
+      "now": "2026-11-03T20:30:00+07:00", "branch_id": 7,
+      "lines": [{"product_id": 1, "variant_id": 11, "category_id": 1, "product_name": "Es Teh", "variant_name": "M", "qty": 1, "unit_price": 8000, "topping_amount": 3000}],
+      "promos": ["persen15_juntikebon_malam"],
+      "expect": {"subtotal": 11000, "percent_id": null, "percent_discount": 0, "total": 11000}
+    },
+    {
+      "name": "F8-1 promo yang sama tidak terpasang jam 19.59",
+      "now": "2026-11-03T19:59:00+07:00", "branch_id": 12,
+      "lines": [{"product_id": 1, "variant_id": 11, "category_id": 1, "product_name": "Es Teh", "variant_name": "M", "qty": 1, "unit_price": 8000, "topping_amount": 3000}],
+      "promos": ["persen15_juntikebon_malam"],
+      "expect": {"subtotal": 11000, "percent_id": null, "percent_discount": 0, "total": 11000}
+    },
+    {
+      "name": "jam selesai tidak ikut: jam 22.00 promo sudah lewat",
+      "now": "2026-11-03T22:00:00+07:00", "branch_id": 12,
+      "lines": [{"product_id": 1, "variant_id": 11, "category_id": 1, "product_name": "Es Teh", "variant_name": "M", "qty": 1, "unit_price": 8000, "topping_amount": 3000}],
+      "promos": ["persen15_juntikebon_malam"],
+      "expect": {"subtotal": 11000, "percent_id": null, "percent_discount": 0, "total": 11000}
+    },
+    {
+      "name": "F8-2 es teh Rp8.000 + topping Rp3.000, promo 15% = potongan Rp1.650",
+      "now": "2026-11-03T10:00:00+07:00", "branch_id": 7,
+      "lines": [{"product_id": 1, "variant_id": 11, "category_id": 1, "product_name": "Es Teh", "variant_name": "M", "qty": 1, "unit_price": 8000, "topping_amount": 3000}],
+      "promos": [{"id": 2, "name": "15% semua", "kind": "percent", "percent": 15, "scope": "all", "include_toppings": true, "days": [0,1,2,3,4,5,6], "channel_pos": true, "active": true}],
+      "expect": {"subtotal": 11000, "percent_id": 2, "percent_discount": 1650, "total": 9350}
+    },
+    {
+      "name": "topping tidak ikut terpotong bila include_toppings mati",
+      "now": "2026-11-03T10:00:00+07:00", "branch_id": 7,
+      "lines": [{"product_id": 1, "variant_id": 11, "category_id": 1, "product_name": "Es Teh", "variant_name": "M", "qty": 1, "unit_price": 8000, "topping_amount": 3000}],
+      "promos": [{"id": 2, "name": "15% tanpa topping", "kind": "percent", "percent": 15, "scope": "all", "include_toppings": false, "days": [0,1,2,3,4,5,6], "channel_pos": true, "active": true}],
+      "expect": {"subtotal": 11000, "percent_id": 2, "percent_discount": 1200, "total": 9800}
+    },
+    {
+      "name": "potongan dibulatkan ke bawah ke rupiah penuh (7.333 x 15% = 1.099,95 -> 1.099)",
+      "now": "2026-11-03T10:00:00+07:00", "branch_id": 7,
+      "lines": [{"product_id": 1, "variant_id": 0, "category_id": 1, "product_name": "Teh Aneh", "qty": 1, "unit_price": 7333}],
+      "promos": [{"id": 2, "name": "15% semua", "kind": "percent", "percent": 15, "scope": "all", "include_toppings": true, "days": [0,1,2,3,4,5,6], "channel_pos": true, "active": true}],
+      "expect": {"subtotal": 7333, "percent_id": 2, "percent_discount": 1099, "total": 6234}
+    },
+    {
+      "name": "F8-3 potongan maksimal Rp10.000 tidak pernah dilewati",
+      "now": "2026-11-03T10:00:00+07:00", "branch_id": 7,
+      "lines": [{"product_id": 3, "variant_id": 0, "category_id": 2, "product_name": "Milkshake", "qty": 10, "unit_price": 10000}],
+      "promos": [{"id": 3, "name": "15% maks 10rb", "kind": "percent", "percent": 15, "scope": "all", "include_toppings": true, "max_discount": 10000, "days": [0,1,2,3,4,5,6], "channel_pos": true, "active": true}],
+      "expect": {"subtotal": 100000, "percent_id": 3, "percent_discount": 10000, "total": 90000}
+    },
+    {
+      "name": "F8-4 batas 100 transaksi: transaksi ke-100 masih dapat",
+      "now": "2026-11-03T10:00:00+07:00", "branch_id": 7,
+      "lines": [{"product_id": 1, "variant_id": 0, "category_id": 1, "product_name": "Es Teh", "qty": 1, "unit_price": 10000}],
+      "promos": [{"id": 4, "name": "10% kuota 100", "kind": "percent", "percent": 10, "scope": "all", "include_toppings": true, "limit_total": 100, "days": [0,1,2,3,4,5,6], "channel_pos": true, "active": true}],
+      "usage": {"4": {"total": 99, "today": 5}},
+      "expect": {"subtotal": 10000, "percent_id": 4, "percent_discount": 1000, "total": 9000}
+    },
+    {
+      "name": "F8-4 batas 100 transaksi: berhenti sesudah transaksi ke-100",
+      "now": "2026-11-03T10:00:00+07:00", "branch_id": 7,
+      "lines": [{"product_id": 1, "variant_id": 0, "category_id": 1, "product_name": "Es Teh", "qty": 1, "unit_price": 10000}],
+      "promos": [{"id": 4, "name": "10% kuota 100", "kind": "percent", "percent": 10, "scope": "all", "include_toppings": true, "limit_total": 100, "days": [0,1,2,3,4,5,6], "channel_pos": true, "active": true}],
+      "usage": {"4": {"total": 100, "today": 6}},
+      "expect": {"subtotal": 10000, "percent_id": null, "percent_discount": 0, "total": 10000}
+    },
+    {
+      "name": "batas harian habis",
+      "now": "2026-11-03T10:00:00+07:00", "branch_id": 7,
+      "lines": [{"product_id": 1, "variant_id": 0, "category_id": 1, "product_name": "Es Teh", "qty": 1, "unit_price": 10000}],
+      "promos": [{"id": 4, "name": "10% 20 per hari", "kind": "percent", "percent": 10, "scope": "all", "include_toppings": true, "limit_daily": 20, "days": [0,1,2,3,4,5,6], "channel_pos": true, "active": true}],
+      "usage": {"4": {"total": 300, "today": 20}},
+      "expect": {"subtotal": 10000, "percent_id": null, "percent_discount": 0, "total": 10000}
+    },
+    {
+      "name": "F8-5 promo berkanal Web Pickup tidak muncul di POS",
+      "now": "2026-11-03T10:00:00+07:00", "branch_id": 7,
+      "lines": [{"product_id": 1, "variant_id": 0, "category_id": 1, "product_name": "Es Teh", "qty": 1, "unit_price": 10000}],
+      "promos": [{"id": 5, "name": "Pickup 20%", "kind": "percent", "percent": 20, "scope": "all", "include_toppings": true, "days": [0,1,2,3,4,5,6], "channel_pos": false, "channel_pickup": true, "active": true}],
+      "expect": {"subtotal": 10000, "percent_id": null, "percent_discount": 0, "total": 10000}
+    },
+    {
+      "name": "dua promo persen cocok: potongan terbesar yang dipakai",
+      "now": "2026-11-03T10:00:00+07:00", "branch_id": 7,
+      "lines": [{"product_id": 1, "variant_id": 0, "category_id": 1, "product_name": "Es Teh", "qty": 2, "unit_price": 10000}],
+      "promos": [
+        {"id": 6, "name": "10%", "kind": "percent", "percent": 10, "scope": "all", "include_toppings": true, "days": [0,1,2,3,4,5,6], "channel_pos": true, "active": true},
+        {"id": 7, "name": "20% maks 3rb", "kind": "percent", "percent": 20, "scope": "all", "include_toppings": true, "max_discount": 3000, "days": [0,1,2,3,4,5,6], "channel_pos": true, "active": true},
+        {"id": 8, "name": "25% minimal 50rb", "kind": "percent", "percent": 25, "scope": "all", "include_toppings": true, "min_spend": 50000, "days": [0,1,2,3,4,5,6], "channel_pos": true, "active": true}
+      ],
+      "expect": {"subtotal": 20000, "percent_id": 7, "percent_discount": 3000, "total": 17000}
+    },
+    {
+      "name": "potongan seri: id terkecil",
+      "now": "2026-11-03T10:00:00+07:00", "branch_id": 7,
+      "lines": [{"product_id": 1, "variant_id": 0, "category_id": 1, "product_name": "Es Teh", "qty": 1, "unit_price": 10000}],
+      "promos": [
+        {"id": 10, "name": "10% B", "kind": "percent", "percent": 10, "scope": "all", "include_toppings": true, "days": [0,1,2,3,4,5,6], "channel_pos": true, "active": true},
+        {"id": 9, "name": "10% A", "kind": "percent", "percent": 10, "scope": "all", "include_toppings": true, "days": [0,1,2,3,4,5,6], "channel_pos": true, "active": true}
+      ],
+      "expect": {"subtotal": 10000, "percent_id": 9, "percent_discount": 1000, "total": 9000}
+    },
+    {
+      "name": "cakupan kategori: hanya milkshake yang terpotong",
+      "now": "2026-11-03T10:00:00+07:00", "branch_id": 7,
+      "lines": [
+        {"product_id": 1, "variant_id": 0, "category_id": 1, "product_name": "Es Teh", "qty": 1, "unit_price": 8000, "topping_amount": 2000},
+        {"product_id": 3, "variant_id": 0, "category_id": 2, "product_name": "Milkshake", "qty": 1, "unit_price": 15000, "topping_amount": 3000}
+      ],
+      "promos": [{"id": 11, "name": "Milkshake 20%", "kind": "percent", "percent": 20, "scope": "targets", "targets": [{"type": "category", "id": 2}], "include_toppings": true, "days": [0,1,2,3,4,5,6], "channel_pos": true, "active": true}],
+      "expect": {"subtotal": 28000, "percent_id": 11, "percent_discount": 3600, "total": 24400}
+    },
+    {
+      "name": "di luar periode tanggal tidak terpasang",
+      "now": "2026-12-01T10:00:00+07:00", "branch_id": 7,
+      "lines": [{"product_id": 1, "variant_id": 0, "category_id": 1, "product_name": "Es Teh", "qty": 1, "unit_price": 10000}],
+      "promos": [{"id": 12, "name": "November 10%", "kind": "percent", "percent": 10, "scope": "all", "include_toppings": true, "start_date": "2026-11-01", "end_date": "2026-11-30", "days": [0,1,2,3,4,5,6], "channel_pos": true, "active": true}],
+      "expect": {"subtotal": 10000, "percent_id": null, "percent_discount": 0, "total": 10000}
+    },
+    {
+      "name": "hari yang tidak dipilih tidak terpasang (3 Nov 2026 = Selasa)",
+      "now": "2026-11-03T10:00:00+07:00", "branch_id": 7,
+      "lines": [{"product_id": 1, "variant_id": 0, "category_id": 1, "product_name": "Es Teh", "qty": 1, "unit_price": 10000}],
+      "promos": [{"id": 13, "name": "Jumat 10%", "kind": "percent", "percent": 10, "scope": "all", "include_toppings": true, "days": [5], "channel_pos": true, "active": true}],
+      "expect": {"subtotal": 10000, "percent_id": null, "percent_discount": 0, "total": 10000}
+    },
+    {
+      "name": "beli X gratis Y yang tidak boleh digabung melepas promo persen",
+      "now": "2026-11-03T10:00:00+07:00", "branch_id": 7,
+      "lines": [{"product_id": 1, "variant_id": 0, "category_id": 1, "product_name": "Es Teh XL", "qty": 3, "unit_price": 10000, "free_qty": 1}],
+      "promos": [
+        {"id": 20, "name": "Beli 2 gratis 1", "kind": "buy_free", "buy_qty": 2, "free_qty": 1, "scope": "all", "days": [0,1,2,3,4,5,6], "channel_pos": true, "active": true},
+        {"id": 21, "name": "10% semua", "kind": "percent", "percent": 10, "scope": "all", "include_toppings": true, "stackable": true, "days": [0,1,2,3,4,5,6], "channel_pos": true, "active": true}
+      ],
+      "chosen_buy_free": [20], "free_discount": 10000,
+      "expect": {"subtotal": 30000, "percent_id": null, "percent_discount": 0, "dropped_percent_id": 21, "total": 20000}
+    },
+    {
+      "name": "keduanya boleh digabung: persen dihitung dari gelas yang dibayar saja",
+      "now": "2026-11-03T10:00:00+07:00", "branch_id": 7,
+      "lines": [{"product_id": 1, "variant_id": 0, "category_id": 1, "product_name": "Es Teh XL", "qty": 3, "unit_price": 10000, "free_qty": 1}],
+      "promos": [
+        {"id": 20, "name": "Beli 2 gratis 1", "kind": "buy_free", "buy_qty": 2, "free_qty": 1, "scope": "all", "stackable": true, "days": [0,1,2,3,4,5,6], "channel_pos": true, "active": true},
+        {"id": 21, "name": "10% semua", "kind": "percent", "percent": 10, "scope": "all", "include_toppings": true, "stackable": true, "days": [0,1,2,3,4,5,6], "channel_pos": true, "active": true}
+      ],
+      "chosen_buy_free": [20], "free_discount": 10000,
+      "expect": {"subtotal": 30000, "percent_id": 21, "percent_discount": 2000, "total": 18000}
+    },
+    {
+      "name": "F9 diskon persen 10% dalam batas 10%",
+      "now": "2026-11-03T10:00:00+07:00", "branch_id": 7,
+      "lines": [{"product_id": 1, "variant_id": 0, "category_id": 1, "product_name": "Es Teh", "qty": 3, "unit_price": 10000}],
+      "promos": [],
+      "manual": {"kind": "percent", "value": 10, "limit_pct": 10, "has_reason": true},
+      "expect": {"subtotal": 30000, "percent_id": null, "percent_discount": 0, "manual_discount": 3000, "total": 27000}
+    },
+    {
+      "name": "F9-1 kasir batas 10% tidak bisa diskon 15% (persen)",
+      "now": "2026-11-03T10:00:00+07:00", "branch_id": 7,
+      "lines": [{"product_id": 1, "variant_id": 0, "category_id": 1, "product_name": "Es Teh", "qty": 3, "unit_price": 10000}],
+      "promos": [],
+      "manual": {"kind": "percent", "value": 15, "limit_pct": 10, "has_reason": true},
+      "expect": {"subtotal": 30000, "percent_id": null, "percent_discount": 0, "manual_discount": 4500, "total": 25500, "violations": ["discount_limit"]}
+    },
+    {
+      "name": "F9-1 kasir batas 10% tidak bisa diskon nominal setara 15% (Rp4.500 dari Rp30.000)",
+      "now": "2026-11-03T10:00:00+07:00", "branch_id": 7,
+      "lines": [{"product_id": 1, "variant_id": 0, "category_id": 1, "product_name": "Es Teh", "qty": 3, "unit_price": 10000}],
+      "promos": [],
+      "manual": {"kind": "amount", "value": 4500, "limit_pct": 10, "has_reason": true},
+      "expect": {"subtotal": 30000, "percent_id": null, "percent_discount": 0, "manual_discount": 4500, "total": 25500, "violations": ["discount_limit"]}
+    },
+    {
+      "name": "diskon nominal tepat di batas (Rp3.000 dari Rp30.000, batas 10%)",
+      "now": "2026-11-03T10:00:00+07:00", "branch_id": 7,
+      "lines": [{"product_id": 1, "variant_id": 0, "category_id": 1, "product_name": "Es Teh", "qty": 3, "unit_price": 10000}],
+      "promos": [],
+      "manual": {"kind": "amount", "value": 3000, "limit_pct": 10, "has_reason": true},
+      "expect": {"subtotal": 30000, "percent_id": null, "percent_discount": 0, "manual_discount": 3000, "total": 27000}
+    },
+    {
+      "name": "F9-2 diskon tanpa alasan ditolak",
+      "now": "2026-11-03T10:00:00+07:00", "branch_id": 7,
+      "lines": [{"product_id": 1, "variant_id": 0, "category_id": 1, "product_name": "Es Teh", "qty": 3, "unit_price": 10000}],
+      "promos": [],
+      "manual": {"kind": "amount", "value": 1000, "limit_pct": 10, "has_reason": false},
+      "expect": {"subtotal": 30000, "percent_id": null, "percent_discount": 0, "manual_discount": 1000, "total": 29000, "violations": ["discount_reason"]}
+    },
+    {
+      "name": "F9-3 transaksi dengan promo persen tidak bisa diberi diskon manual",
+      "now": "2026-11-03T10:00:00+07:00", "branch_id": 7,
+      "lines": [{"product_id": 1, "variant_id": 0, "category_id": 1, "product_name": "Es Teh", "qty": 3, "unit_price": 10000}],
+      "promos": [{"id": 2, "name": "15% semua", "kind": "percent", "percent": 15, "scope": "all", "include_toppings": true, "days": [0,1,2,3,4,5,6], "channel_pos": true, "active": true}],
+      "manual": {"kind": "amount", "value": 1000, "limit_pct": 10, "has_reason": true},
+      "expect": {"subtotal": 30000, "percent_id": 2, "percent_discount": 4500, "manual_discount": 1000, "total": 24500, "violations": ["discount_with_promo"]}
+    },
+    {
+      "name": "F9-3 transaksi dengan beli X gratis Y tidak bisa diberi diskon manual",
+      "now": "2026-11-03T10:00:00+07:00", "branch_id": 7,
+      "lines": [{"product_id": 1, "variant_id": 0, "category_id": 1, "product_name": "Es Teh XL", "qty": 3, "unit_price": 10000, "free_qty": 1}],
+      "promos": [{"id": 20, "name": "Beli 2 gratis 1", "kind": "buy_free", "buy_qty": 2, "free_qty": 1, "scope": "all", "days": [0,1,2,3,4,5,6], "channel_pos": true, "active": true}],
+      "chosen_buy_free": [20], "free_discount": 10000,
+      "manual": {"kind": "percent", "value": 5, "limit_pct": 10, "has_reason": true},
+      "expect": {"subtotal": 30000, "percent_id": null, "percent_discount": 0, "manual_discount": 1500, "total": 18500, "violations": ["discount_with_promo"]}
+    }
+  ],
+  "scope_cases": [
+    {
+      "name": "XL: semua item XL dan gratisnya XL",
+      "promo": {"id": 20, "name": "Beli 2 gratis 1 XL", "kind": "buy_free", "scope": "targets", "targets": [{"type": "size", "value": "XL"}]},
+      "lines": [{"product_id": 1, "variant_id": 11, "product_name": "Es Teh", "variant_name": "XL", "qty": 3}],
+      "free": {"product_id": 1, "variant_id": 11, "product_name": "Es Teh", "variant_name": "XL"},
+      "ok": true
+    },
+    {
+      "name": "XL di nama produk juga dihitung",
+      "promo": {"id": 20, "name": "Beli 2 gratis 1 XL", "kind": "buy_free", "scope": "targets", "targets": [{"type": "size", "value": "XL"}]},
+      "lines": [{"product_id": 2, "variant_id": 0, "product_name": "Thai Tea XL", "qty": 3}],
+      "free": {"product_id": 2, "variant_id": 0, "product_name": "Thai Tea XL"},
+      "ok": true
+    },
+    {
+      "name": "ada satu item M di keranjang: promo XL tidak berlaku",
+      "promo": {"id": 20, "name": "Beli 2 gratis 1 XL", "kind": "buy_free", "scope": "targets", "targets": [{"type": "size", "value": "XL"}]},
+      "lines": [
+        {"product_id": 1, "variant_id": 11, "product_name": "Es Teh", "variant_name": "XL", "qty": 2},
+        {"product_id": 1, "variant_id": 12, "product_name": "Es Teh", "variant_name": "M", "qty": 1}
+      ],
+      "free": {"product_id": 1, "variant_id": 11, "product_name": "Es Teh", "variant_name": "XL"},
+      "ok": false
+    },
+    {
+      "name": "XL hanya kata utuh: 'XLarge' bukan XL",
+      "promo": {"id": 20, "name": "Beli 2 gratis 1 XL", "kind": "buy_free", "scope": "targets", "targets": [{"type": "size", "value": "XL"}]},
+      "lines": [{"product_id": 4, "variant_id": 41, "product_name": "Kopi", "variant_name": "XLarge", "qty": 3}],
+      "free": {"product_id": 4, "variant_id": 41, "product_name": "Kopi", "variant_name": "XLarge"},
+      "ok": false
+    },
+    {
+      "name": "cakupan semua: apa pun boleh",
+      "promo": {"id": 22, "name": "Beli 5 gratis 1", "kind": "buy_free", "scope": "all"},
+      "lines": [{"product_id": 1, "variant_id": 12, "product_name": "Es Teh", "variant_name": "M", "qty": 5}],
+      "free": {"product_id": 1, "variant_id": 12, "product_name": "Es Teh", "variant_name": "M"},
+      "ok": true
+    }
+  ]
+}

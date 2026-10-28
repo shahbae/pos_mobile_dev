@@ -59,6 +59,23 @@ class ProductTransactionRequest {
   final String? customerName; // atas nama (free text), opsional
   final String? idempotencyKey;
 
+  /// Total yang ditunjukkan ke kasir/pembeli. Server menghitung ulang dan
+  /// menolak (409) bila berbeda — pembeli tidak ditagih angka yang tak pernah
+  /// ia lihat.
+  final int? expectedTotal;
+
+  /// Promo persen yang dipasang app; null bila tidak ada.
+  final int? percentPromoId;
+
+  /// Diskon manual: `percent` atau `amount`, nilainya, dan alasannya.
+  final String? discountKind;
+  final int? discountValue;
+  final int? discountReasonId;
+
+  /// `allowance` untuk pesanan jatah karyawan; null = penjualan biasa.
+  final String? saleType;
+  final int? recipientUserId;
+
   ProductTransactionRequest({
     required this.items,
     this.promoFreeItems = const [],
@@ -70,6 +87,13 @@ class ProductTransactionRequest {
     this.paymentRef,
     this.customerName,
     this.idempotencyKey,
+    this.expectedTotal,
+    this.percentPromoId,
+    this.discountKind,
+    this.discountValue,
+    this.discountReasonId,
+    this.saleType,
+    this.recipientUserId,
   });
 
   /// [forQris] = alur QRIS dinamis: `payment_ref` tidak dikirim (nomor ref
@@ -87,6 +111,15 @@ class ProductTransactionRequest {
       if (sedotans.isNotEmpty) 'sedotans': sedotans.map((s) => s.toJson()).toList(),
       if (customerName != null && customerName!.isNotEmpty) 'customer_name': customerName,
       if (idempotencyKey != null) 'idempotency_key': idempotencyKey,
+      // Aturan promo & diskon Tahap 3. Tanpa ini server memakai cara lama.
+      'pricing_version': 2,
+      if (expectedTotal != null) 'expected_total': expectedTotal,
+      if (percentPromoId != null) 'percent_promo_id': percentPromoId,
+      if (discountKind != null) 'discount_kind': discountKind,
+      if (discountValue != null) 'discount_value': discountValue,
+      if (discountReasonId != null) 'discount_reason_id': discountReasonId,
+      if (saleType != null) 'sale_type': saleType,
+      if (recipientUserId != null) 'recipient_user_id': recipientUserId,
     };
   }
 }

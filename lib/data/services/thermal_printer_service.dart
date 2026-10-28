@@ -207,6 +207,15 @@ class ThermalPrinterService {
       bytes += g.hr(ch: '=');
     }
 
+    // Pesanan jatah: bukan penjualan, jadi ditandai jelas di atas.
+    if (r.isAllowance) {
+      bytes += g.text('JATAH KARYAWAN', styles: const PosStyles(align: PosAlign.center, bold: true));
+      if (r.recipientName != null) {
+        bytes += g.text('Untuk ${r.recipientName}', styles: const PosStyles(align: PosAlign.center));
+      }
+      bytes += g.hr();
+    }
+
     // Info transaksi
     bytes += g.text('No    : ${r.invoiceNo}');
     if (r.createdAt != null) {
@@ -256,7 +265,10 @@ class ThermalPrinterService {
     } else if (r.promoDiscount > 0) {
       bytes += _summaryRow(g, 'Diskon Promo', -r.promoDiscount);
     }
-    if (r.discount > 0) bytes += _summaryRow(g, 'Diskon', -r.discount);
+    if (r.discount > 0) {
+      bytes += _summaryRow(g, 'Diskon', -r.discount);
+      if (r.discountReason != null) bytes += g.text('  (${r.discountReason})');
+    }
     if (r.tax > 0) bytes += _summaryRow(g, 'Pajak', r.tax);
     bytes += g.hr();
     // TOTAL ditonjolkan (teks lebih besar)
@@ -274,8 +286,12 @@ class ThermalPrinterService {
     ]);
     bytes += g.hr(ch: '=');
 
-    bytes += _summaryRow(g, _paymentLabel(r.paymentMethod), r.paid);
-    bytes += _summaryRow(g, 'Kembalian', r.change);
+    if (r.isAllowance) {
+      bytes += g.text('Tidak dibayar - memakai jatah', styles: const PosStyles(align: PosAlign.center));
+    } else {
+      bytes += _summaryRow(g, _paymentLabel(r.paymentMethod), r.paid);
+      bytes += _summaryRow(g, 'Kembalian', r.change);
+    }
     if (r.paymentRef != null && r.paymentRef!.isNotEmpty) {
       bytes += g.text('Ref: ${r.paymentRef}');
     }
@@ -323,6 +339,8 @@ class ThermalPrinterService {
         return 'Kredit';
       case 'ewallet':
         return 'E-Wallet';
+      case 'allowance':
+        return 'Jatah';
       default:
         return method.isEmpty ? 'Bayar' : method.toUpperCase();
     }

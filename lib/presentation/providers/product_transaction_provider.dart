@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pos_mobile/core/promo_engine.dart';
 import 'package:pos_mobile/data/models/product_model.dart';
 import 'package:pos_mobile/data/models/product_variant_model.dart';
 import 'package:pos_mobile/data/models/promo_model.dart';
@@ -172,6 +173,83 @@ int sedotanAutoQty(ProductTransactionState state, String autoFor) {
   }
 }
 
+/// Diskon manual yang diberikan kasir (Tahap 3, F9): persen atau rupiah,
+/// selalu dengan alasan. Tidak bisa bersama promo apa pun.
+class ManualDiscount {
+  /// `percent` atau `amount`.
+  final String kind;
+
+  /// Persen bulat, atau rupiah.
+  final int value;
+  final int reasonId;
+  final String reasonName;
+
+  const ManualDiscount({
+    required this.kind,
+    required this.value,
+    required this.reasonId,
+    required this.reasonName,
+  });
+
+  bool get isPercent => kind == 'percent';
+
+  Map<String, dynamic> toJson() => {'kind': kind, 'value': value, 'reason_id': reasonId};
+}
+
+/// Baris keranjang dalam bentuk yang dibaca mesin promo: digabung per produk +
+/// varian seperti server menggabungnya, termasuk gelas bonus (yang ditandai
+/// [PricingLine.freeQty]). Topping dihitung untuk semua gelas di baris itu.
+List<PricingLine> pricingLinesOf(ProductTransactionState state) {
+  final merged = <String, PricingLine>{};
+  void add({
+    required Product product,
+    ProductVariant? variant,
+    required int qty,
+    required int unitPrice,
+    int toppingAmount = 0,
+    int freeQty = 0,
+  }) {
+    final key = '${product.id}_${variant?.id ?? 0}';
+    final prev = merged[key];
+    merged[key] = PricingLine(
+      productId: product.id,
+      variantId: variant?.id ?? 0,
+      categoryId: product.categoryId ?? 0,
+      productName: product.name,
+      variantName: variant?.name ?? '',
+      qty: (prev?.qty ?? 0) + qty,
+      unitPrice: unitPrice,
+      toppingAmount: (prev?.toppingAmount ?? 0) + toppingAmount,
+      freeQty: (prev?.freeQty ?? 0) + freeQty,
+    );
+  }
+
+  for (final i in state.items) {
+    add(
+      product: i.product,
+      variant: i.variant,
+      qty: i.quantity,
+      unitPrice: i.unitPrice.toInt(),
+      toppingAmount: i.extraToppingTotal * i.quantity,
+    );
+  }
+  if (state.selectedPromo != null) {
+    for (final b in state.promoFreeItems) {
+      add(product: b.product, variant: b.variant, qty: b.qty, unitPrice: b.unitPrice.toInt(), freeQty: b.qty);
+    }
+  }
+  return merged.values.toList();
+}
+
+/// Hitungan keranjang tanpa promo persen dan tanpa diskon manual: subtotal
+/// dikurangi bonus beli X gratis Y saja — cara hitung app sebelum Tahap 3.
+/// Bawaan untuk pemanggil yang tidak membawa hitungan checkout.
+PricingResult basicPricing(ProductTransactionState state) {
+  final subtotal = pricingSubtotal(pricingLinesOf(state));
+  final free = state.selectedPromo == null ? 0 : state.promoDiscount.toInt();
+  return PricingResult(subtotal: subtotal, freeDiscount: free, total: max(0, subtotal - free));
+}
+
 /// Isi pesanan dalam bentuk yang dikirim ke server.
 class SaleLines {
   final List<TransactionItem> items;
@@ -197,9 +275,12 @@ class SaleLines {
 ///
 /// [withPrices] menyertakan harga yang ditagih di tiap baris — hanya untuk
 /// penjualan offline.
-SaleLines saleLinesOf(ProductTransactionState state, {bool withPrices = false}) {
+///
+/// [withBonus] mati untuk pesanan jatah: promo tidak berlaku di sana.
+SaleLines saleLinesOf(ProductTransactionState state, {bool withPrices = false, bool withBonus = true}) {
   final promo = state.selectedPromo;
-  final freeSelections = (promo == null) ? const <PromoFreeSelection>[] : state.promoFreeItems;
+  final freeSelections =
+      (promo == null || !withBonus) ? const <PromoFreeSelection>[] : state.promoFreeItems;
   return SaleLines(
     items: [
       ...state.items.map((i) => i.toTransactionItem(withPrices: withPrices)),
@@ -230,6 +311,9 @@ class ProductTransactionState {
   final List<CartPlastic> plastics;
   final List<CartSedotan> sedotans;
 
+  /// Diskon manual kasir; null = tanpa diskon.
+  final ManualDiscount? manualDiscount;
+
   /// sedotan_id yang angkanya sudah diubah kasir. Sedotan ini tidak lagi diisi
   /// otomatis sampai transaksi selesai (state baru = set kosong).
   final Set<int> manualSedotanIds;
@@ -239,6 +323,10 @@ class ProductTransactionState {
   /// true bila [error] berarti server tidak menjawab sama sekali (jaringan
   /// putus), bukan menolak. Checkout memakainya untuk beralih ke mode offline.
   final bool unreachable;
+
+  /// Status HTTP penolakan [error], bila ada. 409 = hitungan app berbeda
+  /// dengan server (kuota habis di HP lain, katalog basi): katalog dimuat ulang.
+  final int? errorStatus;
   final ProductTransactionResponse? lastResponse;
 
   ProductTransactionState({
@@ -247,10 +335,12 @@ class ProductTransactionState {
     this.promoFreeItems = const [],
     this.plastics = const [],
     this.sedotans = const [],
+    this.manualDiscount,
     this.manualSedotanIds = const {},
     this.isLoading = false,
     this.error,
     this.unreachable = false,
+    this.errorStatus,
     this.lastResponse,
   });
 
@@ -280,10 +370,13 @@ class ProductTransactionState {
     List<PromoFreeSelection>? promoFreeItems,
     List<CartPlastic>? plastics,
     List<CartSedotan>? sedotans,
+    ManualDiscount? manualDiscount,
+    bool clearManualDiscount = false,
     Set<int>? manualSedotanIds,
     bool? isLoading,
     String? error,
     bool unreachable = false,
+    int? errorStatus,
     ProductTransactionResponse? lastResponse,
     bool clearLastResponse = false,
   }) {
@@ -293,11 +386,13 @@ class ProductTransactionState {
       promoFreeItems: promoFreeItems ?? this.promoFreeItems,
       plastics: plastics ?? this.plastics,
       sedotans: sedotans ?? this.sedotans,
+      manualDiscount: clearManualDiscount ? null : (manualDiscount ?? this.manualDiscount),
       manualSedotanIds: manualSedotanIds ?? this.manualSedotanIds,
       isLoading: isLoading ?? this.isLoading,
       error: error,
       // Seperti error, hanya berlaku untuk keadaan yang baru dibuat.
       unreachable: unreachable,
+      errorStatus: errorStatus,
       lastResponse: clearLastResponse ? null : (lastResponse ?? this.lastResponse),
     );
   }
@@ -484,10 +579,20 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
     if (promo == null) {
       state = state.copyWith(clearPromo: true, promoFreeItems: []);
     } else {
-      state = state.copyWith(selectedPromo: promo);
+      // Kasir memilih promo: diskon manual tidak bisa ikut (PRD F9).
+      state = state.copyWith(selectedPromo: promo, clearManualDiscount: true);
       _reconcilePromo();
     }
     _syncAutoSedotans();
+  }
+
+  // ── Diskon manual ─────────────────────────────────────
+  void setManualDiscount(ManualDiscount discount) {
+    state = state.copyWith(manualDiscount: discount);
+  }
+
+  void clearManualDiscount() {
+    state = state.copyWith(clearManualDiscount: true);
   }
 
   /// Set jumlah bonus gratis untuk sebuah produk+varian (0 = hapus).
@@ -530,46 +635,71 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
     state = state.copyWith(promoFreeItems: reconciled);
   }
 
-  /// Bangun payload transaksi dari state keranjang saat ini.
+  /// Bangun payload transaksi dari state keranjang saat ini dan hitungan
+  /// [pricing] yang ditunjukkan ke kasir.
+  ///
+  /// [recipientUserId] diisi untuk pesanan jatah (tanpa [pricing]): tanpa
+  /// promo maupun diskon, totalnya harga menu + topping.
   ProductTransactionRequest _buildRequest({
     required String paymentMethod,
     required int paid,
-    int discount = 0,
+    PricingResult? pricing,
     String? paymentRef,
     String? customerName,
+    int? recipientUserId,
   }) {
-    final lines = saleLinesOf(state);
-    final items = lines.items;
-    final promoFreeItems = lines.promoFreeItems;
-    final plastics = lines.plastics;
-    final sedotans = lines.sedotans;
-    final cart = _cartSignature(lines, discount);
+    final allowance = recipientUserId != null;
+    final lines = saleLinesOf(state, withBonus: !allowance);
+    final manual = allowance ? null : state.manualDiscount;
+    pricing ??= basicPricing(state);
+    final expectedTotal = allowance ? state.paidSubtotal.toInt() : pricing.total;
+    final percentPromoId = allowance ? null : pricing.percent?.id;
+    final cart = _cartSignature(
+      lines,
+      manual: manual,
+      percentPromoId: percentPromoId,
+      recipientUserId: recipientUserId,
+    );
     // QRIS senilai Rp0 langsung dicatat lunas oleh server, tanpa QR.
-    final makesQr = paymentMethod.toLowerCase() == 'qris' && state.total > 0;
+    final makesQr = paymentMethod.toLowerCase() == 'qris' && expectedTotal > 0;
 
     return ProductTransactionRequest(
-      items: items,
-      promoFreeItems: promoFreeItems,
-      plastics: plastics,
-      sedotans: sedotans,
+      items: lines.items,
+      promoFreeItems: lines.promoFreeItems,
+      plastics: lines.plastics,
+      sedotans: lines.sedotans,
       paymentMethod: paymentMethod,
       paid: paid,
-      discount: discount,
       paymentRef: paymentRef,
       customerName: customerName,
       idempotencyKey: _attemptKeyFor(cart, makesQr: makesQr),
+      expectedTotal: expectedTotal,
+      percentPromoId: percentPromoId,
+      discountKind: manual?.kind,
+      discountValue: manual?.value,
+      discountReasonId: manual?.reasonId,
+      saleType: allowance ? 'allowance' : null,
+      recipientUserId: recipientUserId,
     );
   }
 
   /// Sidik isi keranjang: yang menentukan stok dan total. Metode bayar,
   /// nominal, dan nama pembeli sengaja tidak ikut — mengubahnya bukan berarti
   /// pesanannya lain.
-  String _cartSignature(SaleLines lines, int discount) => jsonEncode({
+  String _cartSignature(
+    SaleLines lines, {
+    ManualDiscount? manual,
+    int? percentPromoId,
+    int? recipientUserId,
+  }) =>
+      jsonEncode({
         'items': lines.items.map((i) => i.toJson()).toList(),
         'promo_free_items': lines.promoFreeItems.map((p) => p.toJson()).toList(),
         'plastics': lines.plastics.map((p) => p.toJson()).toList(),
         'sedotans': lines.sedotans.map((s) => s.toJson()).toList(),
-        'discount': discount,
+        'discount': manual?.toJson(),
+        'percent_promo_id': percentPromoId,
+        'recipient_user_id': recipientUserId,
       });
 
   /// Idempotency key untuk menyimpan keranjang ini sebagai penjualan offline.
@@ -577,8 +707,11 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
   /// Key yang sama dengan percobaan online atas keranjang ini bila ada: kalau
   /// percobaan itu ternyata sudah tercatat di server, kiriman offline-nya
   /// dikenali sebagai penjualan yang sama dan tidak dicatat dua kali.
-  String offlineKey({int discount = 0}) =>
-      _attemptKeyFor(_cartSignature(saleLinesOf(state), discount), makesQr: false);
+  String offlineKey({PricingResult? pricing}) => _attemptKeyFor(
+        _cartSignature(saleLinesOf(state),
+            manual: state.manualDiscount, percentPromoId: (pricing ?? basicPricing(state)).percent?.id),
+        makesQr: false,
+      );
 
   /// Penjualan sudah aman tersimpan di HP: kosongkan keranjang, dan anggap
   /// percobaan bayarnya selesai.
@@ -626,7 +759,7 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
   Future<void> submitTransaction({
     required String paymentMethod,
     required int paid,
-    int discount = 0,
+    PricingResult? pricing,
     String? paymentRef,
     String? customerName,
   }) async {
@@ -642,11 +775,28 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
     final request = _buildRequest(
       paymentMethod: paymentMethod,
       paid: paid,
-      discount: discount,
+      pricing: pricing,
       paymentRef: paymentRef,
       customerName: customerName,
     );
+    await _send(request);
+  }
 
+  /// Catat pesanan jatah karyawan untuk [recipientUserId]. Hanya online:
+  /// saldo jatah dijaga server. Promo, bonus, dan diskon tidak ikut; totalnya
+  /// harga menu + topping ([ProductTransactionState.paidSubtotal]).
+  Future<void> submitAllowance({required int recipientUserId}) async {
+    if (state.items.isEmpty) return;
+    state = state.copyWith(isLoading: true, error: null, clearLastResponse: true);
+    final request = _buildRequest(
+      paymentMethod: 'allowance',
+      paid: 0,
+      recipientUserId: recipientUserId,
+    );
+    await _send(request);
+  }
+
+  Future<void> _send(ProductTransactionRequest request) async {
     try {
       final response = await repo.createTransaction(request);
       _dropAttemptKey();
@@ -657,6 +807,7 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
         isLoading: false,
         error: e.toString(),
         unreachable: e is TransactionSubmitException && e.unreachable,
+        errorStatus: e is TransactionSubmitException ? e.statusCode : null,
       );
     }
   }
@@ -665,7 +816,7 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
   /// lunas (dari QR page) supaya bisa retry bila QR kedaluwarsa/dibatalkan.
   /// Return hasil (pending QR / langsung lunas), atau null bila gagal (lihat state.error).
   Future<QrisChargeResult?> chargeQris({
-    int discount = 0,
+    PricingResult? pricing,
     String? customerName,
   }) async {
     if (state.items.isEmpty) return null;
@@ -675,8 +826,8 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
     // QRIS: payment_method lowercase "qris", paid = total (BE tetap validasi paid).
     final request = _buildRequest(
       paymentMethod: 'qris',
-      paid: state.total.toInt(),
-      discount: discount,
+      paid: (pricing ?? basicPricing(state)).total,
+      pricing: pricing,
       customerName: customerName,
     );
 
@@ -687,7 +838,11 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
       return result;
     } catch (e) {
       _dropAttemptKeyIfRejected(e);
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        error: e.toString(),
+        errorStatus: e is TransactionSubmitException ? e.statusCode : null,
+      );
       return null;
     }
   }
