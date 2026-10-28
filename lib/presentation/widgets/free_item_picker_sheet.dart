@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/data/models/product_model.dart';
+import 'package:pos_mobile/data/models/product_variant_model.dart';
 import 'package:pos_mobile/presentation/providers/product_pagination_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/utils/currency.dart';
-import 'package:pos_mobile/utils/xl_promo.dart';
+
+/// Apakah produk (dan variannya, bila ada) masuk cakupan promo yang dipilih.
+typedef PromoScopeTest = bool Function(Product product, ProductVariant? variant);
 
 /// Bottom sheet untuk memilih menu yang digratiskan (bonus promo).
 /// Mengembalikan [Product] terpilih, atau null bila dibatalkan. Variannya
@@ -15,13 +18,15 @@ import 'package:pos_mobile/utils/xl_promo.dart';
 /// penanda siap per cabang, jadi menu yang bahannya habis bisa disaring di
 /// sini tanpa request tambahan.
 ///
-/// Yang ditawarkan: menu berkategori `freeable`, ukuran XL, siap dibuat, dan
-/// harganya ≤ [maxPrice] — batas itu adalah minuman termurah di keranjang.
+/// Yang ditawarkan: menu berkategori `freeable`, masuk cakupan promo
+/// ([inScope], mis. hanya ukuran XL), siap dibuat, dan harganya ≤ [maxPrice] —
+/// batas itu adalah minuman termurah di keranjang.
 /// Tidak harus menu yang dipesan: pelanggan boleh minta teh yang tidak ada di
 /// pesanannya, asal tidak lebih mahal dari yang termurah tadi.
 Future<Product?> showFreeItemPicker(
   BuildContext context, {
   required num maxPrice,
+  required PromoScopeTest inScope,
 }) {
   return showModalBottomSheet<Product>(
     context: context,
@@ -30,36 +35,38 @@ Future<Product?> showFreeItemPicker(
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
-    builder: (_) => _FreeItemPickerSheet(maxPrice: maxPrice),
+    builder: (_) => _FreeItemPickerSheet(maxPrice: maxPrice, inScope: inScope),
   );
 }
 
 /// True bila [p] boleh dijadikan bonus dengan batas harga [maxPrice].
-/// Untuk produk bervarian, cukup ada satu varian XL yang siap dan masuk batas.
-bool _isFreeable(Product p, num maxPrice) {
+/// Untuk produk bervarian, cukup ada satu varian dalam cakupan yang siap dan
+/// masuk batas.
+bool _isFreeable(Product p, num maxPrice, PromoScopeTest inScope) {
   if (!p.categoryFreeable || !p.ready) return false;
   if (p.hasVariants) {
     return p.variants.any(
-      (v) => nameHasXL(v.name) && v.ready && v.sellingPriceNum <= maxPrice,
+      (v) => inScope(p, v) && v.ready && v.sellingPriceNum <= maxPrice,
     );
   }
-  return nameHasXL(p.name) && p.sellingPriceNum <= maxPrice;
+  return inScope(p, null) && p.sellingPriceNum <= maxPrice;
 }
 
 /// Harga termurah yang bisa diambil dari [p] dalam batas [maxPrice] — dipakai
 /// untuk label, supaya kasir tahu nilai gratisannya sebelum masuk ke varian.
-num _lowestPrice(Product p, num maxPrice) {
+num _lowestPrice(Product p, num maxPrice, PromoScopeTest inScope) {
   if (!p.hasVariants) return p.sellingPriceNum;
   final harga = p.variants
-      .where((v) => nameHasXL(v.name) && v.ready && v.sellingPriceNum <= maxPrice)
+      .where((v) => inScope(p, v) && v.ready && v.sellingPriceNum <= maxPrice)
       .map((v) => v.sellingPriceNum);
   return harga.reduce((a, b) => a < b ? a : b);
 }
 
 class _FreeItemPickerSheet extends ConsumerStatefulWidget {
   final num maxPrice;
+  final PromoScopeTest inScope;
 
-  const _FreeItemPickerSheet({required this.maxPrice});
+  const _FreeItemPickerSheet({required this.maxPrice, required this.inScope});
 
   @override
   ConsumerState<_FreeItemPickerSheet> createState() => _FreeItemPickerSheetState();
@@ -76,11 +83,11 @@ class _FreeItemPickerSheetState extends ConsumerState<_FreeItemPickerSheet> {
 
     final keyword = _search.trim().toLowerCase();
     final products = catalog.allItems
-        .where((p) => _isFreeable(p, widget.maxPrice))
+        .where((p) => _isFreeable(p, widget.maxPrice, widget.inScope))
         .where((p) => keyword.isEmpty || p.name.toLowerCase().contains(keyword))
         .toList()
-      ..sort((a, b) => _lowestPrice(a, widget.maxPrice)
-          .compareTo(_lowestPrice(b, widget.maxPrice)));
+      ..sort((a, b) => _lowestPrice(a, widget.maxPrice, widget.inScope)
+          .compareTo(_lowestPrice(b, widget.maxPrice, widget.inScope)));
 
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
@@ -162,7 +169,7 @@ class _FreeItemPickerSheetState extends ConsumerState<_FreeItemPickerSheet> {
             _search.trim().isNotEmpty
                 ? "Menu itu tidak bisa digratiskan, atau harganya di atas "
                     "${formatRupiah(widget.maxPrice)}."
-                : "Tidak ada menu XL yang bisa digratiskan — semuanya di atas "
+                : "Tidak ada menu dalam cakupan promo yang bisa digratiskan — semuanya di atas "
                     "${formatRupiah(widget.maxPrice)} atau sedang habis.",
             textAlign: TextAlign.center,
             style: const TextStyle(color: AppTheme.textSecondary),
@@ -184,7 +191,7 @@ class _FreeItemPickerSheetState extends ConsumerState<_FreeItemPickerSheet> {
                   fontWeight: FontWeight.w600, color: AppTheme.textPrimary)),
           subtitle: Text(
             p.hasVariants
-                ? "${formatRupiah(_lowestPrice(p, widget.maxPrice))} • pilih varian"
+                ? "${formatRupiah(_lowestPrice(p, widget.maxPrice, widget.inScope))} • pilih varian"
                 : formatRupiah(p.sellingPriceNum),
             style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
           ),

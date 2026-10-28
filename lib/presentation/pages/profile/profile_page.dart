@@ -4,6 +4,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import 'package:pos_mobile/data/models/profile_model.dart';
+import 'package:pos_mobile/presentation/pages/allowance/my_allowance_page.dart';
+import 'package:pos_mobile/presentation/providers/allowance_provider.dart';
 import 'package:pos_mobile/presentation/providers/attendance_provider.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/widgets/confirm_dialog.dart';
@@ -31,7 +33,10 @@ class ProfilePage extends ConsumerWidget {
       backgroundColor: AppTheme.bgLight,
       appBar: AppBar(title: const Text('Profil'), centerTitle: true),
       body: RefreshIndicator(
-        onRefresh: () async => ref.invalidate(myProfileProvider),
+        onRefresh: () async {
+          ref.invalidate(myProfileProvider);
+          ref.invalidate(myAllowanceProvider);
+        },
         child: async.when(
           loading: SdmStateView.loading,
           error: (e, _) => SdmStateView(
@@ -208,6 +213,8 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
                 ],
               ),
             ),
+            const SizedBox(height: 12),
+            const MyAllowanceCard(),
             const SizedBox(height: 20),
             const _Heading('Kontak'),
             const SizedBox(height: 8),

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/data/models/product_model.dart';
 import 'package:pos_mobile/data/models/product_variant_model.dart';
+import 'package:pos_mobile/presentation/providers/checkout_pricing_provider.dart';
 import 'package:pos_mobile/presentation/providers/pos_catalog_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_pagination_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_provider.dart';
@@ -342,7 +343,8 @@ class _ProductTransactionPageState extends ConsumerState<ProductTransactionPage>
                           style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
                         ),
                         Text(
-                          formatRupiah(cartState.total),
+                          // Sudah termasuk promo persen yang sedang berlaku.
+                          formatRupiah(ref.watch(checkoutPricingProvider).total),
                           style: const TextStyle(
                             color: AppTheme.textPrimary,
                             fontWeight: FontWeight.w800,

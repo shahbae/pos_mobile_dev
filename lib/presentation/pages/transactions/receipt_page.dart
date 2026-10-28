@@ -215,6 +215,27 @@ class _ReceiptPreview extends StatelessWidget {
                           ],
                         ),
                       ),
+                    if (receipt.isAllowance)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.teal.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          receipt.recipientName == null
+                              ? 'JATAH KARYAWAN'
+                              : 'JATAH KARYAWAN · untuk ${receipt.recipientName}',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.teal.shade800,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
                     _InfoLine(label: 'No. Invoice', value: receipt.invoiceNo),
                     if (receipt.createdAt != null)
                       _InfoLine(label: 'Tanggal', value: dateFmt.format(receipt.createdAt!.toLocal())),
@@ -319,7 +340,11 @@ class _ReceiptPreview extends StatelessWidget {
                         )),
                     if (receipt.promos.isEmpty && receipt.promoDiscount > 0)
                       _AmountLine(label: 'Diskon Promo', value: -receipt.promoDiscount),
-                    if (receipt.discount > 0) _AmountLine(label: 'Diskon', value: -receipt.discount),
+                    if (receipt.discount > 0)
+                      _AmountLine(
+                        label: receipt.discountReason == null ? 'Diskon' : 'Diskon (${receipt.discountReason})',
+                        value: -receipt.discount,
+                      ),
                     if (receipt.tax > 0) _AmountLine(label: 'Pajak', value: receipt.tax),
                     const SizedBox(height: 10),
                     // Blok TOTAL menonjol
@@ -353,8 +378,10 @@ class _ReceiptPreview extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    _AmountLine(label: _paymentLabel(receipt.paymentMethod), value: receipt.paid),
-                    _AmountLine(label: 'Kembalian', value: receipt.change),
+                    if (!receipt.isAllowance) ...[
+                      _AmountLine(label: _paymentLabel(receipt.paymentMethod), value: receipt.paid),
+                      _AmountLine(label: 'Kembalian', value: receipt.change),
+                    ],
                     if (receipt.paymentRef != null && receipt.paymentRef!.isNotEmpty)
                       _InfoLine(label: 'Ref', value: receipt.paymentRef!),
                   ],
@@ -415,6 +442,8 @@ String _paymentLabel(String method) {
       return 'Kredit';
     case 'ewallet':
       return 'E-Wallet';
+    case 'allowance':
+      return 'Jatah';
     default:
       return method.isEmpty ? 'Bayar' : method.toUpperCase();
   }
