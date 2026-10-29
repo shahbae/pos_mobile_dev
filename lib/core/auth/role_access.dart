@@ -306,6 +306,16 @@ bool canUsePayroll(Iterable<String> held) => _norm(held)
 bool canHandOutLoan(Iterable<String> held) =>
     _norm(held).intersection(const {'owner', 'leader', 'kasir', 'karyawan'}).isNotEmpty;
 
+/// Bisa menerima reminder & permintaan pengecekan foto (Tahap 4): kru outlet.
+/// SPV dan owner tidak pernah menerima walau sedang absen di outlet — cermin
+/// aturan penerima di be-pos `reminder_rules.go`.
+bool canReceiveReminders(Iterable<String> held) =>
+    _norm(held).intersection(const {'kasir', 'karyawan', 'leader'}).isNotEmpty;
+
+/// Membuat dan mengonfirmasi tiket bantuan (Tahap 4): leader, untuk outlet yang
+/// dipimpinnya. Menanggapi tiket ada di web admin.
+bool canUseHelpTickets(Iterable<String> held) => _norm(held).contains('leader');
+
 /// Boleh mencatat izin keluar dari outlet (yang sedang bertugas).
 bool canLeaveOut(Iterable<String> held) => _norm(held)
     .intersection(const {'owner', 'supervisor', 'leader', 'kasir', 'karyawan'})

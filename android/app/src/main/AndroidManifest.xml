@@ -16,6 +16,15 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Notifikasi push (Tahap 4). POST_NOTIFICATIONS diminta saat login
+         (Android 13+). Layar penuh untuk alarm permintaan pengecekan foto di
+         atas kunci layar (Android 14+ perlu izin pengguna, lihat kartu
+         "Notifikasi siap?" di Profil). Pengecualian hemat baterai supaya
+         notifikasi tidak ditahan HP. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <application
         android:label="Kasir Es Teh"
         android:name="${applicationName}"

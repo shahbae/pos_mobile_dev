@@ -9,6 +9,7 @@ import 'package:pos_mobile/presentation/providers/allowance_provider.dart';
 import 'package:pos_mobile/presentation/providers/attendance_provider.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/widgets/confirm_dialog.dart';
+import 'package:pos_mobile/presentation/widgets/notification_readiness_card.dart';
 import 'package:pos_mobile/presentation/widgets/offline_hold.dart';
 import 'package:pos_mobile/presentation/widgets/sdm_widgets.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
@@ -215,6 +216,8 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
             ),
             const SizedBox(height: 12),
             const MyAllowanceCard(),
+            const SizedBox(height: 12),
+            const NotificationReadinessCard(),
             const SizedBox(height: 20),
             const _Heading('Kontak'),
             const SizedBox(height: 8),

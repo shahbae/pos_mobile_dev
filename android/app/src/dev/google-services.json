@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1054508074796",
+    "project_id": "es-teh-candi",
+    "storage_bucket": "es-teh-candi.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1054508074796:android:0960f17517a17a4d048e89",
+        "android_client_info": {
+          "package_name": "com.example.pos_mobile.dev"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBzSSM8KUFNhWtmILrTNoTWxfn2Gnzebl0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

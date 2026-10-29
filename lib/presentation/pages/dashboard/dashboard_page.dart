@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/presentation/widgets/offline_banner.dart';
+import 'package:pos_mobile/presentation/widgets/pending_reminder_banner.dart';
 import 'package:pos_mobile/presentation/pages/dashboard/tabs/stock_tab.dart';
 
 import 'package:pos_mobile/core/auth/role_access.dart';
@@ -133,6 +134,8 @@ class DashboardPage extends ConsumerWidget {
             // Selalu terlihat di semua tab: selama spanduk ini ada, masih ada
             // penjualan yang hanya tersimpan di HP ini.
             if (showOfflineBanner) const OfflineBanner(),
+            // Reminder yang belum dibalas, di semua tab (Tahap 4).
+            const PendingReminderBanner(),
             Expanded(
               child: Row(
                 children: [
