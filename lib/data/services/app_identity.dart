@@ -14,6 +14,10 @@ class AppIdentity {
   /// [load] selesai.
   static int versionCode = 0;
 
+  /// versionName APK terpasang (mis. `1.0.18`), dicatat be-pos bersama token
+  /// notifikasi push. Kosong sampai [load] selesai.
+  static String versionName = '';
+
   /// Bertambah setiap server membalas 426, supaya `AppUpdateGate` memeriksa
   /// ulang dan memunculkan dialog wajib di layar mana pun yang sedang terbuka.
   static final upgradeRequired = ValueNotifier<int>(0);
@@ -23,6 +27,7 @@ class AppIdentity {
     try {
       final info = await PackageInfo.fromPlatform();
       versionCode = int.tryParse(info.buildNumber) ?? 0;
+      versionName = info.version;
     } catch (_) {
       // Tanpa versi, server menganggapnya versi 0. Itu hanya berarti dialog
       // wajib muncul bila ada rilis wajib — tidak ada yang rusak.

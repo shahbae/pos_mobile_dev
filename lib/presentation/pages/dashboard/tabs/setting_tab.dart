@@ -22,6 +22,8 @@ import '../../../pages/kitchen/kitchen_display_page.dart';
 import '../../../pages/payroll/cash_loan_page.dart';
 import '../../../pages/payroll/my_loans_page.dart';
 import '../../../pages/payroll/payslip_list_page.dart';
+import '../../../pages/reminders/reminder_list_page.dart';
+import '../../../pages/help/help_ticket_list_page.dart';
 
 class SettingTab extends ConsumerWidget {
   const SettingTab({super.key});
@@ -124,6 +126,32 @@ class SettingTab extends ConsumerWidget {
                 MaterialPageRoute(builder: (_) => const AttendancePage()),
               );
             },
+          ),
+        ],
+        if (canReceiveReminders(auth.held)) ...[
+          const SizedBox(height: 16),
+          _SettingMenuCard(
+            title: "Reminder",
+            subtitle: "Catatan & permintaan foto dari SPV atau leader",
+            icon: Icons.campaign_outlined,
+            color: accent,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ReminderListPage()),
+            ),
+          ),
+        ],
+        if (canUseHelpTickets(auth.held)) ...[
+          const SizedBox(height: 16),
+          _SettingMenuCard(
+            title: "Bantuan",
+            subtitle: "Tiket ke SPV atau finance",
+            icon: Icons.support_agent,
+            color: accent,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const HelpTicketListPage()),
+            ),
           ),
         ],
         if (canAttend) ...[

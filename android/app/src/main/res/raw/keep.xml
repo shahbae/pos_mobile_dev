@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ikon notifikasi hanya dirujuk dari Dart lewat nama, jadi R8 di build rilis
+     tidak melihat pemakainya dan akan membuangnya. Tanpa ikon, notifikasi
+     gagal tampil tanpa pesan apa pun. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_notif" />
