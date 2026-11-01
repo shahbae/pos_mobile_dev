@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
+import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/data/models/payroll_model.dart';
 import 'package:pos_mobile/presentation/pages/payroll/payroll_widgets.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
@@ -71,7 +72,8 @@ class _CashLoanPageState extends ConsumerState<CashLoanPage> {
 
   @override
   Widget build(BuildContext context) {
-    final noBranch = ref.watch(authProvider).branchId == null;
+    final auth = ref.watch(authProvider);
+    final noBranch = auth.branchId == null;
     final bottomInset = MediaQuery.of(context).padding.bottom;
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
@@ -79,9 +81,9 @@ class _CashLoanPageState extends ConsumerState<CashLoanPage> {
       body: Stack(
         children: [
           if (noBranch)
-            const SdmStateView(
+            SdmStateView(
               icon: Icons.store_outlined,
-              message: 'Pilih cabang aktif dulu lewat menu Ganti Cabang.',
+              message: branchRequiredMessage(auth.held),
             )
           else
             RefreshIndicator(

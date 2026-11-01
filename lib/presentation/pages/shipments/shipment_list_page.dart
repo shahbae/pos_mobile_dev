@@ -24,7 +24,7 @@ class ShipmentListPage extends ConsumerWidget {
       return Scaffold(
         backgroundColor: AppTheme.bgLight,
         appBar: AppBar(title: const Text('Kiriman Gudang'), centerTitle: true),
-        body: const _BranchRequiredView(),
+        body: const BranchRequiredView(reason: 'Kiriman gudang selalu ditujukan ke satu cabang.'),
       );
     }
 
@@ -129,50 +129,6 @@ class _EmptyView extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _BranchRequiredView extends StatelessWidget {
-  const _BranchRequiredView();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.store_outlined,
-              size: 56, color: AppTheme.textSecondary),
-          const SizedBox(height: 12),
-          const Text('Pilih cabang dulu',
-              style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 16,
-                  color: AppTheme.textPrimary)),
-          const SizedBox(height: 6),
-          const Text(
-            'Kiriman gudang selalu ditujukan ke satu cabang. Pilih cabang aktif '
-            'dulu sebelum membuka menu ini.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
-          ),
-          const SizedBox(height: 20),
-          ElevatedButton.icon(
-            onPressed: () => showBranchSwitchSheet(context),
-            icon: const Icon(Icons.swap_horiz),
-            label: const Text('Pilih Cabang'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.brandBlue,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape:
-                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

@@ -7,6 +7,8 @@ import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/data/repositories/auth_repository.dart';
 import 'package:pos_mobile/data/services/api_provider.dart';
 import 'package:pos_mobile/data/services/secure_storage.dart';
+import 'package:pos_mobile/presentation/providers/branch_scope.dart';
+import 'package:pos_mobile/presentation/providers/session_cache.dart';
 
 enum AuthStatus { unknown, authenticated, unauthenticated }
 
@@ -62,17 +64,23 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   final repo = ref.watch(authRepositoryProvider);
-  return AuthNotifier(repo);
+  return AuthNotifier(repo, ref);
 });
 
 class AuthNotifier extends StateNotifier<AuthState> {
   final AuthRepository repo;
+
+  /// Dipegang hanya untuk membuang cache sesi — lihat [clearSessionCache].
+  final Ref _ref;
+
   late final StreamSubscription<void> _storageSub;
 
-  AuthNotifier(this.repo) : super(const AuthState(status: AuthStatus.unknown)) {
+  AuthNotifier(this.repo, this._ref) : super(const AuthState(status: AuthStatus.unknown)) {
     _storageSub = SecureStorage.changes.listen((_) async {
       final hasAccess = await SecureStorage.getAccessToken() != null;
       if (!hasAccess && state.status != AuthStatus.unauthenticated) {
+        // Logout paksa dari server atau ganti password: data akun ini dibuang.
+        _clearSession();
         state = state.copyWith(
           status: AuthStatus.unauthenticated,
           role: null,
@@ -81,6 +89,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
     });
     _init();
+  }
+
+  /// Hari saya, kunci absen, tugas, reminder, dan daftar cabang milik akun
+  /// sebelumnya tidak boleh terbawa ke akun berikutnya (revisi uji manual 31
+  /// Okt 2026: dulu hanya dibuang saat pindah cabang).
+  void _clearSession() {
+    if (!mounted) return;
+    clearSessionCache(_ref.invalidate, _ref.read(branchScopeProvider.notifier));
   }
 
   String? _extractRoleFromToken(String token) {
@@ -133,20 +149,24 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   /// Ambil role & branch dari `GET /me` (otoritatif). Bila gagal (mis. jaringan),
   /// jatuh balik ke klaim JWT supaya app tetap bisa menentukan akses.
+  ///
+  /// Role lama `kasir` dibaca sebagai `karyawan`: token yang terbit sebelum
+  /// role itu dihapus masih membawanya, dan saat offline klaim token itulah
+  /// yang dipakai. Tanpa ini kasir lama tertolak masuk tepat saat jaringan mati.
   Future<({String? role, List<String> roles, int? branchId})> _resolveIdentity(
     String token,
   ) async {
     try {
       final me = await repo.getMe();
       return (
-        role: me.role ?? _extractRoleFromToken(token),
-        roles: me.roles.isNotEmpty ? me.roles : _extractRolesFromToken(token),
+        role: upgradeLegacyRole(me.role ?? _extractRoleFromToken(token)),
+        roles: upgradeLegacyRoles(me.roles.isNotEmpty ? me.roles : _extractRolesFromToken(token)),
         branchId: me.branchId ?? _extractBranchIdFromToken(token),
       );
     } catch (_) {
       return (
-        role: _extractRoleFromToken(token),
-        roles: _extractRolesFromToken(token),
+        role: upgradeLegacyRole(_extractRoleFromToken(token)),
+        roles: upgradeLegacyRoles(_extractRolesFromToken(token)),
         branchId: _extractBranchIdFromToken(token),
       );
     }
@@ -301,6 +321,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
         return;
       }
 
+      // Akun baru masuk: apa pun yang tersisa dari akun sebelumnya dibuang
+      // sebelum layar membaca ulang.
+      _clearSession();
       state = state.copyWith(
         status: AuthStatus.authenticated,
         loading: false,
@@ -327,6 +350,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     try {
       await repo.logout();
     } finally {
+      _clearSession();
       state = state.copyWith(
         status: AuthStatus.unauthenticated,
         role: null,

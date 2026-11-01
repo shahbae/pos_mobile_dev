@@ -11,9 +11,19 @@ void main() {
     });
 
     test('role outlet tetap masuk', () {
-      for (final r in ['owner', 'supervisor', 'leader', 'kasir', 'produksi']) {
+      for (final r in ['owner', 'supervisor', 'leader', 'karyawan', 'produksi']) {
         expect(canAccessApp(r), isTrue, reason: r);
       }
+    });
+
+    test('role kasir dihapus (31 Okt 2026): token lama dibaca sebagai karyawan', () {
+      expect(canAccessApp('kasir'), isFalse, reason: 'role mentah tidak dikenal lagi');
+      expect(upgradeLegacyRole('kasir'), 'karyawan');
+      expect(upgradeLegacyRole(' KASIR '), 'karyawan');
+      expect(upgradeLegacyRole('leader'), 'leader');
+      expect(upgradeLegacyRole(null), isNull);
+      expect(upgradeLegacyRoles(['kasir', 'karyawan', 'leader']), ['karyawan', 'leader']);
+      expect(canAccessApp(upgradeLegacyRole('kasir')), isTrue);
     });
 
     test('role lain mendapat pesan umum', () {

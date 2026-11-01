@@ -1,5 +1,6 @@
 package com.example.pos_mobile
 
+import android.app.KeyguardManager
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
@@ -109,9 +110,48 @@ class MainActivity : FlutterActivity() {
                         setShowOverLock(call.argument<Boolean>("on") == true)
                         result.success(null)
                     }
+                    // Kamera bawaan HP adalah activity app lain tanpa izin tampil
+                    // di atas kunci layar: dibuka dari layar alarm, ia muncul di
+                    // BELAKANG kunci dan tidak terlihat (uji manual 31 Okt 2026).
+                    // Layar alarm meminta buka kunci dulu, baru membuka kamera.
+                    "isKeyguardLocked" -> {
+                        val km = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+                        result.success(km.isKeyguardLocked)
+                    }
+                    "dismissKeyguard" -> dismissKeyguard(result)
+                    "openAppSettings" -> {
+                        open(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+                        result.success(null)
+                    }
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    // Memunculkan PIN / sidik jari di atas layar alarm. true = HP terbuka.
+    // Android 8 ke bawah tidak punya API ini: dijawab apa adanya (terbuka atau
+    // tidak), dan layar alarm meminta orangnya membuka kunci sendiri.
+    private fun dismissKeyguard(result: MethodChannel.Result) {
+        val km = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+        if (!km.isKeyguardLocked) {
+            result.success(true)
+            return
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            result.success(false)
+            return
+        }
+        var answered = false
+        fun answer(ok: Boolean) {
+            if (answered) return
+            answered = true
+            result.success(ok)
+        }
+        km.requestDismissKeyguard(this, object : KeyguardManager.KeyguardDismissCallback() {
+            override fun onDismissSucceeded() = answer(true)
+            override fun onDismissCancelled() = answer(false)
+            override fun onDismissError() = answer(false)
+        })
     }
 
     private fun open(intent: Intent) {

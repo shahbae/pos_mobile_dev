@@ -223,6 +223,30 @@ class PushService {
   /// Lepas izin tampil di atas kunci layar sesudah layar alarm ditutup.
   static Future<void> releaseLockScreen() => _call('setShowOverLock', {'on': false});
 
+  /// Pastikan HP tidak terkunci sebelum membuka kamera dari layar alarm.
+  ///
+  /// Layar alarm tampil di atas kunci layar, tetapi kamera bawaan HP tidak:
+  /// dibuka saat HP terkunci, kamera muncul di belakang kunci dan tidak
+  /// terlihat (uji manual 31 Okt 2026). Bila terkunci, PIN / sidik jari
+  /// dimunculkan dulu. false = orangnya batal membuka kunci. Kanal tidak
+  /// tersedia (mis. app lama) dianggap tidak terkunci, supaya kamera tetap
+  /// dicoba.
+  static Future<bool> ensureUnlockedForCamera() async {
+    try {
+      final locked = await _native.invokeMethod<bool>('isKeyguardLocked') ?? false;
+      if (!locked) return true;
+      return await _native.invokeMethod<bool>('dismissKeyguard') ?? false;
+    } on MissingPluginException {
+      return true;
+    } catch (e) {
+      debugPrint('[push] ensureUnlockedForCamera gagal: $e');
+      return true;
+    }
+  }
+
+  /// Halaman info app, tempat izin kamera bisa dinyalakan lagi.
+  static Future<void> openAppSettings() => _call('openAppSettings');
+
   static Future<void> _call(String method, [Map<String, dynamic>? args]) async {
     try {
       await _native.invokeMethod<void>(method, args);

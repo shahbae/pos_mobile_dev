@@ -121,28 +121,14 @@ Set<AppFeature> featuresForRole(String? role) {
       return {
         AppFeature.attendance,
       };
-    case 'kasir':
-      // Fokus POS, shift, transaksi, absensi. + dashboard (GET /dashboard
-      // adaptif: section current_shift + recent_transactions).
-      // + audit stok (revisi BE 2026-08-03 §4): kasir input hitung fisik,
-      //   approve tetap milik owner/supervisor.
-      return {
-        AppFeature.dashboard,
-        AppFeature.pos,
-        AppFeature.transactions,
-        AppFeature.stockAudit,
-        AppFeature.shift,
-        AppFeature.attendance,
-        AppFeature.kitchenDisplay,
-      };
     case 'karyawan':
       // POS + shift + absensi + riwayat transaksi + dashboard adaptif.
       // CATATAN: matriks (baris 243) menandai GET /transactions ❌ untuk
       // karyawan, tapi per arahan user karyawan boleh akses transaksi.
       // + audit stok (Tahap 1 SDM): karyawan bertugas kasir menggantikan role
-      // kasir, termasuk opname. BE baru membukanya saat role kasir dimigrasi
-      // ke karyawan (langkah 7). Hari yang ia bertugas penyaji saja, menu
-      // kasir ditutup lewat [cashierDutyFeatures].
+      // kasir, termasuk opname. Role kasir sendiri sudah dihapus (revisi uji
+      // manual 31 Okt 2026). Hari yang ia bertugas penyaji saja, menu kasir
+      // ditutup lewat [cashierDutyFeatures].
       return {
         AppFeature.dashboard,
         AppFeature.pos,
@@ -171,11 +157,10 @@ Set<AppFeature> featuresForRole(String? role) {
 ///
 /// `finance` dikeluarkan (revisi 18 Sep 2026): finance kini absen di gudang
 /// lewat app Gudang, dengan lokasi gudang. Dulu dia masuk ke sini hanya untuk
-/// absensi. `karyawan` masuk sejak Tahap 1 SDM: role kasir akan dimigrasi ke
-/// karyawan, dan tugas kasir/penyajinya diambil dari jadwal.
+/// absensi. `karyawan` masuk sejak Tahap 1 SDM dan menggantikan role `kasir`
+/// (dihapus 31 Okt 2026); tugas kasir/penyajinya diambil dari jadwal.
 const allowedAppRoles = {
   'owner',
-  'kasir',
   'karyawan',
   'supervisor',
   'leader',
@@ -207,14 +192,25 @@ bool isAttendanceOnly(String? role) {
   return f.length == 1 && f.contains(AppFeature.attendance);
 }
 
+/// Role lama `kasir` dihapus (revisi uji manual 31 Okt 2026); pemegangnya
+/// dimigrasi ke `karyawan` oleh server. Token yang terbit sebelum migrasi masih
+/// membawanya — dibaca sebagai `karyawan`, sama seperti di server.
+String? upgradeLegacyRole(String? role) {
+  final r = role?.trim().toLowerCase();
+  return r == 'kasir' ? 'karyawan' : r;
+}
+
+/// [upgradeLegacyRole] untuk seluruh daftar, tanpa dobel.
+List<String> upgradeLegacyRoles(Iterable<String> roles) => {
+      for (final r in roles)
+        if (r.trim().isNotEmpty) upgradeLegacyRole(r)!,
+    }.toList();
+
 /// Seluruh role yang dipegang user, huruf kecil. `roles` dari `/me` atau token;
 /// kosong (token sebelum multi-role) → jatuh ke role utama.
 Set<String> heldRoles(String? role, Iterable<String> roles) {
-  final held = {
-    for (final r in roles)
-      if (r.trim().isNotEmpty) r.trim().toLowerCase(),
-  };
-  final primary = role?.trim().toLowerCase();
+  final held = upgradeLegacyRoles(roles).toSet();
+  final primary = upgradeLegacyRole(role);
   if (held.isEmpty && primary != null && primary.isNotEmpty) held.add(primary);
   return held;
 }
@@ -226,31 +222,45 @@ const _attendanceGateExempt = {'owner', 'supervisor', 'leader'};
 /// Aplikasi terkunci mengikuti absensi: sebelum absen masuk dan sesudah absen
 /// pulang, yang terbuka hanya halaman Absensi.
 ///
-/// Hanya kasir dan karyawan (hotfix 19 Okt 2026; revisi 17 Okt mengunci semua
-/// yang ikut absen; karyawan sejak Tahap 1 SDM). Owner, supervisor dan leader
-/// bebas — juga kalau dia sekaligus kasir. Karena itu yang dibaca seluruh role,
-/// bukan role utama: finance mengalahkan leader di urutan role utama, jadi
-/// finance + leader + kasir akan terbaca "finance" dan aturannya meleset.
+/// Hanya karyawan (hotfix 19 Okt 2026 untuk kasir; revisi 17 Okt mengunci
+/// semua yang ikut absen; karyawan sejak Tahap 1 SDM, kasir dihapus 31 Okt).
+/// Owner, supervisor dan leader bebas — juga kalau dia sekaligus karyawan.
+/// Karena itu yang dibaca seluruh role, bukan role utama: finance mengalahkan
+/// leader di urutan role utama, jadi finance + leader + karyawan akan terbaca
+/// "finance" dan aturannya meleset.
 bool requiresAttendanceGate(Iterable<String> held) {
   final roles = _norm(held);
-  return (roles.contains('kasir') || roles.contains('karyawan')) &&
-      roles.intersection(_attendanceGateExempt).isEmpty;
+  return roles.contains('karyawan') && roles.intersection(_attendanceGateExempt).isEmpty;
 }
 
-Set<String> _norm(Iterable<String> held) => held.map((r) => r.trim().toLowerCase()).toSet();
+Set<String> _norm(Iterable<String> held) => upgradeLegacyRoles(held).toSet();
 
 /// Owner & supervisor: hak penuh di semua cabang.
 bool isOwnerLevel(Iterable<String> held) =>
     _norm(held).intersection(const {'owner', 'supervisor'}).isNotEmpty;
 
+/// Boleh memilih cabang sendiri (menu Ganti Cabang): hanya owner & SPV
+/// (revisi uji manual 31 Okt 2026). Cabang kerja role lain mengikuti jadwal
+/// hari ini dan app pindah sendiri sesudah absen masuk; menu itu bagi mereka
+/// hanya sumber 403.
+bool canSwitchBranch(Iterable<String> held) => isOwnerLevel(held);
+
+/// Pesan saat token belum membawa cabang, untuk yang tidak bisa memilih
+/// cabang sendiri.
+const kNoOutletTodayMsg = 'Belum ada jadwal di outlet hari ini. Absen masuk dulu atau hubungi leader.';
+
+/// Pesan "belum ada cabang" yang sesuai untuk orang ini.
+String branchRequiredMessage(Iterable<String> held) =>
+    canSwitchBranch(held) ? 'Pilih cabang aktif dulu lewat menu Ganti Cabang.' : kNoOutletTodayMsg;
+
 /// Karyawan yang menunya mengikuti tugas hari ini (Tahap 1 SDM). Cerminan
-/// `dutyGated` di BE: memegang karyawan, tanpa kasir dan tanpa role lain.
-/// Kasir lama tidak diperiksa tugasnya sampai rolenya dimigrasi.
+/// `dutyGated` di BE: memegang karyawan tanpa role lain. Dulu pemegang role
+/// kasir dilewati; role itu dihapus 31 Okt 2026, sehingga penyaji tidak lagi
+/// bisa membuka POS hanya karena rolenya belum dimigrasi.
 bool isDutyGated(Iterable<String> held) {
   final roles = _norm(held);
   return roles.contains('karyawan') &&
       roles.intersection(const {
-        'kasir',
         'owner',
         'supervisor',
         'finance',
@@ -294,7 +304,6 @@ bool canUsePayroll(Iterable<String> held) => _norm(held)
       'supervisor',
       'leader',
       'finance',
-      'kasir',
       'karyawan',
       'produksi',
       'admin_produksi',
@@ -304,13 +313,13 @@ bool canUsePayroll(Iterable<String> held) => _norm(held)
 /// Boleh menyerahkan pinjaman tunai dari laci (`loanCashier` di BE). Karyawan
 /// penyaji tetap ditolak BE (RequireCashierDuty); menunya ikut [AppFeature.shift].
 bool canHandOutLoan(Iterable<String> held) =>
-    _norm(held).intersection(const {'owner', 'leader', 'kasir', 'karyawan'}).isNotEmpty;
+    _norm(held).intersection(const {'owner', 'leader', 'karyawan'}).isNotEmpty;
 
 /// Bisa menerima reminder & permintaan pengecekan foto (Tahap 4): kru outlet.
 /// SPV dan owner tidak pernah menerima walau sedang absen di outlet — cermin
 /// aturan penerima di be-pos `reminder_rules.go`.
 bool canReceiveReminders(Iterable<String> held) =>
-    _norm(held).intersection(const {'kasir', 'karyawan', 'leader'}).isNotEmpty;
+    _norm(held).intersection(const {'karyawan', 'leader'}).isNotEmpty;
 
 /// Membuat dan mengonfirmasi tiket bantuan (Tahap 4): leader, untuk outlet yang
 /// dipimpinnya. Menanggapi tiket ada di web admin.
@@ -318,7 +327,7 @@ bool canUseHelpTickets(Iterable<String> held) => _norm(held).contains('leader');
 
 /// Boleh mencatat izin keluar dari outlet (yang sedang bertugas).
 bool canLeaveOut(Iterable<String> held) => _norm(held)
-    .intersection(const {'owner', 'supervisor', 'leader', 'kasir', 'karyawan'})
+    .intersection(const {'owner', 'supervisor', 'leader', 'karyawan'})
     .isNotEmpty;
 
 /// Boleh memilih cabang saat check-in absensi.
@@ -370,7 +379,7 @@ bool canManageExpense(String? role) {
 
 /// Boleh membuat / mengubah / menghapus draft audit stok.
 /// Revisi BE 2026-08-03 §4 memisahkan input dari persetujuan: Owner,
-/// Supervisor, Leader, Kasir boleh menginput hitung fisik. Finance read-only;
+/// Supervisor, Leader, Karyawan boleh menginput hitung fisik. Finance read-only;
 /// Produksi tanpa akses. Karyawan (dicabut per BE 2026-08-08 §3) kembali di
 /// Tahap 1 SDM untuk hari ia bertugas kasir — lihat [featuresForToday].
 bool canCreateAudit(String? role) {
@@ -378,7 +387,6 @@ bool canCreateAudit(String? role) {
     case 'owner':
     case 'supervisor':
     case 'leader':
-    case 'kasir':
     case 'karyawan':
       return true;
     default:
@@ -402,7 +410,7 @@ bool canReceiveShipment(String? role) {
 }
 
 /// Boleh mengajukan / mengubah / membatalkan permintaan stok ke gudang.
-/// Owner, Supervisor, Leader (BE Stasiun 3). Kasir & karyawan tidak: permintaan
+/// Owner, Supervisor, Leader (BE Stasiun 3). Karyawan tidak: permintaan
 /// punya konsekuensi biaya dan harus jelas siapa yang bertanggung jawab per
 /// outlet.
 ///
@@ -451,7 +459,6 @@ bool canOperateShift(String? role) {
     case 'owner':
     case 'supervisor':
     case 'leader':
-    case 'kasir':
     case 'karyawan':
       return true;
     default:
