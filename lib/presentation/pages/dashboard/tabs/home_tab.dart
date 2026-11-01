@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/data/models/dashboard_model.dart';
 import 'package:pos_mobile/data/models/dashboard_operational_model.dart';
+import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/branch_provider.dart';
 import 'package:pos_mobile/presentation/providers/dashboard_operational_provider.dart';
 import 'package:pos_mobile/presentation/widgets/branch_switch_sheet.dart';
@@ -458,6 +460,9 @@ class _Header extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currentBranch = ref.watch(currentBranchProvider);
     final accent = Theme.of(context).colorScheme.primary;
+    // Owner & SPV memilih cabang sendiri. Role lain cabangnya ikut jadwal hari
+    // ini (31 Okt 2026): nama outletnya tetap tampil, tanpa pemilih.
+    final canSwitch = canSwitchBranch(ref.watch(authProvider).held);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -484,56 +489,60 @@ class _Header extends ConsumerWidget {
             ),
           ],
         ),
-        const SizedBox(height: 10),
-        InkWell(
-          borderRadius: BorderRadius.circular(999),
-          onTap: () => showBranchSwitchSheet(context),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-            decoration: BoxDecoration(
-              color: currentBranch != null
-                  ? accent.withOpacity(0.08)
-                  : Colors.white,
-              border: Border.all(
+        if (canSwitch || currentBranch != null) ...[
+          const SizedBox(height: 10),
+          InkWell(
+            borderRadius: BorderRadius.circular(999),
+            onTap: canSwitch ? () => showBranchSwitchSheet(context) : null,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
                 color: currentBranch != null
-                    ? accent.withOpacity(0.35)
-                    : AppTheme.borderLight,
-              ),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.store_outlined,
-                  size: 15,
+                    ? accent.withOpacity(0.08)
+                    : Colors.white,
+                border: Border.all(
                   color: currentBranch != null
-                      ? accent
-                      : AppTheme.textSecondary,
+                      ? accent.withOpacity(0.35)
+                      : AppTheme.borderLight,
                 ),
-                const SizedBox(width: 6),
-                Text(
-                  currentBranch?.name ?? 'Pilih Cabang',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.store_outlined,
+                    size: 15,
                     color: currentBranch != null
                         ? accent
                         : AppTheme.textSecondary,
                   ),
-                ),
-                const SizedBox(width: 4),
-                Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  size: 16,
-                  color: currentBranch != null
-                      ? accent
-                      : AppTheme.textSecondary,
-                ),
-              ],
+                  const SizedBox(width: 6),
+                  Text(
+                    currentBranch?.name ?? 'Pilih Cabang',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: currentBranch != null
+                          ? accent
+                          : AppTheme.textSecondary,
+                    ),
+                  ),
+                  if (canSwitch) ...[
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 16,
+                      color: currentBranch != null
+                          ? accent
+                          : AppTheme.textSecondary,
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
-        ),
+        ],
       ],
     );
   }

@@ -43,14 +43,16 @@ void main() {
 
   group('sumber role', () {
     test('roles kosong (token lama) jatuh ke role utama', () {
-      expect(heldRoles('kasir', const []), {'kasir'});
+      // Role lama kasir dibaca sebagai karyawan (dihapus 31 Okt 2026).
+      expect(heldRoles('kasir', const []), {'karyawan'});
       expect(heldRoles('leader', const []), {'leader'});
       expect(heldRoles(null, const []), isEmpty);
       expect(requiresAttendanceGate(heldRoles(null, const [])), isFalse);
     });
 
     test('roles ada → role utama tidak ditambahkan diam-diam', () {
-      expect(heldRoles('leader', ['leader', 'kasir']), {'leader', 'kasir'});
+      expect(heldRoles('leader', ['leader', 'karyawan']), {'leader', 'karyawan'});
+      expect(heldRoles('leader', ['leader', 'kasir', 'karyawan']), {'leader', 'karyawan'});
     });
 
     test('/me membawa roles', () {

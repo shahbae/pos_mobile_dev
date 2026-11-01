@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/presentation/widgets/offline_hold.dart';
 import 'package:pos_mobile/data/models/branch_model.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
@@ -343,4 +344,53 @@ void showBranchSwitchSheet(BuildContext context) {
     backgroundColor: Colors.transparent,
     builder: (_) => const BranchSwitchSheet(),
   );
+}
+
+/// Layar pengganti untuk menu yang selalu terikat satu cabang (kiriman, audit
+/// stok, permintaan stok) saat token belum membawa cabang. Owner & SPV diberi
+/// tombol memilih cabang; role lain cabangnya ikut jadwal, jadi diarahkan
+/// absen masuk dulu.
+class BranchRequiredView extends ConsumerWidget {
+  /// Kenapa menu ini butuh cabang, satu kalimat.
+  final String reason;
+  const BranchRequiredView({super.key, required this.reason});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final canSwitch = canSwitchBranch(ref.watch(authProvider).held);
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.store_outlined, size: 56, color: AppTheme.textSecondary),
+          const SizedBox(height: 12),
+          Text(
+            canSwitch ? 'Pilih cabang dulu' : 'Belum ada outlet hari ini',
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppTheme.textPrimary),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            canSwitch ? '$reason Pilih cabang aktif dulu sebelum membuka menu ini.' : '$reason $kNoOutletTodayMsg',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+          ),
+          if (canSwitch) ...[
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: () => showBranchSwitchSheet(context),
+              icon: const Icon(Icons.swap_horiz),
+              label: const Text('Pilih Cabang'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.brandBlue,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }

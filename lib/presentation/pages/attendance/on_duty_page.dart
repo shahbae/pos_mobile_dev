@@ -87,9 +87,9 @@ class _OnDutyPageState extends ConsumerState<OnDutyPage> {
           RefreshIndicator(
             onRefresh: () async => ref.invalidate(onDutyProvider),
             child: async == null
-                ? const SdmStateView(
+                ? SdmStateView(
                     icon: Icons.store_outlined,
-                    message: 'Pilih cabang aktif dulu lewat menu Ganti Cabang.',
+                    message: branchRequiredMessage(auth.held),
                   )
                 : async.when(
                     loading: SdmStateView.loading,

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:pos_mobile/data/models/me_model.dart';
@@ -73,8 +74,9 @@ void main() {
   });
 
   Future<AuthNotifier> buka(_Repo repo) async {
-    final n = AuthNotifier(repo);
-    addTearDown(n.dispose);
+    final container = ProviderContainer(overrides: [authRepositoryProvider.overrideWithValue(repo)]);
+    addTearDown(container.dispose);
+    final n = container.read(authProvider.notifier);
     for (var i = 0; i < 20 && n.state.status == AuthStatus.unknown; i++) {
       await Future<void>.delayed(Duration.zero);
     }
@@ -88,7 +90,9 @@ void main() {
 
     expect(repo.refreshCalls, 1);
     expect(auth.state.status, AuthStatus.authenticated);
-    expect(auth.state.role, 'kasir');
+    // Token terbit sebelum role kasir dihapus (31 Okt 2026): dibaca sebagai
+    // karyawan, kalau tidak kasir lama tertolak masuk tepat saat offline.
+    expect(auth.state.role, 'karyawan');
     expect(auth.state.branchId, 7, reason: 'peran dan cabang dibaca dari token yang tersimpan');
     expect(storage['REFRESH_TOKEN'], 'refresh-lama', reason: 'token tidak boleh ikut terhapus');
     expect(storage.containsKey('ACCESS_TOKEN'), isTrue);

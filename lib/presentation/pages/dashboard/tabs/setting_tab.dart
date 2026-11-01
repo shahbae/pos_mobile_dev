@@ -38,6 +38,8 @@ class SettingTab extends ConsumerWidget {
     final canShift = ref.watch(todayFeaturesProvider).contains(AppFeature.shift);
     final canMonitorKitchen = hasFeature(role, AppFeature.kitchenDisplay);
     final currentBranch = ref.watch(currentBranchProvider);
+    // Cabang kerja selain owner & SPV ikut jadwal hari ini (31 Okt 2026).
+    final canSwitch = canSwitchBranch(auth.held);
     final accent = theme.colorScheme.primary;
     final bottomInset = MediaQuery.of(context).padding.bottom;
 
@@ -82,20 +84,22 @@ class SettingTab extends ConsumerWidget {
             ],
           ),
         ),
-        const SizedBox(height: 16),
-        _SettingMenuCard(
-          title: "Ganti Cabang",
-          subtitle: currentBranch?.name ?? "Pilih cabang aktif",
-          icon: Icons.store_outlined,
-          color: accent,
-          onTap: () => showBranchSwitchSheet(context),
-        ),
+        if (canSwitch) ...[
+          const SizedBox(height: 16),
+          _SettingMenuCard(
+            title: "Ganti Cabang",
+            subtitle: currentBranch?.name ?? "Pilih cabang aktif",
+            icon: Icons.store_outlined,
+            color: accent,
+            onTap: () => showBranchSwitchSheet(context),
+          ),
+        ],
         if (canMonitorKitchen) ...[
           const SizedBox(height: 16),
           _SettingMenuCard(
             title: "Monitoring Pesanan",
             subtitle: auth.branchId == null
-                ? "Pilih cabang aktif dulu"
+                ? (canSwitch ? "Pilih cabang aktif dulu" : "Belum ada jadwal di outlet hari ini")
                 : "Layar dapur: pesanan masuk realtime",
             icon: Icons.ramen_dining_outlined,
             color: accent,
@@ -103,7 +107,13 @@ class SettingTab extends ConsumerWidget {
               // BE mengunci stream ke satu cabang. Owner yang belum switch
               // cabang tidak punya branch_id, jadi diarahkan memilih dulu.
               if (auth.branchId == null) {
-                showBranchSwitchSheet(context);
+                if (canSwitch) {
+                  showBranchSwitchSheet(context);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text(kNoOutletTodayMsg)),
+                  );
+                }
                 return;
               }
               Navigator.push(

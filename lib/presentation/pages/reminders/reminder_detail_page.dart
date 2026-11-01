@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -24,6 +25,26 @@ Color reminderStatusColor(String status) => switch (status) {
   'missed' => AppTheme.danger,
   _ => AppTheme.textSecondary,
 };
+
+/// Pesan bila orangnya batal membuka kunci HP sebelum memotret.
+const kUnlockToShootMsg = 'Buka kunci HP dulu untuk memotret.';
+
+/// Izin kamera ditolak (kode galat image_picker).
+bool isCameraPermissionError(Object e) =>
+    e is PlatformException && (e.code.contains('denied') || e.code.contains('restricted'));
+
+/// Galat kamera apa adanya, supaya uji berikutnya langsung menunjukkan
+/// penyebabnya.
+String cameraErrorMessage(Object e) {
+  if (isCameraPermissionError(e)) {
+    return 'Izin kamera ditolak. Nyalakan izin kamera untuk Kasir Es Teh di Pengaturan.';
+  }
+  if (e is PlatformException) {
+    if (e.code == 'no_available_camera') return 'Tidak ada app kamera yang bisa dibuka di HP ini.';
+    return 'Kamera tidak bisa dibuka (${e.code}${e.message == null ? '' : ': ${e.message}'}).';
+  }
+  return 'Kamera tidak bisa dibuka: $e';
+}
 
 /// Satu reminder untuk penerimanya (Tahap 4, F11): catatan ditandai sudah
 /// dibaca, permintaan pengecekan dibalas foto per bagian dari kamera.
@@ -112,13 +133,27 @@ class _ReminderDetailPageState extends ConsumerState<ReminderDetailPage> {
   }
 
   Future<void> _shoot(ReminderPart part) async {
+    // Dibuka alarm di atas kunci layar: buka kunci dulu, kalau tidak kamera
+    // terbuka di belakang kunci dan tidak terlihat. Hitung mundur tetap jalan.
+    if (!await PushService.ensureUnlockedForCamera()) {
+      _snack(kUnlockToShootMsg, error: true);
+      return;
+    }
+    if (!mounted) return;
     // Kamera saja, tanpa pilihan galeri: fotonya harus diambil saat itu.
-    final file = await ImagePicker().pickImage(
-      source: ImageSource.camera,
-      preferredCameraDevice: CameraDevice.rear,
-      imageQuality: 70,
-      maxWidth: 1280,
-    );
+    XFile? file;
+    try {
+      file = await ImagePicker().pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: CameraDevice.rear,
+        imageQuality: 70,
+        maxWidth: 1280,
+      );
+    } catch (e) {
+      // Dulu galatnya hilang diam-diam: tombol ditekan, tidak terjadi apa-apa.
+      _cameraFailed(e);
+      return;
+    }
     if (file == null || !mounted) return;
     // Dibaca ke memori sekarang juga, sebelum folder cache kamera sempat
     // dikosongkan Android.
@@ -137,6 +172,19 @@ class _ReminderDetailPageState extends ConsumerState<ReminderDetailPage> {
     } finally {
       if (mounted) setState(() => _uploading.remove(part.id));
     }
+  }
+
+  void _cameraFailed(Object e) {
+    if (!mounted) return;
+    final denied = isCameraPermissionError(e);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(cameraErrorMessage(e)),
+      backgroundColor: AppTheme.danger,
+      duration: const Duration(seconds: 6),
+      action: denied
+          ? SnackBarAction(label: 'Pengaturan', textColor: Colors.white, onPressed: PushService.openAppSettings)
+          : null,
+    ));
   }
 
   Future<void> _markRead() async {

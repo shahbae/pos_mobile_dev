@@ -306,8 +306,6 @@ void main() {
     test('bertugas kasir, tidak diketahui, atau bukan karyawan murni: tidak dikurangi', () {
       expect(featuresForToday('karyawan', {'karyawan'}, cashierDuty: true), contains(AppFeature.pos));
       expect(featuresForToday('karyawan', {'karyawan'}), contains(AppFeature.pos));
-      // Kasir lama tidak diperiksa tugasnya sampai rolenya dimigrasi.
-      expect(featuresForToday('kasir', {'kasir', 'karyawan'}, cashierDuty: false), contains(AppFeature.pos));
       expect(featuresForToday('leader', {'leader', 'karyawan'}, cashierDuty: false), contains(AppFeature.pos));
     });
 
@@ -344,9 +342,16 @@ void main() {
 
     test('isDutyGated hanya karyawan murni', () {
       expect(isDutyGated({'karyawan'}), isTrue);
-      expect(isDutyGated({'karyawan', 'kasir'}), isFalse);
       expect(isDutyGated({'karyawan', 'produksi'}), isFalse);
-      expect(isDutyGated({'kasir'}), isFalse);
+      expect(isDutyGated({'leader', 'karyawan'}), isFalse);
+    });
+
+    test('role kasir dihapus (31 Okt 2026): token lama ikut diperiksa tugasnya', () {
+      // Dulu kasir lama dilewati, sehingga penyaji ber-role kasir masih bisa
+      // membuka POS. Kini dibaca sebagai karyawan.
+      expect(isDutyGated({'kasir'}), isTrue);
+      expect(isDutyGated({'karyawan', 'kasir'}), isTrue);
+      expect(featuresForToday('karyawan', {'kasir'}, cashierDuty: false), isNot(contains(AppFeature.pos)));
     });
   });
 
