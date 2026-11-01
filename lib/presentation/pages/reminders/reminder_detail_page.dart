@@ -393,61 +393,88 @@ class _PartCard extends StatelessWidget {
                 ? 'Terkirim'
                 : 'Terkirim ${_clock.format(photo.receivedAt!.toLocal())}',
           };
+    // Tombol di bawah, selebar kartu. Dulu sebaris dengan nama bagian: tombol
+    // bertema lebar penuh (minimumSize Size.fromHeight) di dalam Row membuat
+    // nama tampil satu huruf per baris dan tombolnya hilang (uji 1 Nov 2026).
+    final Widget? action = uploading
+        ? ElevatedButton.icon(
+            onPressed: null,
+            icon: const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+            label: const Text('Mengirim foto…'),
+          )
+        : !canShoot
+            ? null
+            : photo == null
+                ? ElevatedButton.icon(
+                    onPressed: onShoot,
+                    icon: const Icon(Icons.photo_camera, size: 20),
+                    label: const Text('Ambil foto'),
+                  )
+                : OutlinedButton.icon(
+                    onPressed: onShoot,
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(44),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    icon: const Icon(Icons.photo_camera_outlined, size: 20),
+                    label: const Text('Foto ulang'),
+                  );
     return SdmCard(
       padding: const EdgeInsets.all(12),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: SizedBox(
-              width: 64,
-              height: 64,
-              child: photo == null
-                  ? const ColoredBox(
-                      color: AppTheme.bgLight,
-                      child: Icon(Icons.image_outlined, color: AppTheme.textSecondary),
-                    )
-                  : Image.network(
-                      photo.url,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => const ColoredBox(
-                        color: AppTheme.bgLight,
-                        child: Icon(Icons.broken_image_outlined, color: AppTheme.textSecondary),
+          Row(
+            children: [
+              _thumb(photo),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(part.name,
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppTheme.textPrimary)),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${_dutyLabels[part.duty] ?? part.duty} · $status',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: photo?.verdict == 'dirty' ? AppTheme.danger : AppTheme.textSecondary,
                       ),
                     ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(part.name,
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppTheme.textPrimary)),
-                const SizedBox(height: 2),
-                Text(
-                  '${_dutyLabels[part.duty] ?? part.duty} · $status',
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    color: photo?.verdict == 'dirty' ? AppTheme.danger : AppTheme.textSecondary,
-                  ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          if (uploading)
-            const Padding(
-              padding: EdgeInsets.all(12),
-              child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5)),
-            )
-          else if (canShoot)
-            ElevatedButton.icon(
-              onPressed: onShoot,
-              style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 14)),
-              icon: const Icon(Icons.photo_camera, size: 18),
-              label: Text(photo == null ? 'Foto' : 'Ulang'),
-            ),
+          if (action != null) ...[
+            const SizedBox(height: 12),
+            action,
+          ],
         ],
+      ),
+    );
+  }
+
+  Widget _thumb(ReminderPhoto? photo) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        width: 64,
+        height: 64,
+        child: photo == null
+            ? const ColoredBox(
+                color: AppTheme.bgLight,
+                child: Icon(Icons.image_outlined, color: AppTheme.textSecondary),
+              )
+            : Image.network(
+                photo.url,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => const ColoredBox(
+                  color: AppTheme.bgLight,
+                  child: Icon(Icons.broken_image_outlined, color: AppTheme.textSecondary),
+                ),
+              ),
       ),
     );
   }
