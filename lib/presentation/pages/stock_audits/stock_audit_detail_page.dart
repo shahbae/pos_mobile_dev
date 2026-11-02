@@ -8,6 +8,7 @@ import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/stock_audit_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/utils/currency.dart';
+import 'audit_reasons_card.dart';
 import 'stock_audit_form_page.dart';
 import 'stock_audit_list_page.dart' show StatusChip;
 
@@ -74,6 +75,20 @@ class _StockAuditDetailPageState extends ConsumerState<StockAuditDetailPage> {
         setState(() => _deleting = false);
         _snack('$e', AppTheme.danger);
       }
+    }
+  }
+
+  Future<void> _saveReasons(Map<StockAuditItem, String> changes) async {
+    try {
+      await ref.read(stockAuditRepositoryProvider).setReasons(widget.auditId, [
+        for (final e in changes.entries) {...e.key.idPayload, 'reason': e.value},
+      ]);
+      ref.invalidate(stockAuditDetailProvider(widget.auditId));
+      ref.invalidate(stockAuditListProvider);
+      ref.invalidate(auditPeriodsProvider);
+      if (mounted) _snack('Alasan tersimpan', Colors.green);
+    } catch (e) {
+      if (mounted) _snack('$e', AppTheme.danger);
     }
   }
 
@@ -174,16 +189,27 @@ class _StockAuditDetailPageState extends ConsumerState<StockAuditDetailPage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text('Status', style: TextStyle(color: AppTheme.textSecondary)),
-                        StatusChip(status: audit.status),
+                        StatusChip(status: audit.status, waitingReasons: audit.waitingReasons),
                       ],
                     ),
                     const Divider(height: 20, color: AppTheme.borderLight),
+                    _row('Jenis',
+                        '${auditTypeLabel(audit.auditType)}${audit.periodKey != null ? ' · ${audit.periodKey}' : ''}'),
                     _row('Catatan', audit.notes?.isNotEmpty == true ? audit.notes! : '-'),
-                    if (audit.createdAt != null) _row('Dibuat', _fmt(audit.createdAt!)),
+                    if ((audit.countedAt ?? audit.createdAt) != null)
+                      _row('Dihitung',
+                          '${_fmt((audit.countedAt ?? audit.createdAt)!)}${audit.createdByName?.isNotEmpty == true ? ' · ${audit.createdByName}' : ''}'),
                     if (audit.approvedAt != null) _row('Disetujui', _fmt(audit.approvedAt!)),
                   ],
                 ),
               ),
+              if (audit.items.any((it) => it.isUnfair)) ...[
+                const SizedBox(height: 16),
+                AuditReasonsCard(
+                  items: audit.items.where((it) => it.isUnfair).toList(),
+                  onSave: audit.isDraft && canCreateAudit(ref.watch(authProvider).role) ? _saveReasons : null,
+                ),
+              ],
               const SizedBox(height: 20),
               const Padding(
                 padding: EdgeInsets.only(left: 4, bottom: 8),
@@ -220,21 +246,34 @@ class _StockAuditDetailPageState extends ConsumerState<StockAuditDetailPage> {
             top: false,
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _busy ? null : _approve,
-                  icon: _approving
-                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Icon(Icons.check_circle_outline),
-                  label: Text(_approving ? 'Memproses…' : 'Setujui Audit'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.brandBlue,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    elevation: 0,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Tahap 5: barang tidak wajar wajib beralasan dulu.
+                  if (audit.reasonsMissing > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        'Belum bisa disetujui: ${audit.reasonsMissing} barang tidak wajar belum diberi alasan.',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.danger),
+                      ),
+                    ),
+                  ElevatedButton.icon(
+                    onPressed: _busy || audit.reasonsMissing > 0 ? null : _approve,
+                    icon: _approving
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.check_circle_outline),
+                    label: Text(_approving ? 'Memproses…' : 'Setujui Audit'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.brandBlue,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      elevation: 0,
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
           ),
@@ -269,6 +308,32 @@ class _StockAuditDetailPageState extends ConsumerState<StockAuditDetailPage> {
                   Text('Rugi ${formatRupiah(it.lossValue)}',
                       style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppTheme.danger)),
                 if (it.shortfallQty > 0) _shortfallNote(it),
+                // Tahap 5: keterangan terhadap batas wajar, stok keluar, dan
+                // jejak perubahan angka fisik.
+                if (it.verdict != null || it.stockOut != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        if (it.verdict != null) _verdictChip(it),
+                        if (it.maxShortage != null)
+                          Text('Batas ${fmtAuditQtyUnit(it.maxShortage, it.unit)}',
+                              style: const TextStyle(fontSize: 10, color: AppTheme.textSecondary)),
+                        if (it.stockOut != null)
+                          Text('Keluar ${fmtAuditQty(it.stockOut!)}',
+                              style: const TextStyle(fontSize: 10, color: AppTheme.textSecondary)),
+                      ],
+                    ),
+                  ),
+                if (it.physicalChanged)
+                  Text('Fisik diubah dari ${fmtAuditQty(it.initialPhysicalQty!)}',
+                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.orange)),
+                if (it.supersededBy != null)
+                  Text('Tidak diterapkan ke stok: digantikan opname #${it.supersededBy}',
+                      style: const TextStyle(fontSize: 10, color: AppTheme.textSecondary)),
               ],
             ),
           ),
@@ -282,6 +347,17 @@ class _StockAuditDetailPageState extends ConsumerState<StockAuditDetailPage> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _verdictChip(StockAuditItem it) {
+    final unfair = it.isUnfair;
+    final color = unfair ? AppTheme.danger : Colors.green;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(999)),
+      child: Text(unfair ? 'Tidak wajar' : 'Wajar',
+          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: color)),
     );
   }
 

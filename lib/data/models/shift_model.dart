@@ -13,6 +13,10 @@ class ShiftModel {
   /// Yang membuka shift. Absen pulang ditolak selama shift miliknya masih
   /// buka (revisi 17 Okt 2026); shift orang lain di cabang yang sama tidak.
   final int? cashierId;
+
+  /// "Shift 1" / "Shift 2" dari server (jam buka). Opname harian wajib sebelum
+  /// Shift 2 ditutup (Tahap 5).
+  final String shiftName;
   final DateTime? openedAt;
   final DateTime? closedAt;
 
@@ -28,11 +32,15 @@ class ShiftModel {
     required this.payments,
     required this.status,
     this.cashierId,
+    this.shiftName = '',
     required this.openedAt,
     required this.closedAt,
   });
 
   bool get isOpen => status == 'open';
+
+  /// Shift sore, yang penutupannya menunggu opname harian.
+  bool get isSecondShift => shiftName.trim().toLowerCase() == 'shift 2';
 
   /// Total penjualan tunai (metode cash) dari breakdown pembayaran — fallback
   /// bila BE tidak mengirim `cash_sales`.
@@ -77,6 +85,7 @@ class ShiftModel {
       payments: pays.map((e) => ShiftPayment.fromJson(e as Map<String, dynamic>)).toList(),
       status: (data['status'] ?? (data['closed_at'] == null ? 'open' : 'closed')).toString(),
       cashierId: data['cashier_id'] is num ? (data['cashier_id'] as num).toInt() : int.tryParse('${data['cashier_id'] ?? ''}'),
+      shiftName: data['shift_name']?.toString() ?? '',
       openedAt: DateTime.tryParse(data['opened_at']?.toString() ?? ''),
       closedAt: DateTime.tryParse(data['closed_at']?.toString() ?? ''),
     );

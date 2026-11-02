@@ -30,9 +30,16 @@ final stockAuditDetailProvider =
 /// Item yang boleh diaudit di cabang aktif (BE 2026-08-08 §1). Sengaja TIDAK
 /// di-cache: owner bisa mengubah centangnya kapan saja dan form opname harus
 /// selalu memakai daftar terbaru — kalau basi, POST-nya kena 422.
+/// Per jenis audit (Tahap 5): Umum = centang "ikut opname", jenis berperiode =
+/// daftar jenis itu.
 final auditableItemsProvider =
-    FutureProvider.autoDispose<List<AuditableItem>>((ref) async {
+    FutureProvider.autoDispose.family<List<AuditableItem>, String>((ref, type) async {
   // Ikut cabang aktif: ganti cabang → daftar & snapshot stoknya ikut berubah.
   final branchId = ref.watch(authProvider).branchId;
-  return ref.watch(stockAuditRepositoryProvider).getAuditableItems(branchId: branchId);
+  return ref.watch(stockAuditRepositoryProvider).getAuditableItems(branchId: branchId, type: type);
+});
+
+/// Harian/Mingguan/Bulanan cabang aktif untuk periode berjalan.
+final auditPeriodsProvider = FutureProvider.autoDispose<AuditPeriods>((ref) async {
+  return ref.watch(stockAuditRepositoryProvider).getPeriods();
 });

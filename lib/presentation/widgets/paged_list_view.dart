@@ -17,6 +17,12 @@ class PagedListView<T> extends StatelessWidget {
   /// Pengganti tampilan kosong bawaan (teks [emptyText]).
   final Widget? empty;
 
+  /// Isi di atas daftar, ikut bergulir (mis. kartu status opname per jenis).
+  final Widget? header;
+
+  /// Tarik-untuk-segarkan. Bawaan: halaman pertama daftar saja.
+  final Future<void> Function()? onRefresh;
+
   const PagedListView({
     super.key,
     required this.state,
@@ -25,6 +31,8 @@ class PagedListView<T> extends StatelessWidget {
     required this.emptyText,
     required this.unit,
     this.empty,
+    this.header,
+    this.onRefresh,
   });
 
   @override
@@ -41,12 +49,14 @@ class PagedListView<T> extends StatelessWidget {
       );
     }
 
+    final header = this.header;
     return RefreshIndicator(
-      onRefresh: notifier.refresh,
+      onRefresh: onRefresh ?? notifier.refresh,
       child: state.items.isEmpty
           ? ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               children: [
+                if (header != null) Padding(padding: const EdgeInsets.fromLTRB(16, 16, 16, 0), child: header),
                 empty ??
                     Padding(
                       padding: const EdgeInsets.only(top: 160),
@@ -62,9 +72,13 @@ class PagedListView<T> extends StatelessWidget {
           : ListView.separated(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(16),
-              itemCount: state.items.length + 1,
-              separatorBuilder: (_, _) => const SizedBox(height: 12),
+              itemCount: state.items.length + 1 + (header != null ? 1 : 0),
+              separatorBuilder: (_, i) => header != null && i == 0 ? const SizedBox.shrink() : const SizedBox(height: 12),
               itemBuilder: (context, i) {
+                if (header != null) {
+                  if (i == 0) return header;
+                  i -= 1;
+                }
                 if (i < state.items.length) {
                   return itemBuilder(context, state.items[i]);
                 }
