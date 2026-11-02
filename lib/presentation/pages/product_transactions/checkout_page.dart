@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pos_mobile/presentation/providers/reminder_block.dart';
 import 'package:intl/intl.dart';
 import 'package:pos_mobile/core/promo_engine.dart';
 import 'package:pos_mobile/data/models/allowance_model.dart';
@@ -57,7 +58,8 @@ class CheckoutPage extends ConsumerStatefulWidget {
   ConsumerState<CheckoutPage> createState() => _CheckoutPageState();
 }
 
-class _CheckoutPageState extends ConsumerState<CheckoutPage> {
+class _CheckoutPageState extends ConsumerState<CheckoutPage>
+    with ReminderPaymentHold {
   final TextEditingController _paidAmountController = TextEditingController();
   final TextEditingController _customerNameController = TextEditingController();
   final TextEditingController _paymentRefController = TextEditingController();

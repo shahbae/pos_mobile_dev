@@ -16,6 +16,7 @@ import 'package:pos_mobile/presentation/pages/login_page.dart';
 import 'package:pos_mobile/presentation/widgets/app_update_gate.dart';
 import 'package:pos_mobile/presentation/widgets/attendance_gate.dart';
 import 'package:pos_mobile/presentation/widgets/push_binder.dart';
+import 'package:pos_mobile/presentation/widgets/reminder_gate.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,6 +31,8 @@ void main() async {
   // Notifikasi push (Tahap 4). Tanpa google-services.json (flavor prod
   // sebelum terdaftar) app tetap jalan, hanya tanpa push.
   await PushService.init();
+  // Sebelum runApp: harus mendahului pengamat Back milik MaterialApp.
+  WidgetsBinding.instance.addObserver(ReminderBackGuard.instance);
 
   runApp(const ProviderScope(child: MyApp()));
 }
@@ -83,6 +86,10 @@ class MyApp extends ConsumerWidget {
       key: ValueKey(auth.status),
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
+      // Blok reminder di atas seluruh halaman, termasuk dialog.
+      builder: auth.status == AuthStatus.authenticated
+          ? (_, child) => ReminderGate(child: child ?? const SizedBox.shrink())
+          : null,
       home: page,
     );
   }

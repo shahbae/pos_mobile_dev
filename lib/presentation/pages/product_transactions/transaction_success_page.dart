@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pos_mobile/presentation/providers/reminder_block.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/data/models/product_transaction_model.dart';
 import 'package:pos_mobile/data/models/receipt_model.dart';
@@ -23,7 +24,8 @@ class TransactionSuccessPage extends ConsumerStatefulWidget {
   ConsumerState<TransactionSuccessPage> createState() => _TransactionSuccessPageState();
 }
 
-class _TransactionSuccessPageState extends ConsumerState<TransactionSuccessPage> {
+class _TransactionSuccessPageState extends ConsumerState<TransactionSuccessPage>
+    with ReminderPaymentHold {
   bool _hasDefaultPrinter = false;
   bool _attempted = false;
 

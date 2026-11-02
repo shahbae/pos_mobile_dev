@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pos_mobile/presentation/providers/reminder_block.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import 'package:pos_mobile/data/models/qris_payment_model.dart';
@@ -37,7 +38,8 @@ const _hintAmber = Color(0xFFB45309);
 
 enum _View { waiting, failed }
 
-class _QrisPaymentPageState extends ConsumerState<QrisPaymentPage> {
+class _QrisPaymentPageState extends ConsumerState<QrisPaymentPage>
+    with ReminderPaymentHold {
   Timer? _pollTimer;
   Timer? _tick;
   bool _checking = false;

@@ -112,12 +112,19 @@ class MyReminderPage {
   final List<MyReminder> items;
   final int total;
   final DateTime? serverTime;
-  const MyReminderPage({required this.items, required this.total, this.serverTime});
 
-  factory MyReminderPage.fromJson(Map<String, dynamic> j) {
+  /// Jam HP saat jawaban diterima. Bersama [serverTime] dipakai menghitung
+  /// sisa waktu tanpa bergantung pada jam HP.
+  final DateTime receivedAt;
+
+  MyReminderPage({required this.items, required this.total, this.serverTime, DateTime? receivedAt})
+      : receivedAt = receivedAt ?? DateTime.now();
+
+  factory MyReminderPage.fromJson(Map<String, dynamic> j, {DateTime? receivedAt}) {
     final server = _time(j['server_time']);
     return MyReminderPage(
       serverTime: server,
+      receivedAt: receivedAt,
       total: (j['total'] as num?)?.toInt() ?? 0,
       items: [
         for (final e in (j['items'] as List? ?? const []))
