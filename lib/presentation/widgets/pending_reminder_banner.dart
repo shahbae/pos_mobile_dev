@@ -7,9 +7,11 @@ import 'package:pos_mobile/presentation/pages/reminders/reminder_list_page.dart'
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/reminder_provider.dart';
 
-/// Spanduk "reminder belum dibalas" di semua tab Dashboard (Tahap 4). Jaring
-/// pengaman bila notifikasinya tidak sampai atau terlanjur digeser: datanya
-/// ditarik ulang tiap app dibuka. Hilang sendiri begitu semuanya dibalas.
+/// Spanduk "reminder belum dibalas" di semua tab Dashboard (Tahap 4). Hilang
+/// sendiri begitu semuanya dibalas.
+///
+/// Sejak ada `ReminderGate`, spanduk ini terlihat hanya saat blok tidak boleh
+/// tampil: HP offline atau orangnya sedang izin keluar.
 class PendingReminderBanner extends ConsumerWidget {
   const PendingReminderBanner({super.key});
 

@@ -51,9 +51,26 @@ String cameraErrorMessage(Object e) {
 ///
 /// Juga tujuan ketukan notifikasi `app:/reminders/<id>`, termasuk alarm yang
 /// membuka app di atas kunci layar.
+///
+/// [blocking]: ditampilkan `ReminderGate` tanpa ada yang menekan apa pun,
+/// jadi alarm tetap berbunyi dan jam "Dibuka" belum dicatat sampai tombol
+/// pertama ditekan. Isinya memakai [initial] dari daftar reminder, supaya
+/// layar ini tidak bergantung pada satu permintaan lagi.
 class ReminderDetailPage extends ConsumerStatefulWidget {
   final int reminderId;
-  const ReminderDetailPage({super.key, required this.reminderId});
+  final bool blocking;
+  final MyReminder? initial;
+
+  /// Jam HP saat [initial] diterima.
+  final DateTime? initialAt;
+
+  const ReminderDetailPage({
+    super.key,
+    required this.reminderId,
+    this.blocking = false,
+    this.initial,
+    this.initialAt,
+  });
 
   @override
   ConsumerState<ReminderDetailPage> createState() => _ReminderDetailPageState();
@@ -66,6 +83,7 @@ class _ReminderDetailPageState extends ConsumerState<ReminderDetailPage> {
   final _uploading = <int>{};
   bool _marking = false;
   bool _reloadedAfterDeadline = false;
+  bool _acknowledged = false;
   Timer? _tick;
 
   int get _id => widget.reminderId;
@@ -73,9 +91,27 @@ class _ReminderDetailPageState extends ConsumerState<ReminderDetailPage> {
   @override
   void initState() {
     super.initState();
-    // Alarm berhenti berbunyi begitu layarnya terbuka.
-    PushService.cancelTag('reminder-$_id');
-    _load(open: true);
+    final initial = widget.initial;
+    if (initial != null) {
+      _r = initial;
+      _fetchedAt = widget.initialAt ?? _fetchedAt;
+      _startTick(initial);
+    }
+    if (!widget.blocking) {
+      // Alarm berhenti berbunyi begitu layarnya terbuka.
+      PushService.cancelTag('reminder-$_id');
+      _load(open: true);
+    }
+  }
+
+  /// Mode blok: orangnya baru benar-benar ada di layar ini saat menekan tombol
+  /// pertama. Saat itulah alarm berhenti dan jam "Dibuka" dicatat.
+  void _acknowledge() {
+    if (!widget.blocking || _acknowledged) return;
+    _acknowledged = true;
+    unawaited(PushService.cancelTag('reminder-$_id'));
+    // Gagal mencatat bukan alasan menahan orang yang sedang membalas.
+    unawaited(ref.read(reminderRepositoryProvider).open(_id).then<void>((_) {}, onError: (_) {}));
   }
 
   @override
@@ -104,6 +140,10 @@ class _ReminderDetailPageState extends ConsumerState<ReminderDetailPage> {
       _fetchedAt = DateTime.now();
     });
     refreshReminders(ref);
+    _startTick(r);
+  }
+
+  void _startTick(MyReminder r) {
     _tick?.cancel();
     if (r.isCheck && r.isPending && r.deadlineAt != null) {
       _tick = Timer.periodic(const Duration(seconds: 1), (_) => _onTick());
@@ -133,6 +173,7 @@ class _ReminderDetailPageState extends ConsumerState<ReminderDetailPage> {
   }
 
   Future<void> _shoot(ReminderPart part) async {
+    _acknowledge();
     // Dibuka alarm di atas kunci layar: buka kunci dulu, kalau tidak kamera
     // terbuka di belakang kunci dan tidak terlihat. Hitung mundur tetap jalan.
     if (!await PushService.ensureUnlockedForCamera()) {
@@ -188,6 +229,7 @@ class _ReminderDetailPageState extends ConsumerState<ReminderDetailPage> {
   }
 
   Future<void> _markRead() async {
+    _acknowledge();
     setState(() => _marking = true);
     try {
       _apply(await ref.read(reminderRepositoryProvider).markRead(_id));
@@ -215,6 +257,7 @@ class _ReminderDetailPageState extends ConsumerState<ReminderDetailPage> {
       appBar: AppBar(
         title: Text(r == null ? 'Reminder' : (r.isCheck ? 'Pengecekan Foto' : 'Catatan')),
         centerTitle: true,
+        automaticallyImplyLeading: !widget.blocking,
       ),
       body: r == null
           ? (_error == null
@@ -227,6 +270,13 @@ class _ReminderDetailPageState extends ConsumerState<ReminderDetailPage> {
                 children: [
                   _Header(r: r),
                   const SizedBox(height: 12),
+                  if (widget.blocking) ...[
+                    const SdmNote(
+                      icon: Icons.lock_outline,
+                      text: 'Selesaikan ini dulu untuk kembali ke aplikasi.',
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   if (r.isCheck) ...[
                     _CheckState(r: r, remaining: _remaining),
                     const SizedBox(height: 20),
