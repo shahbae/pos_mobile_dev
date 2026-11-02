@@ -12,6 +12,15 @@ final shiftRepositoryProvider = Provider<ShiftRepository>((ref) {
   return ShiftRepository(ref.watch(apiProvider));
 });
 
+/// Shift 2 ditolak ditutup karena opname harian hari itu belum lengkap
+/// (Tahap 5 — 422 daily_audit_required).
+class DailyAuditRequired implements Exception {
+  final String message;
+  DailyAuditRequired(this.message);
+  @override
+  String toString() => message;
+}
+
 class ShiftRepository {
   final ApiService api;
   ShiftRepository(this.api);
@@ -46,6 +55,10 @@ class ShiftRepository {
       final res = await api.dio.put('/shifts/current/close', data: {'closing_cash': closingCash});
       return ShiftModel.fromJson(res.data as Map<String, dynamic>);
     } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map && data['code'] == 'daily_audit_required') {
+        throw DailyAuditRequired('${data['message'] ?? 'Buat opname harian dulu sebelum menutup Shift 2.'}');
+      }
       throw e.response?.data?['message'] ?? 'Gagal menutup shift';
     }
   }

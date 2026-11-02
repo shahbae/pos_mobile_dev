@@ -10,6 +10,7 @@ import 'package:pos_mobile/data/models/shift_model.dart';
 import 'package:pos_mobile/data/repositories/shift_repository.dart';
 import 'package:pos_mobile/presentation/pages/payroll/cash_loan_page.dart';
 import 'package:pos_mobile/presentation/pages/shifts/shift_list_page.dart';
+import 'package:pos_mobile/presentation/pages/stock_audits/daily_audit_gate.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/branch_provider.dart';
 import 'package:pos_mobile/presentation/providers/payroll_provider.dart';
@@ -93,6 +94,10 @@ class ShiftPage extends ConsumerWidget {
     // Kas shift dihitung dari penjualan yang sudah sampai di server.
     if (!await ensureNothingUnsent(context, ref, action: 'Tutup shift')) return;
     if (!context.mounted) return;
+    // Opname harian dikerjakan saat closing Shift 2 (Tahap 5) — dicek sebelum
+    // kas akhir diketik, supaya tidak ditolak sesudahnya.
+    if (shift.isSecondShift && !await ensureDailyAudit(context, ref)) return;
+    if (!context.mounted) return;
     final amount = await _askAmount(
       context,
       title: 'Tutup Shift',
@@ -102,12 +107,23 @@ class ShiftPage extends ConsumerWidget {
     if (amount == null) return;
 
     ShiftModel? result;
+    var dailyAuditRequired = false;
     await _runWithLoading(context, () async {
       result = await ref.read(shiftRepositoryProvider).closeCurrent(amount);
       ref.invalidate(currentShiftProvider);
       // Shift yang diingat HP untuk jualan offline sudah tidak berlaku.
       await ref.read(offlineProvider.notifier).forgetShift();
-    }, successMsg: 'Shift ditutup');
+    }, successMsg: 'Shift ditutup', onError: (e) {
+      // Server tetap penentunya: nama shift di HP bisa saja basi.
+      if (e is! DailyAuditRequired) return false;
+      dailyAuditRequired = true;
+      return true;
+    });
+
+    if (dailyAuditRequired && context.mounted) {
+      await showDailyAuditRequired(context, ref);
+      return;
+    }
 
     if (result != null && context.mounted) {
       await showDialog(
@@ -221,10 +237,13 @@ Future<num?> _askAmount(
   );
 }
 
+/// [onError] mengembalikan true bila galatnya sudah ditangani pemanggil
+/// (tanpa snackbar "Gagal").
 Future<void> _runWithLoading(
   BuildContext context,
   Future<void> Function() task, {
   required String successMsg,
+  bool Function(Object error)? onError,
 }) async {
   showDialog(
     context: context,
@@ -243,6 +262,7 @@ Future<void> _runWithLoading(
     }
   } catch (e) {
     if (context.mounted) Navigator.pop(context);
+    if (onError?.call(e) == true) return;
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Gagal: $e'),

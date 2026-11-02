@@ -7,14 +7,19 @@ import 'package:pos_mobile/data/repositories/stock_audit_repository.dart';
 import 'package:pos_mobile/presentation/providers/stock_audit_provider.dart';
 import 'package:pos_mobile/presentation/widgets/confirm_dialog.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
+import 'stock_audit_detail_page.dart';
 
 class StockAuditFormPage extends ConsumerStatefulWidget {
   /// Bila diisi = mode edit draft (prefill + PUT). Null = buat audit baru.
   final StockAudit? audit;
 
-  const StockAuditFormPage({super.key, this.audit});
+  /// Jenis audit baru (Tahap 5). Mode edit memakai jenis draf itu.
+  final String auditType;
+
+  const StockAuditFormPage({super.key, this.audit, this.auditType = AuditTypes.general});
 
   bool get isEdit => audit != null;
+  String get type => audit?.auditType ?? auditType;
 
   @override
   ConsumerState<StockAuditFormPage> createState() => _StockAuditFormPageState();
@@ -99,18 +104,38 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
     setState(() => _saving = true);
     try {
       final repo = ref.read(stockAuditRepositoryProvider);
+      final StockAudit saved;
       if (widget.isEdit) {
-        await repo.updateAudit(
+        saved = await repo.updateAudit(
           id: widget.audit!.id,
           notes: _notes.text.trim(),
           items: items,
         );
         ref.invalidate(stockAuditDetailProvider(widget.audit!.id));
       } else {
-        await repo.createAudit(notes: _notes.text.trim(), items: items);
+        saved = await repo.createAudit(auditType: widget.type, notes: _notes.text.trim(), items: items);
       }
       ref.invalidate(stockAuditListProvider);
-      if (mounted) Navigator.pop(context, true);
+      ref.invalidate(auditPeriodsProvider);
+      if (!mounted) return;
+      // Ada barang tidak wajar: langsung ke detail supaya alasannya diisi
+      // sekarang, selagi orangnya masih di depan rak (Tahap 5). Saat mengubah
+      // draf, layar sebelumnya memang sudah detail itu.
+      if (saved.reasonsMissing > 0 && !widget.isEdit) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => StockAuditDetailPage(auditId: saved.id)),
+          result: true,
+        );
+      } else {
+        Navigator.pop(context, true);
+      }
+    } on AuditPeriodExists catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        await _showPeriodExistsDialog(e);
+      }
+      return;
     } on OpenDraftConflict catch (e) {
       // Cabang sudah punya draft terbuka (BE §2). Arahkan ke draft itu
       // daripada menampilkan error mentah.
@@ -123,6 +148,29 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
       if (mounted) _toast('$e', AppTheme.danger);
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _showPeriodExistsDialog(AuditPeriodExists e) async {
+    final open = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Opname ${auditTypeLabel(widget.type)} sudah ada'),
+        content: Text(e.message),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Tutup')),
+          if (e.auditId != null)
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Buka opname itu')),
+        ],
+      ),
+    );
+    if (open == true && mounted && e.auditId != null) {
+      ref.invalidate(stockAuditListProvider);
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => StockAuditDetailPage(auditId: e.auditId!)),
+        result: true,
+      );
     }
   }
 
@@ -157,12 +205,13 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
 
   @override
   Widget build(BuildContext context) {
-    final auditableAsync = ref.watch(auditableItemsProvider);
+    final auditableAsync = ref.watch(auditableItemsProvider(widget.type));
+    final label = auditTypeLabel(widget.type);
 
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
       appBar: AppBar(
-        title: Text(widget.isEdit ? 'Edit Audit' : 'Audit Baru'),
+        title: Text(widget.isEdit ? 'Edit Opname $label' : 'Opname $label'),
         centerTitle: true,
       ),
       body: auditableAsync.when(
@@ -179,16 +228,19 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
-            Icon(Icons.rule_folder_outlined, size: 56, color: AppTheme.textSecondary),
-            SizedBox(height: 12),
-            Text('Belum ada item yang diatur untuk opname',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-            SizedBox(height: 6),
+          children: [
+            const Icon(Icons.rule_folder_outlined, size: 56, color: AppTheme.textSecondary),
+            const SizedBox(height: 12),
             Text(
-              'Owner atau supervisor perlu memilih dulu bahan mana yang '
-              'dihitung saat opname.',
+                widget.type == AuditTypes.general
+                    ? 'Belum ada item yang diatur untuk opname'
+                    : 'Daftar opname ${auditTypeLabel(widget.type)} masih kosong',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+            const SizedBox(height: 6),
+            const Text(
+              'Owner atau supervisor perlu memilih dulu barang mana yang '
+              'dihitung, lewat web admin.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
             ),
@@ -206,7 +258,7 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
             Text(msg, textAlign: TextAlign.center),
             const SizedBox(height: 16),
             OutlinedButton.icon(
-              onPressed: () => ref.invalidate(auditableItemsProvider),
+              onPressed: () => ref.invalidate(auditableItemsProvider(widget.type)),
               icon: const Icon(Icons.refresh),
               label: const Text('Coba lagi'),
             ),
@@ -265,11 +317,13 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
                 ),
               ),
               const SizedBox(height: 8),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 4),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: Text(
-                  'Hanya item yang dipilih owner yang dihitung saat opname.',
-                  style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                  '${auditTypeHint(widget.type)} Angka stok sistem sengaja tidak '
+                  'ditampilkan supaya hitungan tidak terpengaruh; angka itu '
+                  'terlihat di detail sesudah disimpan.',
+                  style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
                 ),
               ),
               if (dropped.isNotEmpty) _droppedNotice(dropped),
@@ -352,9 +406,7 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
                     if (item.unit.isNotEmpty)
                       Text(item.unit,
                           style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
-                    const SizedBox(height: 2),
-                    Text('Sistem: ${_fmtNum(item.systemQty)}',
-                        style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
+                    // Hitungan buta (Tahap 5): angka sistem tidak ditampilkan.
                     if (item.incomingToday > 0)
                       Text('Masuk hari ini: ${_fmtNum(item.incomingToday)}',
                           style: const TextStyle(

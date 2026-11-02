@@ -14,6 +14,17 @@ class OpenDraftConflict implements Exception {
   String toString() => message;
 }
 
+/// Jenis berperiode ini sudah dibuat untuk periodenya (Tahap 5 — 409
+/// audit_period_exists). Membawa id opname yang ada supaya layar bisa
+/// langsung membukanya.
+class AuditPeriodExists implements Exception {
+  final int? auditId;
+  final String message;
+  AuditPeriodExists(this.auditId, this.message);
+  @override
+  String toString() => message;
+}
+
 class StockAuditRepository {
   final ApiService api;
   StockAuditRepository(this.api);
@@ -21,10 +32,11 @@ class StockAuditRepository {
   /// Item yang boleh diaudit di cabang aktif (BE 2026-08-08 §1).
   /// Owner tanpa cabang aktif wajib mengirim [branchId].
   /// Daftar bisa kosong kalau owner belum mencentang apa pun.
-  Future<List<AuditableItem>> getAuditableItems({int? branchId}) async {
+  /// [type]: daily | weekly | monthly | general (bawaan BE: general).
+  Future<List<AuditableItem>> getAuditableItems({int? branchId, String type = AuditTypes.general}) async {
     try {
       final res = await api.dio.get('/stock-audits/auditable-items',
-          queryParameters: {if (branchId != null) 'branch_id': branchId});
+          queryParameters: {if (branchId != null) 'branch_id': branchId, 'type': type});
       debugPrint('[StockAuditRepo] auditable status=${res.statusCode} body=${res.data}');
       final data = res.data['data'];
       if (data == null || data is! List) return [];
@@ -77,19 +89,38 @@ class StockAuditRepository {
     }
   }
 
-  /// Buat audit baru.
+  /// Keadaan Harian/Mingguan/Bulanan cabang aktif untuk periode berjalan
+  /// (Tahap 5): kartu status di daftar dan syarat menutup Shift 2.
+  Future<AuditPeriods> getPeriods() async {
+    try {
+      final res = await api.dio.get('/stock-audits/periods');
+      return AuditPeriods.fromJson(Map<String, dynamic>.from(res.data['data'] as Map));
+    } on DioException catch (e) {
+      throw _msg(e, 'Gagal memuat status opname');
+    }
+  }
+
+  /// Buat audit baru. [auditType] daily | weekly | monthly | general.
   /// items: [{material_id|topping_id, physical_qty, returned_qty?}]
   Future<StockAudit> createAudit({
+    String auditType = AuditTypes.general,
     String? notes,
     required List<Map<String, dynamic>> items,
   }) async {
     try {
       final res = await api.dio.post('/stock-audits', data: {
+        'audit_type': auditType,
         if (notes != null && notes.isNotEmpty) 'notes': notes,
         'items': items,
       });
       return StockAudit.fromJson(res.data['data'] ?? res.data);
     } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map && data['code'] == 'audit_period_exists') {
+        final id = (data['data'] is Map) ? (data['data']['audit_id'] as num?)?.toInt() : null;
+        throw AuditPeriodExists(id,
+            'Opname ${auditTypeLabel(auditType)} untuk periode ini sudah dibuat. Buka opname itu untuk melanjutkan.');
+      }
       if (_isOpenDraftConflict(e)) {
         throw OpenDraftConflict(
             'Cabang ini masih punya draft opname yang belum disetujui. '
@@ -114,6 +145,17 @@ class StockAuditRepository {
       return StockAudit.fromJson(res.data['data'] ?? res.data);
     } on DioException catch (e) {
       throw _msg(e, 'Gagal memperbarui audit stok');
+    }
+  }
+
+  /// Isi alasan barang tidak wajar (Tahap 5). Angka sistem tidak dipotret
+  /// ulang. items: [{material_id|topping_id|plastic_id|sedotan_id, reason}].
+  Future<StockAudit> setReasons(int id, List<Map<String, dynamic>> items) async {
+    try {
+      final res = await api.dio.put('/stock-audits/$id/reasons', data: {'items': items});
+      return StockAudit.fromJson(res.data['data'] ?? res.data);
+    } on DioException catch (e) {
+      throw _msg(e, 'Gagal menyimpan alasan');
     }
   }
 
