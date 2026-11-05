@@ -325,6 +325,25 @@ bool canReceiveReminders(Iterable<String> held) =>
 /// dipimpinnya. Menanggapi tiket ada di web admin.
 bool canUseHelpTickets(Iterable<String> held) => _norm(held).contains('leader');
 
+/// Punya skor KPI sendiri dan boleh menyanggah (Tahap 6): leader & karyawan.
+/// Owner, SPV, finance, dan produksi tidak punya skor Crew/Leader — `/me/kpi`
+/// mereka selalu kosong. Cermin `POST /kpi/disputes` di be-pos.
+bool canSeeOwnKpi(Iterable<String> held) =>
+    _norm(held).intersection(const {'leader', 'karyawan'}).isNotEmpty;
+
+/// Mengirim ceklis foto opening/closing (Tahap 6): yang bertugas di outlet.
+/// Cermin `crewApp` (`/me/photo-checklist`) di be-pos.
+bool canUsePhotoChecklist(Iterable<String> held) => canSeeOwnKpi(held);
+
+/// Melihat skor tim outlet yang dipimpinnya dan mengirim setoran (Tahap 6).
+/// Leader tidak bisa menilai crew.
+bool canSeeTeamKpi(Iterable<String> held) => _norm(held).contains('leader');
+bool canSendCashDeposit(Iterable<String> held) => _norm(held).contains('leader');
+
+/// Sidak outlet (Tahap 6, L6): owner & SPV, di lokasi. Akun leader + SPV
+/// ditolak server (403) di outlet yang dipimpinnya.
+bool canInspect(Iterable<String> held) => isOwnerLevel(held);
+
 /// Boleh mencatat izin keluar dari outlet (yang sedang bertugas).
 bool canLeaveOut(Iterable<String> held) => _norm(held)
     .intersection(const {'owner', 'supervisor', 'leader', 'karyawan'})
