@@ -24,6 +24,10 @@ import '../../../pages/payroll/my_loans_page.dart';
 import '../../../pages/payroll/payslip_list_page.dart';
 import '../../../pages/reminders/reminder_list_page.dart';
 import '../../../pages/help/help_ticket_list_page.dart';
+import '../../../pages/kpi/cash_deposit_page.dart';
+import '../../../pages/kpi/inspection_list_page.dart';
+import '../../../pages/kpi/my_kpi_page.dart';
+import '../../../pages/kpi/photo_checklist_page.dart';
 
 class SettingTab extends ConsumerWidget {
   const SettingTab({super.key});
@@ -161,6 +165,61 @@ class SettingTab extends ConsumerWidget {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const HelpTicketListPage()),
+            ),
+          ),
+        ],
+        // KPI tahap A (Tahap 6).
+        if (canUsePhotoChecklist(auth.held)) ...[
+          const SizedBox(height: 16),
+          _SettingMenuCard(
+            title: "Ceklis Foto",
+            subtitle: "Foto opening & closing shift",
+            icon: Icons.add_a_photo_outlined,
+            color: accent,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const PhotoChecklistPage()),
+            ),
+          ),
+        ],
+        if (canSeeOwnKpi(auth.held)) ...[
+          const SizedBox(height: 16),
+          _SettingMenuCard(
+            title: "Skor KPI",
+            subtitle: canSeeTeamKpi(auth.held)
+                ? "Skor saya & tim, kejadian, sanggahan"
+                : "Skor bulan ini, kejadian, sanggahan",
+            icon: Icons.insights_outlined,
+            color: accent,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const MyKpiPage()),
+            ),
+          ),
+        ],
+        if (canSendCashDeposit(auth.held)) ...[
+          const SizedBox(height: 16),
+          _SettingMenuCard(
+            title: "Setoran",
+            subtitle: "Bukti transfer setoran tunai outlet",
+            icon: Icons.account_balance_outlined,
+            color: accent,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const CashDepositPage()),
+            ),
+          ),
+        ],
+        if (canInspect(auth.held)) ...[
+          const SizedBox(height: 16),
+          _SettingMenuCard(
+            title: "Sidak",
+            subtitle: "Sidak outlet di lokasi",
+            icon: Icons.fact_check_outlined,
+            color: accent,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const InspectionListPage()),
             ),
           ),
         ],

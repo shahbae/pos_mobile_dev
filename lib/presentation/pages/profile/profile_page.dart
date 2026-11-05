@@ -5,9 +5,11 @@ import 'package:intl/intl.dart';
 
 import 'package:pos_mobile/data/models/profile_model.dart';
 import 'package:pos_mobile/presentation/pages/allowance/my_allowance_page.dart';
+import 'package:pos_mobile/presentation/pages/kpi/my_kpi_page.dart';
 import 'package:pos_mobile/presentation/providers/allowance_provider.dart';
 import 'package:pos_mobile/presentation/providers/attendance_provider.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
+import 'package:pos_mobile/presentation/providers/kpi_provider.dart';
 import 'package:pos_mobile/presentation/widgets/confirm_dialog.dart';
 import 'package:pos_mobile/presentation/widgets/notification_readiness_card.dart';
 import 'package:pos_mobile/presentation/widgets/offline_hold.dart';
@@ -37,6 +39,7 @@ class ProfilePage extends ConsumerWidget {
         onRefresh: () async {
           ref.invalidate(myProfileProvider);
           ref.invalidate(myAllowanceProvider);
+          ref.invalidate(myKpiProvider);
         },
         child: async.when(
           loading: SdmStateView.loading,
@@ -216,6 +219,8 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
             ),
             const SizedBox(height: 12),
             const MyAllowanceCard(),
+            const SizedBox(height: 12),
+            const MyKpiCard(),
             const SizedBox(height: 12),
             const NotificationReadinessCard(),
             const SizedBox(height: 20),

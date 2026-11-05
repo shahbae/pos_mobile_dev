@@ -15,6 +15,7 @@ import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/branch_provider.dart';
 import 'package:pos_mobile/presentation/providers/payroll_provider.dart';
 import 'package:pos_mobile/presentation/providers/shift_provider.dart';
+import 'package:pos_mobile/presentation/widgets/photo_checklist_card.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/utils/currency.dart';
 
@@ -97,6 +98,9 @@ class ShiftPage extends ConsumerWidget {
     // Opname harian dikerjakan saat closing Shift 2 (Tahap 5) — dicek sebelum
     // kas akhir diketik, supaya tidak ditolak sesudahnya.
     if (shift.isSecondShift && !await ensureDailyAudit(context, ref)) return;
+    if (!context.mounted) return;
+    // Ceklis foto closing (Tahap 6): diingatkan, tidak memblokir.
+    await remindClosingChecklist(context, ref);
     if (!context.mounted) return;
     final amount = await _askAmount(
       context,

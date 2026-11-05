@@ -7,7 +7,9 @@ import 'package:pos_mobile/data/models/dashboard_operational_model.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/branch_provider.dart';
 import 'package:pos_mobile/presentation/providers/dashboard_operational_provider.dart';
+import 'package:pos_mobile/presentation/providers/kpi_provider.dart';
 import 'package:pos_mobile/presentation/widgets/branch_switch_sheet.dart';
+import 'package:pos_mobile/presentation/widgets/photo_checklist_card.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/utils/currency.dart';
 
@@ -25,6 +27,7 @@ class HomeTab extends ConsumerWidget {
         child: RefreshIndicator(
           onRefresh: () async {
             ref.invalidate(dashboardProvider);
+            if (canUsePhotoChecklist(ref.read(authProvider).held)) ref.invalidate(myChecklistProvider);
           },
           child: Center(
             child: ConstrainedBox(
@@ -35,6 +38,8 @@ class HomeTab extends ConsumerWidget {
                 children: [
                   const _Header(),
                   const SizedBox(height: 14),
+                  // Ceklis foto shift ini yang belum terkirim (Tahap 6).
+                  const PhotoChecklistCard(),
                   dashboardAsync.when(
                     data: (data) => _DashboardSections(data: data),
                     loading: () => const _DashboardSkeleton(),
