@@ -11,7 +11,7 @@ import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/utils/currency.dart';
 
 /// Pinjaman sendiri (Tahap 2 SDM): ajukan, lihat perjalanannya, batalkan
-/// selama belum diperiksa finance. Diperiksa finance, disetujui owner, lalu
+/// selama belum disetujui. Disetujui finance, lalu
 /// dicairkan lewat transfer, tunai dari finance, atau tunai dari laci outlet.
 /// Dipotong dari gaji di slip periode tanggal cairnya.
 class MyLoansPage extends ConsumerStatefulWidget {
@@ -41,7 +41,7 @@ class _MyLoansPageState extends ConsumerState<MyLoansPage> {
     final yakin = await confirmAction(
       context,
       title: 'Ajukan pinjaman ${formatRupiah(input.amount)}?',
-      message: 'Diperiksa finance lalu disetujui owner. Sesudah cair, pinjaman '
+      message: 'Disetujui finance. Sesudah cair, pinjaman '
           'dipotong dari gaji bulan itu.',
       confirmLabel: 'Ajukan',
     );
@@ -109,7 +109,7 @@ class _MyLoansPageState extends ConsumerState<MyLoansPage> {
                 children: [
                   const SdmNote(
                     icon: Icons.info_outline,
-                    text: 'Pinjaman diperiksa finance lalu disetujui owner. Sesudah cair, '
+                    text: 'Pinjaman disetujui finance. Sesudah cair, '
                         'dipotong dari gaji di slip bulan cairnya.',
                   ),
                   const SizedBox(height: 16),

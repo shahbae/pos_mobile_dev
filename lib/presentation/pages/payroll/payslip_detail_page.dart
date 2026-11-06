@@ -12,7 +12,7 @@ import 'package:pos_mobile/utils/currency.dart';
 
 /// Rincian satu slip: penghasilan, potongan beserta rinciannya, total
 /// diterima, PDF, dan komplain. Slip yang sudah terbit tidak bisa diubah;
-/// komplain yang diterima owner dibetulkan finance di slip berikutnya.
+/// komplain yang diterima dibetulkan finance di slip berikutnya.
 class PayslipDetailPage extends ConsumerStatefulWidget {
   final int payslipId;
   const PayslipDetailPage({super.key, required this.payslipId});
@@ -57,7 +57,7 @@ class _PayslipDetailPageState extends ConsumerState<PayslipDetailPage> {
     final yakin = await confirmAction(
       context,
       title: 'Kirim komplain?',
-      message: 'Owner akan membaca dan memutuskannya. Satu slip hanya bisa punya '
+      message: 'Komplainmu akan dibaca dan dijawab. Satu slip hanya bisa punya '
           'satu komplain yang menunggu.',
       confirmLabel: 'Kirim',
     );
@@ -150,19 +150,25 @@ class _PayslipDetailPageState extends ConsumerState<PayslipDetailPage> {
                     _ComplaintCard(complaint: c),
                     const SizedBox(height: 8),
                   ],
-                  if (!s.hasOpenComplaint) ...[
+                  if (!s.hasOpenComplaint && s.canComplain) ...[
                     OutlinedButton.icon(
                       onPressed: _busy ? null : () => _complain(s),
                       icon: const Icon(Icons.report_outlined),
                       label: const Text('Ada yang salah? Ajukan komplain'),
                     ),
                     const SizedBox(height: 6),
-                    const Text(
-                      'Slip yang sudah terbit tidak diubah. Bila owner menerima komplainmu, '
+                    Text(
+                      '${s.complaintDeadline == null ? '' : 'Bisa diajukan sampai ${payrollDate(s.complaintDeadline)}. '}'
+                      'Slip yang sudah terbit tidak diubah. Bila komplainmu diterima, '
                       'kekurangannya disusulkan di slip berikutnya.',
-                      style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                      style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                     ),
                   ],
+                  if (!s.hasOpenComplaint && !s.canComplain)
+                    Text(
+                      'Batas komplain slip ini sudah lewat (${payrollDate(s.complaintDeadline)}).',
+                      style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                    ),
                 ],
               ),
             ),
@@ -302,7 +308,7 @@ class _ComplaintCard extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(color: AppTheme.bgLight, borderRadius: BorderRadius.circular(10)),
-              child: Text('Jawaban owner: ${c.response}',
+              child: Text('Jawaban: ${c.response}',
                   style: const TextStyle(fontSize: 12.5, color: AppTheme.textPrimary)),
             ),
           ],
