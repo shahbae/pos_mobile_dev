@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/data/models/attendance_model.dart';
+import 'package:pos_mobile/data/models/kitchen_order_model.dart';
 import 'package:pos_mobile/data/models/my_day_model.dart';
 import 'package:pos_mobile/presentation/providers/attendance_provider.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
@@ -58,4 +59,25 @@ final todayFeaturesProvider = Provider<Set<AppFeature>>((ref) {
   final auth = ref.watch(authProvider);
   final duty = ref.watch(cashierDutyProvider).valueOrNull;
   return featuresForToday(auth.role, auth.held, cashierDuty: duty);
+});
+
+/// Tampilan monitoring dari tugas hari ini. Tanpa tugas yang terbaca, keduanya
+/// terbuka: sama seperti menu, tidak dikurangi selama tugas belum diketahui.
+Set<KitchenView> kitchenViewsForDuties(Iterable<String?> duties) {
+  final views = <KitchenView>{
+    if (duties.any(ScheduleDuty.holdsServer)) KitchenView.server,
+    if (duties.any(ScheduleDuty.holdsCashier)) KitchenView.cashier,
+  };
+  return views.isEmpty ? KitchenView.values.toSet() : views;
+}
+
+/// Karyawan melihat tampilan sesuai tugasnya di cabang aktif hari ini. Owner,
+/// SPV, leader, dan produksi tidak bertugas lewat jadwal kasir/penyaji, jadi
+/// keduanya terbuka.
+final kitchenViewsProvider = Provider<Set<KitchenView>>((ref) {
+  final auth = ref.watch(authProvider);
+  if (!isDutyGated(auth.held)) return KitchenView.values.toSet();
+  final day = ref.watch(myDayProvider).valueOrNull;
+  if (day == null) return KitchenView.values.toSet();
+  return kitchenViewsForDuties(day.shiftsAtBranch(auth.branchId).map((s) => s.duty));
 });

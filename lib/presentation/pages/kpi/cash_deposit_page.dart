@@ -19,6 +19,15 @@ final _ymd = DateFormat('yyyy-MM-dd');
 /// Batas tanggal operasional di server (`kpiDepositMaxAgeDays`).
 const kDepositMaxAgeDays = 31;
 
+/// Batas foto bukti di server (`KPIDepositMaxPhotos`).
+const kDepositMaxPhotos = 5;
+
+/// Jam batas setoran di server (`kpiDepositDefaultCutoff`), sehari sesudah
+/// tanggal operasional.
+const kDepositCutoffHour = 19;
+
+DateTime _yesterday() => DateUtils.addDaysToDate(DateUtils.dateOnly(DateTime.now()), -1);
+
 Color cashDepositStatusColor(String status) => switch (status) {
   'pending' => const Color(0xFFD97706),
   'verified' => const Color(0xFF15803D),
@@ -66,8 +75,8 @@ class CashDepositPage extends ConsumerWidget {
             children: [
               const SdmNote(
                 icon: Icons.info_outline,
-                text: 'Kirim bukti transfer setoran tunai tiap hari operasional. '
-                    'Jam transfer dicatat saat bukti diunggah.',
+                text: 'Kirim bukti transfer setoran penjualan kemarin, paling lambat hari ini '
+                    'pukul $kDepositCutoffHour.00. Jam transfer dicatat saat bukti diunggah.',
               ),
               const SizedBox(height: 16),
               if (rows.isEmpty)
@@ -122,6 +131,14 @@ class _DepositCard extends StatelessWidget {
               ),
             ],
           ),
+          if (d.photoUrls.length > 1) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [for (final url in d.photoUrls.skip(1)) KpiThumb(url, size: 44)],
+            ),
+          ],
           const SizedBox(height: 8),
           Wrap(
             spacing: 6,
@@ -163,11 +180,13 @@ class _DepositCard extends StatelessWidget {
   }
 }
 
-/// Form kirim setoran. [retry]: setoran yang ditolak, tanggal dan nominalnya
-/// diisikan lagi.
+/// Form kirim setoran. Tanggal otomatis kemarin; tanggal yang lebih lama boleh
+/// untuk setoran tertinggal. [retry]: setoran yang ditolak, tanggal dan
+/// nominalnya diisikan lagi. [pickPhoto]: pengganti pemilih foto untuk tes.
 class CashDepositFormPage extends ConsumerStatefulWidget {
   final CashDeposit? retry;
-  const CashDepositFormPage({super.key, this.retry});
+  final Future<Uint8List?> Function(BuildContext context)? pickPhoto;
+  const CashDepositFormPage({super.key, this.retry, this.pickPhoto});
 
   @override
   ConsumerState<CashDepositFormPage> createState() => _CashDepositFormPageState();
@@ -179,14 +198,24 @@ class _CashDepositFormPageState extends ConsumerState<CashDepositFormPage> {
     text: widget.retry == null ? '' : NumberFormat.decimalPattern('id_ID').format(widget.retry!.amount.round()),
   );
   final _note = TextEditingController();
-  Uint8List? _photo;
+  final List<Uint8List> _photos = [];
   bool _busy = false;
 
   DateTime _initialDate() {
     final today = DateUtils.dateOnly(DateTime.now());
+    final yesterday = _yesterday();
     final d = widget.retry == null ? null : DateTime.tryParse(widget.retry!.operationalDate);
-    if (d == null || d.isAfter(today) || today.difference(d).inDays > kDepositMaxAgeDays) return today;
+    if (d == null || d.isAfter(yesterday) || today.difference(d).inDays > kDepositMaxAgeDays) return yesterday;
     return d;
+  }
+
+  /// Batas kirim tanggal terpilih, cermin `depositDeadline` di server.
+  String get _deadlineHint {
+    final deadline = DateTime(_date.year, _date.month, _date.day + 1, kDepositCutoffHour);
+    if (DateTime.now().isAfter(deadline)) {
+      return 'Sudah lewat batas kirim ${_when.format(deadline)}, setoran tercatat terlambat.';
+    }
+    return 'Batas kirim ${_when.format(deadline)}.';
   }
 
   @override
@@ -197,7 +226,13 @@ class _CashDepositFormPageState extends ConsumerState<CashDepositFormPage> {
   }
 
   int get _amountValue => int.tryParse(_amount.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
-  bool get _ready => _amountValue > 0 && _photo != null;
+  bool get _ready => _amountValue > 0 && _photos.isNotEmpty;
+
+  Future<void> _addPhoto() async {
+    final pick = widget.pickPhoto ?? pickKpiPhotoAnySource;
+    final b = await pick(context);
+    if (b != null && mounted) setState(() => _photos.add(b));
+  }
 
   Future<void> _pickDate() async {
     final today = DateUtils.dateOnly(DateTime.now());
@@ -205,7 +240,7 @@ class _CashDepositFormPageState extends ConsumerState<CashDepositFormPage> {
       context: context,
       initialDate: _date,
       firstDate: today.subtract(const Duration(days: kDepositMaxAgeDays)),
-      lastDate: today,
+      lastDate: _yesterday(),
       helpText: 'Tanggal operasional',
     );
     if (d != null && mounted) setState(() => _date = d);
@@ -217,7 +252,7 @@ class _CashDepositFormPageState extends ConsumerState<CashDepositFormPage> {
       final d = await ref.read(kpiRepositoryProvider).createCashDeposit(
             operationalDate: _ymd.format(_date),
             amount: _amountValue,
-            photo: _photo!,
+            photos: _photos,
             note: _note.text.trim(),
           );
       if (!mounted) return;
@@ -249,9 +284,11 @@ class _CashDepositFormPageState extends ConsumerState<CashDepositFormPage> {
                 InkWell(
                   onTap: _busy ? null : _pickDate,
                   child: InputDecorator(
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Tanggal operasional',
-                      suffixIcon: Icon(Icons.calendar_today_outlined),
+                      suffixIcon: const Icon(Icons.calendar_today_outlined),
+                      helperText: _deadlineHint,
+                      helperMaxLines: 2,
                     ),
                     child: Text(_day.format(_date)),
                   ),
@@ -281,23 +318,31 @@ class _CashDepositFormPageState extends ConsumerState<CashDepositFormPage> {
               children: [
                 const Text('Bukti transfer', style: TextStyle(fontWeight: FontWeight.w800, color: AppTheme.textPrimary)),
                 const SizedBox(height: 4),
-                const Text('Foto struk atau tangkapan layar m-banking.',
+                const Text('Foto struk atau tangkapan layar m-banking, paling banyak $kDepositMaxPhotos foto.',
                     style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
                 const SizedBox(height: 8),
-                if (_photo != null)
-                  KpiPhotoPreview(_photo!, onRemove: _busy ? null : () => setState(() => _photo = null))
-                else
+                if (_photos.isNotEmpty) ...[
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (var i = 0; i < _photos.length; i++)
+                        _PhotoTile(
+                          key: ValueKey('bukti-$i-${_photos[i].length}'),
+                          bytes: _photos[i],
+                          onRemove: _busy ? null : () => setState(() => _photos.removeAt(i)),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                if (_photos.length < kDepositMaxPhotos)
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
-                      onPressed: _busy
-                          ? null
-                          : () async {
-                              final b = await pickKpiPhotoAnySource(context);
-                              if (b != null && mounted) setState(() => _photo = b);
-                            },
+                      onPressed: _busy ? null : _addPhoto,
                       icon: const Icon(Icons.add_a_photo_outlined),
-                      label: const Text('Tambah bukti'),
+                      label: Text(_photos.isEmpty ? 'Tambah bukti' : 'Tambah bukti (${_photos.length}/$kDepositMaxPhotos)'),
                     ),
                   ),
               ],
@@ -310,6 +355,50 @@ class _CashDepositFormPageState extends ConsumerState<CashDepositFormPage> {
                 ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                 : const Text('Kirim setoran'),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Satu foto bukti di form, dengan tombol hapus di sudutnya.
+class _PhotoTile extends StatelessWidget {
+  final Uint8List bytes;
+  final VoidCallback? onRemove;
+  const _PhotoTile({super.key, required this.bytes, this.onRemove});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 96,
+      height: 96,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.memory(bytes, fit: BoxFit.cover),
+          ),
+          if (onRemove != null)
+            Positioned(
+              top: 2,
+              right: 2,
+              child: Material(
+                color: Colors.black54,
+                shape: const CircleBorder(),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: onRemove,
+                  child: const Tooltip(
+                    message: 'Hapus foto',
+                    child: Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(Icons.close, size: 16, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

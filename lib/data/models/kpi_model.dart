@@ -598,7 +598,10 @@ class CashDeposit {
   final String leaderName;
   final double amount;
   final String note;
+
+  /// Foto pertama. [photoUrls] berisi semua foto, termasuk yang pertama.
   final String? photoUrl;
+  final List<String> photoUrls;
   final DateTime? uploadedAt;
   final DateTime? transferAt;
 
@@ -619,6 +622,7 @@ class CashDeposit {
     this.leaderName = '',
     this.note = '',
     this.photoUrl,
+    this.photoUrls = const [],
     this.uploadedAt,
     this.transferAt,
     this.late = false,
@@ -636,6 +640,7 @@ class CashDeposit {
     amount: _num(j['amount']),
     note: '${j['note'] ?? ''}',
     photoUrl: _str(j['photo_url']),
+    photoUrls: _depositPhotos(j),
     uploadedAt: _time(j['uploaded_at']),
     transferAt: _time(j['transfer_at']),
     status: '${j['status'] ?? ''}',
@@ -645,6 +650,14 @@ class CashDeposit {
     rejectedByName: _str(j['rejected_by_name']),
     rejectReason: '${j['reject_reason'] ?? ''}',
   );
+}
+
+/// Server lama hanya mengirim `photo_url`.
+List<String> _depositPhotos(Map<String, dynamic> j) {
+  final raw = j['photo_urls'];
+  if (raw is List && raw.isNotEmpty) return [for (final u in raw) '$u'];
+  final one = _str(j['photo_url']);
+  return one == null ? const [] : [one];
 }
 
 // ---------------------------------------------------------------- sidak

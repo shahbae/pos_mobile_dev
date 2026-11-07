@@ -127,22 +127,29 @@ class KpiRepository {
     }
   }
 
-  /// `POST /cash-deposits` (multipart). Jam transfer = jam unggah di server.
+  /// `POST /cash-deposits` (multipart, isian `photo` berulang). Jam transfer =
+  /// jam unggah di server.
   Future<CashDeposit> createCashDeposit({
     required String operationalDate,
     required int amount,
-    required Uint8List photo,
+    required List<Uint8List> photos,
     String note = '',
   }) async {
     try {
+      final form = FormData.fromMap({
+        'operational_date': operationalDate,
+        'amount': '$amount',
+        'note': note,
+      });
+      for (var i = 0; i < photos.length; i++) {
+        form.files.add(MapEntry(
+          'photo',
+          MultipartFile.fromBytes(photos[i], filename: 'setoran-$operationalDate-${i + 1}.jpg'),
+        ));
+      }
       final res = await api.dio.post(
         '/cash-deposits',
-        data: FormData.fromMap({
-          'operational_date': operationalDate,
-          'amount': '$amount',
-          'note': note,
-          'photo': MultipartFile.fromBytes(photo, filename: 'setoran-$operationalDate.jpg'),
-        }),
+        data: form,
         options: Options(contentType: 'multipart/form-data'),
       );
       return CashDeposit.fromJson(_data(res));

@@ -44,6 +44,42 @@ String? nextKitchenStatus(String status) {
   }
 }
 
+/// Tampilan monitoring menurut tugas (revisi owner 5 Nov), searah dengan KPI:
+/// "Mulai Buat" dan "Siap" dinilai di KPI penyaji (C4.1), "Diserahkan" di KPI
+/// kasir (C3.3).
+enum KitchenView { server, cashier }
+
+String kitchenViewLabel(KitchenView view) =>
+    view == KitchenView.server ? 'Penyaji' : 'Kasir';
+
+/// Tombol di tampilan ini hanya untuk status yang menjadi tugasnya.
+bool kitchenViewCanAdvance(KitchenView view, String status) =>
+    view == KitchenView.server
+        ? status == kitchenStatusQueued || status == kitchenStatusPreparing
+        : status == kitchenStatusReady;
+
+/// Penyaji hanya melihat yang masih harus dibuat. Kasir melihat semuanya supaya
+/// bisa menjawab pelanggan, dengan yang siap diserahkan di depan. Di dalam tiap
+/// kelompok urutan [orders] dipertahankan.
+List<KitchenOrder> kitchenOrdersForView(List<KitchenOrder> orders, KitchenView view) {
+  if (view == KitchenView.server) {
+    return [
+      for (final o in orders)
+        if (kitchenViewCanAdvance(view, o.status)) o,
+    ];
+  }
+  return [
+    for (final o in orders)
+      if (o.status == kitchenStatusReady) o,
+    for (final o in orders)
+      if (o.status != kitchenStatusReady) o,
+  ];
+}
+
+/// Jumlah pesanan yang menunggu tombol di tampilan ini.
+int kitchenViewPending(List<KitchenOrder> orders, KitchenView view) =>
+    orders.where((o) => kitchenViewCanAdvance(view, o.status)).length;
+
 /// Label tombol aksi yang memindahkan pesanan ke status berikutnya.
 String? kitchenActionLabel(String status) {
   switch (status) {
