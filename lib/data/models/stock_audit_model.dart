@@ -259,7 +259,7 @@ class StockAuditItem {
 
   bool get isUnfair => verdict == 'unfair';
 
-  /// Kekurangan = (sistem − retur) − fisik. Positif = kurang.
+  /// Kekurangan = (sistem − retur) − fisik. Positif = kurang, negatif = lebih.
   double get shortage => systemQty - returnedQty - physicalQty;
 
   /// Angka fisik diubah sesudah pertama disimpan.

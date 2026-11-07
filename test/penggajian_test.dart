@@ -251,8 +251,45 @@ void main() {
       ]));
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(find.text('Lembur 3 Nov belum masuk'), 200);
-      expect(find.text('Menunggu keputusan owner'), findsOneWidget);
+      expect(find.text('Menunggu jawaban'), findsOneWidget);
       expect(find.text('Ada yang salah? Ajukan komplain'), findsNothing);
+      expect(find.textContaining('Batas komplain'), findsNothing);
+    });
+
+    testWidgets('rincian slip dalam batas komplain: tombol dan tanggal batasnya tampil', (tester) async {
+      await tester.pumpWidget(_host(const PayslipDetailPage(payslipId: 3), extra: [
+        payslipProvider.overrideWith((ref, id) async => PayslipView.fromJson(
+            {..._slipJson(), 'complaint_deadline': '2026-11-30', 'can_complain': true})),
+      ]));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('Ada yang salah? Ajukan komplain'), 200);
+      expect(find.text('Ada yang salah? Ajukan komplain'), findsOneWidget);
+      await tester.scrollUntilVisible(find.textContaining('Bisa diajukan sampai 30 November 2026'), 200);
+      expect(find.textContaining('Bisa diajukan sampai 30 November 2026'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('rincian slip lewat batas: tombol komplain hilang, jawaban lama tetap terbaca', (tester) async {
+      await tester.pumpWidget(_host(const PayslipDetailPage(payslipId: 3), extra: [
+        payslipProvider.overrideWith((ref, id) async => PayslipView.fromJson({
+              ..._slipJson(complaints: [
+                {
+                  'id': 1, 'payslip_id': 3, 'user_id': 5, 'message': 'Lembur 3 Nov belum masuk',
+                  'status': 'accepted', 'response': 'Benar, disusulkan.', 'decided_by': 2,
+                  'decided_at': '2026-11-28T10:00:00+07:00', 'created_at': '2026-11-27T10:00:00+07:00',
+                },
+              ]),
+              'complaint_deadline': '2026-11-30',
+              'can_complain': false,
+            })),
+      ]));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('Jawaban: Benar, disusulkan.'), 200);
+      expect(find.text('Jawaban: Benar, disusulkan.'), findsOneWidget);
+      await tester.scrollUntilVisible(find.textContaining('Batas komplain slip ini sudah lewat'), 200);
+      expect(find.textContaining('(30 November 2026)'), findsOneWidget);
+      expect(find.text('Ada yang salah? Ajukan komplain'), findsNothing);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('Pinjaman: status, alasan tolak, batal hanya untuk yang diajukan', (tester) async {

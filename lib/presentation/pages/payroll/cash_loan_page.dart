@@ -100,7 +100,7 @@ class _CashLoanPageState extends ConsumerState<CashLoanPage> {
                       children: [
                         const SdmNote(
                           icon: Icons.info_outline,
-                          text: 'Pinjaman yang sudah disetujui owner dan ditunjuk finance untuk '
+                          text: 'Pinjaman yang sudah disetujui dan ditunjuk finance untuk '
                               'diambil tunai di outlet ini. Uangnya keluar dari laci shift yang '
                               'sedang buka dan tercatat sebagai pengeluaran.',
                         ),

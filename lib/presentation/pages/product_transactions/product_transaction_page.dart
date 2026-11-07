@@ -17,7 +17,11 @@ import 'package:pos_mobile/presentation/widgets/variant_picker_sheet.dart';
 import 'package:pos_mobile/utils/currency.dart';
 
 class ProductTransactionPage extends ConsumerStatefulWidget {
-  const ProductTransactionPage({super.key});
+  /// Memilih menu untuk jatah sendiri, dari halaman Jatah Saya. Yang bertugas
+  /// penyaji juga sampai ke sini walau menu kasirnya tertutup.
+  final bool ownAllowance;
+
+  const ProductTransactionPage({super.key, this.ownAllowance = false});
 
   @override
   ConsumerState<ProductTransactionPage> createState() => _ProductTransactionPageState();
@@ -139,7 +143,7 @@ class _ProductTransactionPageState extends ConsumerState<ProductTransactionPage>
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
       appBar: AppBar(
-        title: const Text("Pilih Produk"),
+        title: Text(widget.ownAllowance ? "Pesan Jatah" : "Pilih Produk"),
         centerTitle: true,
       ),
       body: Column(
@@ -344,7 +348,8 @@ class _ProductTransactionPageState extends ConsumerState<ProductTransactionPage>
                         ),
                         Text(
                           // Sudah termasuk promo persen yang sedang berlaku.
-                          formatRupiah(ref.watch(checkoutPricingProvider).total),
+                          // Jatah tanpa promo: harga menu + topping.
+                          formatRupiah(widget.ownAllowance ? cartState.paidSubtotal : ref.watch(checkoutPricingProvider).total),
                           style: const TextStyle(
                             color: AppTheme.textPrimary,
                             fontWeight: FontWeight.w800,
@@ -359,7 +364,7 @@ class _ProductTransactionPageState extends ConsumerState<ProductTransactionPage>
                         onPressed: () {
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (_) => const CheckoutPage()),
+                            MaterialPageRoute(builder: (_) => CheckoutPage(ownAllowance: widget.ownAllowance)),
                           );
                         },
                         style: ElevatedButton.styleFrom(
@@ -368,8 +373,8 @@ class _ProductTransactionPageState extends ConsumerState<ProductTransactionPage>
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                           elevation: 0,
                         ),
-                        child: const Text(
-                          "Checkout",
+                        child: Text(
+                          widget.ownAllowance ? "Lanjut" : "Checkout",
                           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                         ),
                       ),

@@ -796,9 +796,18 @@ class ProductTransactionNotifier extends StateNotifier<ProductTransactionState> 
     await _send(request);
   }
 
-  Future<void> _send(ProductTransactionRequest request) async {
+  /// Pesan jatah untuk diri sendiri. Penerimanya diisi server dari akun yang
+  /// login, jadi angka di sini hanya menandai ini pesanan jatah.
+  Future<void> submitOwnAllowance() async {
+    if (state.items.isEmpty) return;
+    state = state.copyWith(isLoading: true, error: null, clearLastResponse: true);
+    final request = _buildRequest(paymentMethod: 'allowance', paid: 0, recipientUserId: 0);
+    await _send(request, ownAllowance: true);
+  }
+
+  Future<void> _send(ProductTransactionRequest request, {bool ownAllowance = false}) async {
     try {
-      final response = await repo.createTransaction(request);
+      final response = ownAllowance ? await repo.createOwnAllowance(request) : await repo.createTransaction(request);
       _dropAttemptKey();
       state = ProductTransactionState(lastResponse: response); // reset cart on success
     } catch (e) {

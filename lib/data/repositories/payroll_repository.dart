@@ -23,7 +23,7 @@ class PayrollRepository {
   Future<PayslipView> payslip(int id) =>
       _one(() => api.dio.get('/me/payslips/$id'), PayslipView.fromJson, 'Gagal memuat slip');
 
-  /// Satu komplain terbuka per slip; owner yang memutuskan.
+  /// Satu komplain terbuka per slip; finance yang memutuskan.
   Future<PayslipView> complain(int payslipId, String message) => _one(
         () => api.dio.post('/me/payslips/$payslipId/complaints', data: {'message': message}),
         PayslipView.fromJson,
@@ -116,7 +116,7 @@ class PayrollRepository {
   }
 
   /// Pesan BE untuk penggajian sudah berbahasa Indonesia ("buka shift kasir
-  /// dulu; …", "komplainmu untuk slip ini masih menunggu keputusan owner"),
+  /// dulu; …", "batas komplain slip ini sudah lewat"),
   /// jadi diteruskan apa adanya. Yang diganti hanya yang teknis.
   String _message(DioException e, String fallback) {
     switch (e.type) {

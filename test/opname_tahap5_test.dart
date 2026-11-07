@@ -231,6 +231,16 @@ void main() {
       expect(tester.widget<ButtonStyleButton>(_button('Setujui Audit')).onPressed, isNotNull);
     });
 
+    testWidgets('barang lebih melewati batas: ditulis lebih, tetap wajib alasan', (tester) async {
+      final json = _auditJson();
+      (json['items'] as List).first['physical_qty'] = '1060';
+      final repo = _Repo()..audit = StockAudit.fromJson(json);
+      await _pump(tester, const StockAuditDetailPage(auditId: 41), repo, roles: ['supervisor']);
+      expect(tester.takeException(), isNull);
+      expect(find.text('Teh original: lebih 60 Ml, batas 50 Ml'), findsOneWidget);
+      expect(find.textContaining('Selisihnya melewati batas wajar'), findsOneWidget);
+    });
+
     testWidgets('karyawan: alasan bisa diisi, tanpa tombol Setujui', (tester) async {
       await _pump(tester, const StockAuditDetailPage(auditId: 41), _Repo());
       expect(tester.takeException(), isNull);

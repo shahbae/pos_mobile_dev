@@ -135,7 +135,7 @@ class PayslipComplaint {
   bool get isOpen => status == 'open';
 
   String get statusLabel => switch (status) {
-        'open' => 'Menunggu keputusan owner',
+        'open' => 'Menunggu jawaban',
         'accepted' => 'Diterima',
         'rejected' => 'Ditolak',
         _ => status,
@@ -172,6 +172,12 @@ class PayslipView {
   final List<PayslipLine> deductions;
   final List<PayslipComplaint> complaints;
 
+  /// Hari terakhir boleh komplain (`YYYY-MM-DD`); null dari server lama.
+  final String? complaintDeadline;
+
+  /// Batas komplain belum lewat.
+  final bool canComplain;
+
   const PayslipView({
     required this.id,
     required this.userName,
@@ -190,6 +196,8 @@ class PayslipView {
     required this.earnings,
     required this.deductions,
     required this.complaints,
+    required this.complaintDeadline,
+    required this.canComplain,
   });
 
   bool get hasOpenComplaint => complaints.any((c) => c.isOpen);
@@ -220,6 +228,8 @@ class PayslipView {
           for (final c in (j['complaints'] as List? ?? const []))
             if (c is Map) PayslipComplaint.fromJson(Map<String, dynamic>.from(c)),
         ],
+        complaintDeadline: _ymd(j['complaint_deadline']),
+        canComplain: j['can_complain'] != false,
       );
 }
 
@@ -258,12 +268,11 @@ class LoanModel {
     required this.payslipId,
   });
 
-  /// Batal hanya selama belum diperiksa finance (BE: `requested`).
+  /// Batal hanya selama belum disetujui (BE: `requested`).
   bool get cancellable => status == 'requested';
 
   String get statusLabel => switch (status) {
         'requested' => 'Diajukan',
-        'checked' => 'Diperiksa finance',
         'approved' => 'Disetujui, menunggu dicairkan',
         'awaiting_cash' => 'Siap diambil di outlet',
         'disbursed' => 'Sudah cair',

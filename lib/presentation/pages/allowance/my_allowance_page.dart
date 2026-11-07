@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/data/models/allowance_model.dart';
+import 'package:pos_mobile/presentation/pages/product_transactions/product_transaction_page.dart';
 import 'package:pos_mobile/presentation/providers/allowance_provider.dart';
+import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/widgets/paged_list_view.dart';
 import 'package:pos_mobile/presentation/widgets/sdm_widgets.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
@@ -55,6 +58,7 @@ class MyAllowancePage extends ConsumerWidget {
     final today = ref.watch(myAllowanceProvider);
     final orders = ref.watch(myAllowanceOrdersProvider);
     final notifier = ref.read(myAllowanceOrdersProvider.notifier);
+    final canOrder = canOrderOwnAllowance(ref.watch(authProvider).held) && (today.valueOrNull?.balance ?? 0) > 0;
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
       appBar: AppBar(title: const Text('Jatah Saya'), centerTitle: true),
@@ -78,6 +82,18 @@ class MyAllowancePage extends ConsumerWidget {
               data: (a) => _Today(a),
             ),
           ),
+          if (canOrder)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+              child: ElevatedButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ProductTransactionPage(ownAllowance: true)),
+                ),
+                icon: const Icon(Icons.local_cafe_outlined),
+                label: const Text('Pesan jatah'),
+              ),
+            ),
           const Padding(
             padding: EdgeInsets.fromLTRB(20, 12, 20, 8),
             child: Align(
