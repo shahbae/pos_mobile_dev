@@ -113,24 +113,19 @@ void main() {
         'category_name': 'Permintaan dana',
         'description': 'Uang laci kurang.',
         'photo_url': null,
-        'status': 'resolved',
+        'status': 'approved',
         'due_at': '2026-10-30T16:59:59Z',
-        'resolved_by_name': 'Nende',
-        'resolution_note': 'Sudah ditransfer.',
-        'reopen_count': 0,
-        'auto_confirmed': false,
-        'auto_confirm_at': '2026-11-02T03:00:00Z',
         'overdue': false,
-        'late': false,
-        'actions': ['reopen', 'confirm'],
+        'late': null,
+        'actions': ['resolve'],
         'events': [
           {'id': 1, 'from_status': '', 'to_status': 'submitted', 'actor_id': 2, 'actor_name': 'Khaerudien'},
           {'id': 2, 'from_status': 'resolved', 'to_status': 'confirmed', 'actor_id': null, 'actor_name': ''},
         ],
       });
-      expect(t.can('confirm'), isTrue);
+      expect(t.can('resolve'), isTrue);
       expect(t.can('approve'), isFalse);
-      expect(t.late, isFalse);
+      expect(t.late, isNull);
       expect(t.events.first.actorName, 'Khaerudien');
       expect(t.events.last.actorName, isNull);
       expect(helpTargetLabels[t.target], 'Finance');

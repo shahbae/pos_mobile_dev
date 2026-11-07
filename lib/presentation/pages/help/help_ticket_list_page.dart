@@ -65,7 +65,7 @@ class HelpTicketListPage extends ConsumerWidget {
               const SdmNote(
                 icon: Icons.info_outline,
                 text: 'Minta bantuan SPV (alat rusak, stok, karyawan) atau finance (dana). '
-                    'Kamu mendapat notifikasi saat tiket disetujui, ditolak, atau ditandai selesai.',
+                    'Kamu mendapat notifikasi saat tiket disetujui atau ditolak. Tandai selesai sendiri kalau masalahnya sudah beres.',
               ),
               const SizedBox(height: 16),
               if (rows.isEmpty)

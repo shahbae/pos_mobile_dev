@@ -67,15 +67,12 @@ class HelpRepository {
         'Gagal membuat tiket',
       );
 
-  /// `POST /help-tickets/:id/reopen` — kembali ke disetujui dengan tenggat lama.
-  Future<HelpTicket> reopen(int id, {String? note}) => _one(
-    () => api.dio.post('/help-tickets/$id/reopen', data: {if (note != null && note.isNotEmpty) 'note': note}),
-    'Gagal membuka kembali tiket',
+  /// `POST /help-tickets/:id/resolve` (multipart) — leader pengaju menandai
+  /// masalahnya sudah beres. Keterangan opsional.
+  Future<HelpTicket> resolve(int id, {String note = ''}) => _one(
+    () => api.dio.post('/help-tickets/$id/resolve', data: FormData.fromMap({'note': note})),
+    'Gagal menandai selesai',
   );
-
-  /// `POST /help-tickets/:id/confirm`.
-  Future<HelpTicket> confirm(int id) =>
-      _one(() => api.dio.post('/help-tickets/$id/confirm'), 'Gagal mengonfirmasi tiket');
 
   Future<HelpTicket> _one(Future<Response<dynamic>> Function() call, String fallback) async {
     try {

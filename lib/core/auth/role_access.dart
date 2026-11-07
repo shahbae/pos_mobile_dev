@@ -321,9 +321,14 @@ bool canHandOutLoan(Iterable<String> held) =>
 bool canReceiveReminders(Iterable<String> held) =>
     _norm(held).intersection(const {'karyawan', 'leader'}).isNotEmpty;
 
-/// Membuat dan mengonfirmasi tiket bantuan (Tahap 4): leader, untuk outlet yang
-/// dipimpinnya. Menanggapi tiket ada di web admin.
+/// Membuat dan menandai selesai tiket bantuan (Tahap 4): leader, untuk outlet
+/// yang dipimpinnya. Menanggapi tiket ada di web admin.
 bool canUseHelpTickets(Iterable<String> held) => _norm(held).contains('leader');
+
+/// Memesan jatah sendiri lewat app, termasuk yang hari ini bertugas penyaji.
+/// Cermin `POST /me/allowance/orders` di be-pos.
+bool canOrderOwnAllowance(Iterable<String> held) =>
+    _norm(held).intersection(const {'owner', 'supervisor', 'leader', 'karyawan'}).isNotEmpty;
 
 /// Punya skor KPI sendiri dan boleh menyanggah (Tahap 6): leader & karyawan.
 /// Owner, SPV, finance, dan produksi tidak punya skor Crew/Leader — `/me/kpi`

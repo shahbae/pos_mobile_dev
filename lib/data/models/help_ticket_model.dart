@@ -56,7 +56,7 @@ class HelpTicket {
   final String description;
   final String? photoUrl;
 
-  /// `submitted`, `rejected`, `approved`, `resolved`, `confirmed`.
+  /// `submitted`, `rejected`, `approved`, `resolved`.
   final String status;
   final DateTime? dueAt;
   final String? rejectReason;
@@ -66,10 +66,6 @@ class HelpTicket {
   final String? resolvedByName;
   final String? resolutionNote;
   final String? resolutionPhotoUrl;
-  final int reopenCount;
-  final DateTime? confirmedAt;
-  final bool autoConfirmed;
-  final DateTime? autoConfirmAt;
 
   /// Masih dikerjakan dan tenggatnya sudah lewat.
   final bool overdue;
@@ -77,7 +73,7 @@ class HelpTicket {
   /// Tanda selesai terakhir lewat tenggat; null sampai ditandai selesai.
   final bool? late;
 
-  /// Tombol yang boleh tampil untuk pemanggil (`reopen`, `confirm`, …).
+  /// Tombol yang boleh tampil untuk pemanggil (`resolve`, …).
   final List<String> actions;
   final DateTime? createdAt;
   final List<HelpTicketEvent> events;
@@ -90,8 +86,6 @@ class HelpTicket {
     required this.categoryName,
     required this.description,
     required this.status,
-    required this.reopenCount,
-    required this.autoConfirmed,
     required this.overdue,
     required this.actions,
     required this.events,
@@ -104,8 +98,6 @@ class HelpTicket {
     this.resolvedByName,
     this.resolutionNote,
     this.resolutionPhotoUrl,
-    this.confirmedAt,
-    this.autoConfirmAt,
     this.late,
     this.createdAt,
   });
@@ -129,10 +121,6 @@ class HelpTicket {
     resolvedByName: _str(j['resolved_by_name']),
     resolutionNote: _str(j['resolution_note']),
     resolutionPhotoUrl: _str(j['resolution_photo_url']),
-    reopenCount: (j['reopen_count'] as num?)?.toInt() ?? 0,
-    confirmedAt: _time(j['confirmed_at']),
-    autoConfirmed: j['auto_confirmed'] == true,
-    autoConfirmAt: _time(j['auto_confirm_at']),
     overdue: j['overdue'] == true,
     late: j['late'] as bool?,
     actions: [for (final a in (j['actions'] as List? ?? const [])) '$a'],
@@ -148,7 +136,8 @@ const helpStatusLabels = {
   'submitted': 'Diajukan',
   'rejected': 'Ditolak',
   'approved': 'Disetujui',
-  'resolved': 'Ditandai selesai',
+  'resolved': 'Selesai',
+  // Hanya ada di riwayat tiket lama.
   'confirmed': 'Dikonfirmasi',
 };
 

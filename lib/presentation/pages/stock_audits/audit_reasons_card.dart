@@ -89,13 +89,13 @@ class _AuditReasonsCardState extends State<AuditReasonsCard> {
           ),
           const SizedBox(height: 4),
           const Text(
-            'Kekurangannya melewati batas wajar. Tulis alasannya; opname baru bisa disetujui sesudah semua barang beralasan.',
+            'Selisihnya melewati batas wajar. Tulis alasannya; opname baru bisa disetujui sesudah semua barang beralasan.',
             style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
           ),
           for (final it in widget.items) ...[
             const SizedBox(height: 12),
             Text(
-              '${it.displayName}: kurang ${fmtAuditQtyUnit(it.shortage, it.unit)}, '
+              '${it.displayName}: ${it.shortage < 0 ? 'lebih' : 'kurang'} ${fmtAuditQtyUnit(it.shortage.abs(), it.unit)}, '
               'batas ${fmtAuditQtyUnit(it.maxShortage, it.unit)}',
               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
             ),

@@ -52,7 +52,10 @@ const _payMethods = <_PayMethod>[
 ];
 
 class CheckoutPage extends ConsumerStatefulWidget {
-  const CheckoutPage({super.key});
+  /// Pesanan jatah untuk diri sendiri: tanpa pilihan metode bayar dan penerima.
+  final bool ownAllowance;
+
+  const CheckoutPage({super.key, this.ownAllowance = false});
 
   @override
   ConsumerState<CheckoutPage> createState() => _CheckoutPageState();
@@ -81,6 +84,13 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage>
   @override
   void initState() {
     super.initState();
+    if (widget.ownAllowance) {
+      _paymentMethod = 'ALLOWANCE';
+      // Sisa pilihan kasir di keranjang: promo dan diskon tidak berlaku.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _enterAllowance(ref.read(productTransactionProvider));
+      });
+    }
     _lastTotal = ref.read(checkoutPricingProvider).total;
     _paidAmountController.text = NumberFormat.decimalPattern('id_ID').format(_lastTotal);
     // Sedotan otomatis butuh master sedotan (penanda auto_for). Diteruskan ke
@@ -214,7 +224,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage>
       return;
     }
     final recipient = _recipient;
-    if (recipient == null) {
+    if (recipient == null && !widget.ownAllowance) {
       _toast("Pilih dulu siapa yang menerima jatah", Colors.orange);
       return;
     }
@@ -224,7 +234,12 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage>
       _toast(toppingProblem, Colors.orange);
       return;
     }
-    await ref.read(productTransactionProvider.notifier).submitAllowance(recipientUserId: recipient.userId);
+    final notifier = ref.read(productTransactionProvider.notifier);
+    if (widget.ownAllowance) {
+      await notifier.submitOwnAllowance();
+    } else {
+      await notifier.submitAllowance(recipientUserId: recipient!.userId);
+    }
     if (!mounted) return;
     final newState = ref.read(productTransactionProvider);
     if (newState.lastResponse != null) {
@@ -234,6 +249,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage>
       _showRejection(newState);
       // Saldo bisa berubah oleh kasir lain: muat ulang daftar penerima.
       ref.invalidate(allowanceRecipientsProvider);
+      if (widget.ownAllowance) ref.invalidate(myAllowanceProvider);
     }
   }
 
@@ -331,10 +347,14 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage>
   /// shift, riwayat, stok plastik/sedotan).
   void _goToSuccess(ProductTransactionResponse response, {Receipt? localReceipt}) {
     invalidateAfterTransaction(ref);
+    if (widget.ownAllowance) {
+      ref.invalidate(myAllowanceProvider);
+      ref.invalidate(myAllowanceOrdersProvider);
+    }
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (_) => TransactionSuccessPage(response: response, localReceipt: localReceipt),
+        builder: (_) => TransactionSuccessPage(response: response, localReceipt: localReceipt, ownAllowance: widget.ownAllowance),
       ),
     );
   }
@@ -485,11 +505,14 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage>
     final num total = _isAllowance ? cartState.paidSubtotal : pricing.total;
     final allowanceProblem = _isAllowance ? allowanceToppingProblem(cartState) : null;
     final recipient = _recipient;
+    final ownBalance = widget.ownAllowance ? ref.watch(myAllowanceProvider).valueOrNull?.balance : null;
     final blockers = _isAllowance
         ? [
             if (allowanceProblem != null) allowanceProblem,
             if (recipient != null && recipient.balance < total)
               'Sisa jatah ${recipient.name} ${formatRupiah(recipient.balance)}, pesanan ${formatRupiah(total)}',
+            if (ownBalance != null && ownBalance < total)
+              'Sisa jatahmu ${formatRupiah(ownBalance)}, pesanan ${formatRupiah(total)}',
           ]
         : pricing.blockers;
 
@@ -500,7 +523,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage>
 
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
-      appBar: AppBar(title: const Text("Konfirmasi Pembayaran"), centerTitle: true),
+      appBar: AppBar(title: Text(widget.ownAllowance ? "Pesan Jatah" : "Konfirmasi Pembayaran"), centerTitle: true),
       body: Column(
         children: [
           OfflineBanner(catalogFetchedAt: ref.watch(posCatalogProvider).catalog?.fetchedAt),
@@ -570,6 +593,13 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage>
             ],
 
             // ── Metode Pembayaran ──
+            if (widget.ownAllowance) ...[
+              _sectionTitle("Jatah Kamu", 18),
+              const SizedBox(height: 12),
+              _infoBox("Sisa jatah hari ini ${ownBalance == null ? '…' : formatRupiah(ownBalance)}. "
+                  "Tidak dibayar dan tidak masuk omzet. Tanpa promo maupun diskon; "
+                  "paling banyak $allowanceMaxToppings topping per minuman."),
+            ] else ...[
             _sectionTitle("Metode Pembayaran", 18),
             const SizedBox(height: 16),
             GridView.count(
@@ -609,7 +639,9 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage>
               }).toList(),
             ),
 
-            if (_isAllowance) ...[
+            ],
+
+            if (_isAllowance && !widget.ownAllowance) ...[
               const SizedBox(height: 24),
               _allowanceSection(),
             ],
@@ -706,7 +738,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage>
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: cartState.isLoading || blockers.isNotEmpty || (_isAllowance && _recipient == null)
+                onPressed: cartState.isLoading || blockers.isNotEmpty || (_isAllowance && _recipient == null && !widget.ownAllowance)
                     ? null
                     : () => _submit(pricing),
                 style: ElevatedButton.styleFrom(
@@ -719,7 +751,9 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage>
                 child: cartState.isLoading
                     ? const CircularProgressIndicator(color: Colors.white)
                     : Text(
-                        _isAllowance
+                        widget.ownAllowance
+                            ? "Pesan Jatah ${formatRupiah(total)}"
+                            : _isAllowance
                             ? (_recipient == null
                                 ? "Pilih penerima jatah"
                                 : "Catat Jatah ${formatRupiah(total)} untuk ${_recipient!.name}")

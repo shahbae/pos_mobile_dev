@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 import 'package:pos_mobile/data/local/catalog_store.dart';
 import 'package:pos_mobile/data/models/allowance_model.dart';
 import 'package:pos_mobile/data/models/pos_catalog_model.dart';
+import 'package:pos_mobile/data/models/product_transaction_model.dart';
 import 'package:pos_mobile/data/repositories/allowance_repository.dart';
 import 'package:pos_mobile/data/repositories/pos_catalog_repository.dart';
 import 'package:pos_mobile/data/repositories/product_transaction_repository.dart';
@@ -17,6 +18,7 @@ import 'package:pos_mobile/presentation/pages/product_transactions/checkout_page
 import 'package:pos_mobile/presentation/providers/allowance_provider.dart';
 import 'package:pos_mobile/presentation/providers/pos_catalog_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_transaction_provider.dart';
+import 'package:pos_mobile/theme/app_theme.dart';
 
 // Layar checkout Tahap 3: promo persen terpasang sendiri, diskon manual lewat
 // lembarnya, dan pesanan jatah sebagai metode bayar.
@@ -68,11 +70,26 @@ class _Store implements CatalogStore {
 }
 
 class _NoSales implements ProductTransactionRepository {
+  final ownOrders = <ProductTransactionRequest>[];
+
+  @override
+  Future<ProductTransactionResponse> createOwnAllowance(ProductTransactionRequest request) async {
+    ownOrders.add(request);
+    // Ditolak supaya uji berhenti di layar ini, tanpa membuka halaman nota.
+    throw const TransactionSubmitException('Ditolak uji', rejected: true);
+  }
+
   @override
   dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();
 }
 
 class _Allowance implements AllowanceRepository {
+  final int balance;
+  _Allowance({this.balance = 20000});
+
+  @override
+  Future<MyAllowance> mine() async => MyAllowance(date: '2026-11-07', balance: balance);
+
   @override
   Future<List<AllowanceRecipient>> recipients() async => const [
         AllowanceRecipient(userId: 6, name: 'Aenah', balance: 20000, locationName: 'Karangampel', atThisBranch: true),
@@ -82,13 +99,19 @@ class _Allowance implements AllowanceRepository {
   dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();
 }
 
-Future<ProviderContainer> _open(WidgetTester tester, {required bool percentPromo}) async {
+Future<ProviderContainer> _open(
+  WidgetTester tester, {
+  required bool percentPromo,
+  Widget home = const CheckoutPage(),
+  _NoSales? sales,
+  int balance = 20000,
+}) async {
   final container = ProviderContainer(overrides: [
     posCatalogRepositoryProvider.overrideWithValue(_Repo(percentPromo)),
     catalogStoreProvider.overrideWithValue(_Store()),
     activeBranchIdProvider.overrideWithValue(_branch),
-    productTransactionRepositoryProvider.overrideWithValue(_NoSales()),
-    allowanceRepositoryProvider.overrideWithValue(_Allowance()),
+    productTransactionRepositoryProvider.overrideWithValue(sales ?? _NoSales()),
+    allowanceRepositoryProvider.overrideWithValue(_Allowance(balance: balance)),
   ]);
   container.listen(productTransactionProvider, (previous, next) {});
   container.listen(posCatalogProvider, (previous, next) {});
@@ -103,7 +126,7 @@ Future<ProviderContainer> _open(WidgetTester tester, {required bool percentPromo
   addTearDown(tester.view.reset);
   await tester.pumpWidget(UncontrolledProviderScope(
     container: container,
-    child: const MaterialApp(home: CheckoutPage()),
+    child: MaterialApp(theme: AppTheme.lightTheme, home: home),
   ));
   await tester.pumpAndSettle();
   return container;
@@ -178,4 +201,36 @@ void main() {
     expect(find.textContaining('16.000'), findsWidgets);
     await _close(tester, c);
   });
+
+  group('pesan jatah sendiri', () {
+    const page = CheckoutPage(ownAllowance: true);
+
+    testWidgets('tanpa pilihan metode bayar dan penerima; terkirim lewat rute jatah sendiri', (tester) async {
+      final sales = _NoSales();
+      final container = await _open(tester, percentPromo: false, home: page, sales: sales);
+      expect(find.text('Pesan Jatah'), findsOneWidget);
+      expect(find.text('Metode Pembayaran'), findsNothing);
+      expect(find.text('Penerima Jatah'), findsNothing);
+      expect(find.text('Jatah Kamu'), findsOneWidget);
+      expect(find.textContaining('Sisa jatah hari ini'), findsOneWidget);
+      final tombol = find.textContaining('Pesan Jatah Rp');
+      expect(tombol, findsOneWidget);
+      await tester.tap(tombol);
+      await tester.pumpAndSettle();
+      expect(sales.ownOrders.length, 1);
+      expect(sales.ownOrders.single.paymentMethod, 'allowance');
+      await _close(tester, container);
+    });
+
+    testWidgets('saldo kurang: tombol mati dan alasannya tampil', (tester) async {
+      final sales = _NoSales();
+      final container = await _open(tester, percentPromo: false, home: page, sales: sales, balance: 10000);
+      expect(find.textContaining('Sisa jatahmu'), findsOneWidget);
+      await tester.tap(find.textContaining('Pesan Jatah Rp'));
+      await tester.pumpAndSettle();
+      expect(sales.ownOrders, isEmpty);
+      await _close(tester, container);
+    });
+  });
+
 }

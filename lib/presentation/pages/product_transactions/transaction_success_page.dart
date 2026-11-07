@@ -18,7 +18,10 @@ class TransactionSuccessPage extends ConsumerStatefulWidget {
   /// meminta apa pun ke server.
   final Receipt? localReceipt;
 
-  const TransactionSuccessPage({super.key, required this.response, this.localReceipt});
+  /// Pesanan jatah sendiri: sesudah selesai kembali ke Jatah Saya, bukan ke POS.
+  final bool ownAllowance;
+
+  const TransactionSuccessPage({super.key, required this.response, this.localReceipt, this.ownAllowance = false});
 
   @override
   ConsumerState<TransactionSuccessPage> createState() => _TransactionSuccessPageState();
@@ -73,7 +76,8 @@ class _TransactionSuccessPageState extends ConsumerState<TransactionSuccessPage>
   /// `invalidateAfterTransaction` (katalog + penanda stok) yang sudah dipicu
   /// dari checkout saat transaksi tercatat.
   void _finish() {
-    Navigator.of(context).pop();
+    final nav = Navigator.of(context)..pop();
+    if (widget.ownAllowance && nav.canPop()) nav.pop();
   }
 
   void _openManualPrint() {
@@ -272,8 +276,8 @@ class _TransactionSuccessPageState extends ConsumerState<TransactionSuccessPage>
                         elevation: 8,
                         shadowColor: AppTheme.brandBlue.withOpacity(0.4),
                       ),
-                      child: const Text(
-                        "Selesai & Transaksi Baru",
+                      child: Text(
+                        widget.ownAllowance ? "Selesai" : "Selesai & Transaksi Baru",
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
                       ),
                     ),

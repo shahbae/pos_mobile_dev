@@ -21,16 +21,24 @@ class ProductTransactionRepository {
   final ApiService api;
   ProductTransactionRepository(this.api);
 
-  Future<ProductTransactionResponse> createTransaction(ProductTransactionRequest request) async {
+  Future<ProductTransactionResponse> createTransaction(ProductTransactionRequest request) =>
+      _postSale('/product-transactions', request);
+
+  /// Pesanan jatah untuk diri sendiri, lewat rute yang juga terbuka bagi yang
+  /// hari ini bertugas penyaji.
+  Future<ProductTransactionResponse> createOwnAllowance(ProductTransactionRequest request) =>
+      _postSale('/me/allowance/orders', request);
+
+  Future<ProductTransactionResponse> _postSale(String path, ProductTransactionRequest request) async {
     try {
-      debugPrint('[TransactionRepo] POST /product-transactions body: ${request.toJson()}');
+      debugPrint('[TransactionRepo] POST $path body: ${request.toJson()}');
       // Batasnya lebih pendek dari permintaan lain: pembeli sedang menunggu di
       // depan kasir, dan bila server tak menjawab penjualannya masih bisa
       // disimpan di HP. Permintaan yang terlanjur sampai tetap aman — kiriman
       // ulangnya memakai idempotency key yang sama.
       final res = await api.dio
           .post(
-            '/product-transactions',
+            path,
             data: request.toJson(),
             options: Options(sendTimeout: _saleTimeout, receiveTimeout: _saleTimeout),
           )

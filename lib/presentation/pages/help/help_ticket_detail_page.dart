@@ -14,8 +14,8 @@ final _when = DateFormat('EEE d MMM, HH.mm', 'id_ID');
 String _fmt(DateTime? t) => t == null ? '-' : _when.format(t.toLocal());
 
 /// Satu tiket bantuan dengan riwayat statusnya. Juga tujuan ketukan
-/// notifikasi `help.status` (`app:/help-tickets/<id>`). Tombol Konfirmasi dan
-/// Buka kembali diambil dari `actions` kiriman server.
+/// notifikasi `help.status` (`app:/help-tickets/<id>`). Tombol Tandai selesai
+/// diambil dari `actions` kiriman server.
 class HelpTicketDetailPage extends ConsumerStatefulWidget {
   final int ticketId;
   const HelpTicketDetailPage({super.key, required this.ticketId});
@@ -66,35 +66,10 @@ class _HelpTicketDetailPageState extends ConsumerState<HelpTicketDetailPage> {
     }
   }
 
-  Future<void> _reopen() async {
-    final note = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Buka kembali tiket?'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Tiket kembali ke penanggap dengan tenggat yang sama.'),
-            const SizedBox(height: 12),
-            TextField(
-              controller: note,
-              maxLines: 3,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(labelText: 'Alasan (opsional)', hintText: 'mis. Masih kurang Rp50.000.'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Buka kembali')),
-        ],
-      ),
-    );
-    final text = note.text.trim();
-    note.dispose();
-    if (ok != true) return;
-    await _act(() => ref.read(helpRepositoryProvider).reopen(widget.ticketId, note: text), 'Tiket dibuka kembali.');
+  Future<void> _resolve() async {
+    final note = await showDialog<String>(context: context, builder: (_) => const _ResolveDialog());
+    if (note == null) return;
+    await _act(() => ref.read(helpRepositoryProvider).resolve(widget.ticketId, note: note), 'Tiket ditandai selesai.');
   }
 
   void _snack(String msg, {bool error = false}) {
@@ -169,7 +144,7 @@ class _HelpTicketDetailPageState extends ConsumerState<HelpTicketDetailPage> {
                       text: 'Ditolak${t.rejectedByName == null ? '' : ' oleh ${t.rejectedByName}'}: ${t.rejectReason}',
                     ),
                   ],
-                  if (t.resolutionNote != null) ...[
+                  if (t.status == 'resolved') ...[
                     const SizedBox(height: 12),
                     SdmCard(
                       child: Column(
@@ -179,8 +154,10 @@ class _HelpTicketDetailPageState extends ConsumerState<HelpTicketDetailPage> {
                             'Ditandai selesai${t.resolvedByName == null ? '' : ' oleh ${t.resolvedByName}'} · ${_fmt(t.resolvedAt)}',
                             style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppTheme.textSecondary),
                           ),
-                          const SizedBox(height: 6),
-                          Text(t.resolutionNote!, style: const TextStyle(color: AppTheme.textPrimary)),
+                          if (t.resolutionNote != null) ...[
+                            const SizedBox(height: 6),
+                            Text(t.resolutionNote!, style: const TextStyle(color: AppTheme.textPrimary)),
+                          ],
                           if (t.resolutionPhotoUrl != null) ...[
                             const SizedBox(height: 10),
                             _Photo(url: t.resolutionPhotoUrl!),
@@ -189,39 +166,18 @@ class _HelpTicketDetailPageState extends ConsumerState<HelpTicketDetailPage> {
                       ),
                     ),
                   ],
-                  if (t.status == 'resolved' && t.autoConfirmAt != null) ...[
-                    const SizedBox(height: 12),
-                    SdmNote(
-                      icon: Icons.hourglass_bottom,
-                      text: 'Konfirmasi atau buka kembali sebelum ${_fmt(t.autoConfirmAt)}. '
-                          'Sesudah itu tiket terkonfirmasi otomatis.',
-                    ),
-                  ],
-                  if (t.status == 'confirmed') ...[
-                    const SizedBox(height: 12),
-                    SdmNote(
-                      icon: Icons.verified_outlined,
-                      text: '${t.autoConfirmed ? 'Terkonfirmasi otomatis' : 'Dikonfirmasi'} ${_fmt(t.confirmedAt)}.',
-                    ),
-                  ],
-                  if (t.can('confirm') || t.can('reopen')) ...[
+                  if (t.can('resolve')) ...[
                     const SizedBox(height: 16),
-                    if (t.can('confirm'))
-                      ElevatedButton.icon(
-                        onPressed: _busy
-                            ? null
-                            : () => _act(() => ref.read(helpRepositoryProvider).confirm(t.id), 'Tiket dikonfirmasi.'),
-                        icon: const Icon(Icons.check_circle_outline),
-                        label: const Text('Konfirmasi selesai'),
-                      ),
-                    if (t.can('reopen')) ...[
-                      const SizedBox(height: 8),
-                      OutlinedButton.icon(
-                        onPressed: _busy ? null : _reopen,
-                        icon: const Icon(Icons.replay),
-                        label: const Text('Buka kembali'),
-                      ),
-                    ],
+                    ElevatedButton.icon(
+                      onPressed: _busy ? null : _resolve,
+                      icon: const Icon(Icons.check_circle_outline),
+                      label: const Text('Tandai selesai'),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Tandai kalau masalahnya sudah beres. Terlambat bila ditandai sesudah tenggat.',
+                      style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                    ),
                   ],
                   const SizedBox(height: 20),
                   const Text('Riwayat',
@@ -231,6 +187,50 @@ class _HelpTicketDetailPageState extends ConsumerState<HelpTicketDetailPage> {
                 ],
               ),
             ),
+    );
+  }
+}
+
+/// Konfirmasi tanda selesai. Memegang kontrolernya sendiri, karena kolomnya masih
+/// tergambar selama animasi dialog menutup. Hasilnya keterangan; null = batal.
+class _ResolveDialog extends StatefulWidget {
+  const _ResolveDialog();
+
+  @override
+  State<_ResolveDialog> createState() => _ResolveDialogState();
+}
+
+class _ResolveDialogState extends State<_ResolveDialog> {
+  final _note = TextEditingController();
+
+  @override
+  void dispose() {
+    _note.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Tandai selesai?'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('Tandai kalau masalahnya sudah beres. Tiket yang selesai tidak bisa dibuka lagi.'),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _note,
+            maxLines: 3,
+            maxLength: 1000,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(labelText: 'Keterangan (opsional)', hintText: 'mis. Blender sudah diganti'),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
+        TextButton(onPressed: () => Navigator.pop(context, _note.text.trim()), child: const Text('Tandai selesai')),
+      ],
     );
   }
 }
