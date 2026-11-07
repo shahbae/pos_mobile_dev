@@ -499,10 +499,10 @@ void main() {
         'data': {'id': 9, 'operational_date': '2026-11-04T00:00:00Z', 'amount': '1250000', 'status': 'pending', 'late': false},
       };
       final d = await repo.createCashDeposit(
-          operationalDate: '2026-11-04', amount: 1250000, photo: Uint8List.fromList([1]), note: 'Shift 1 & 2');
+          operationalDate: '2026-11-04', amount: 1250000, photos: [Uint8List.fromList([1])], note: 'Shift 1 & 2');
       expect(d.amount, 1250000);
       expect(fields(adapter.last!), {'operational_date': '2026-11-04', 'amount': '1250000', 'note': 'Shift 1 & 2'});
-      expect(files(adapter.last!)['photo'], endsWith('.jpg'));
+      expect(files(adapter.last!)['photo'], endsWith('-1.jpg'));
     });
 
     test('sidak: results JSON, foto temuan photo_<item_id>, tenggat kirim 3 menit', () async {

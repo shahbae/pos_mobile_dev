@@ -43,6 +43,8 @@ class ScheduleDuty {
 
   /// Tugas yang memegang POS dan laci.
   static bool holdsCashier(String? value) => value == cashier || value == both;
+
+  static bool holdsServer(String? value) => value == server || value == both;
 }
 
 /// "07:00" → "07.00", cara jam ditulis di layar app ini.

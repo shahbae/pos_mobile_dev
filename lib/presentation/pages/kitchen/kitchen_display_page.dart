@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import 'package:pos_mobile/data/models/kitchen_order_model.dart';
+import 'package:pos_mobile/presentation/providers/duty_provider.dart';
 import 'package:pos_mobile/presentation/providers/kitchen_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
@@ -12,6 +13,9 @@ import 'package:pos_mobile/theme/app_theme.dart';
 ///
 /// Pesanan yang sudah lunas muncul otomatis lewat SSE; snapshot REST ditarik
 /// ulang tiap koneksi pulih agar tidak ada pesanan yang hilang saat wifi putus.
+///
+/// Dipisah menurut tugas hari ini: penyaji menekan Mulai Buat dan Siap, kasir
+/// menekan Diserahkan. Yang memegang keduanya berpindah lewat pilihan di atas.
 class KitchenDisplayPage extends ConsumerStatefulWidget {
   const KitchenDisplayPage({super.key});
 
@@ -23,6 +27,9 @@ class _KitchenDisplayPageState extends ConsumerState<KitchenDisplayPage>
     with WidgetsBindingObserver {
   /// Hanya untuk menyegarkan label durasi tunggu — TIDAK untuk menarik data.
   Timer? _ticker;
+
+  /// Pilihan orang yang memegang dua tampilan. Null = tampilan pertama.
+  KitchenView? _picked;
 
   @override
   void initState() {
@@ -59,6 +66,9 @@ class _KitchenDisplayPageState extends ConsumerState<KitchenDisplayPage>
   Widget build(BuildContext context) {
     final state = ref.watch(kitchenDisplayProvider);
     final notifier = ref.read(kitchenDisplayProvider.notifier);
+    final views = ref.watch(kitchenViewsProvider);
+    final view = _picked != null && views.contains(_picked) ? _picked! : views.first;
+    final orders = kitchenOrdersForView(state.orders, view);
 
     ref.listen<KitchenDisplayState>(kitchenDisplayProvider, (prev, next) {
       final err = next.error;
@@ -92,38 +102,103 @@ class _KitchenDisplayPageState extends ConsumerState<KitchenDisplayPage>
       body: SafeArea(
         child: state.loading
             ? const Center(child: CircularProgressIndicator())
-            : state.orders.isEmpty
-                ? _EmptyState(onRefresh: notifier.refresh)
-                : RefreshIndicator(
-                    onRefresh: notifier.refresh,
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        // Kartu enak dibaca di ~300px; tablet landscape dapat
-                        // 3–4 kolom, ponsel 1 kolom.
-                        final columns =
-                            (constraints.maxWidth / 300).floor().clamp(1, 4);
-                        return GridView.builder(
-                          padding: const EdgeInsets.all(12),
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: columns,
-                            mainAxisSpacing: 12,
-                            crossAxisSpacing: 12,
-                            mainAxisExtent: 280,
-                          ),
-                          itemCount: state.orders.length,
-                          itemBuilder: (context, i) {
-                            final order = state.orders[i];
-                            return _OrderCard(
-                              order: order,
-                              onAdvance: () => notifier.advance(order),
-                            );
-                          },
-                        );
-                      },
-                    ),
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _ViewHeader(
+                    views: views,
+                    view: view,
+                    orders: state.orders,
+                    onPick: (v) => setState(() => _picked = v),
                   ),
+                  Expanded(
+                    child: orders.isEmpty
+                        ? _EmptyState(view: view, onRefresh: notifier.refresh)
+                        : RefreshIndicator(
+                            onRefresh: notifier.refresh,
+                            child: LayoutBuilder(
+                              builder: (context, constraints) {
+                                // Kartu enak dibaca di ~300px; tablet landscape
+                                // dapat 3–4 kolom, ponsel 1 kolom.
+                                final columns =
+                                    (constraints.maxWidth / 300).floor().clamp(1, 4);
+                                return GridView.builder(
+                                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+                                  physics: const AlwaysScrollableScrollPhysics(),
+                                  gridDelegate:
+                                      SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: columns,
+                                    mainAxisSpacing: 12,
+                                    crossAxisSpacing: 12,
+                                    mainAxisExtent: 280,
+                                  ),
+                                  itemCount: orders.length,
+                                  itemBuilder: (context, i) {
+                                    final order = orders[i];
+                                    return _OrderCard(
+                                      order: order,
+                                      canAdvance: kitchenViewCanAdvance(view, order.status),
+                                      onAdvance: () => notifier.advance(order),
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+                          ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+/// Pilihan tampilan bila memegang dua tugas, atau nama tugas bila satu, ditambah
+/// petunjuk tombol yang menjadi tugasnya.
+class _ViewHeader extends StatelessWidget {
+  final Set<KitchenView> views;
+  final KitchenView view;
+  final List<KitchenOrder> orders;
+  final ValueChanged<KitchenView> onPick;
+
+  const _ViewHeader({
+    required this.views,
+    required this.view,
+    required this.orders,
+    required this.onPick,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hint = view == KitchenView.server
+        ? 'Tekan Mulai Buat saat mulai membuat, lalu Siap saat pesanan jadi.'
+        : 'Tekan Diserahkan begitu pesanan siap diberikan ke pelanggan.';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (views.length > 1) ...[
+            SegmentedButton<KitchenView>(
+              showSelectedIcon: false,
+              segments: [
+                for (final v in views)
+                  ButtonSegment(
+                    value: v,
+                    label: Text('${kitchenViewLabel(v)} (${kitchenViewPending(orders, v)})'),
+                  ),
+              ],
+              selected: {view},
+              onSelectionChanged: (s) => onPick(s.first),
+            ),
+            const SizedBox(height: 8),
+          ] else
+            Text(
+              'Tugas hari ini: ${kitchenViewLabel(view)}',
+              style: const TextStyle(fontWeight: FontWeight.w900, color: AppTheme.textPrimary),
+            ),
+          Text(hint, style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+        ],
       ),
     );
   }
@@ -162,14 +237,17 @@ String _formatClock(DateTime t) =>
 
 class _OrderCard extends StatelessWidget {
   final KitchenOrder order;
+
+  /// False = kartu hanya dibaca: statusnya tugas tampilan lain.
+  final bool canAdvance;
   final VoidCallback onAdvance;
 
-  const _OrderCard({required this.order, required this.onAdvance});
+  const _OrderCard({required this.order, required this.canAdvance, required this.onAdvance});
 
   @override
   Widget build(BuildContext context) {
     final urgency = _urgencyColor(order);
-    final actionLabel = kitchenActionLabel(order.status);
+    final actionLabel = canAdvance ? kitchenActionLabel(order.status) : null;
 
     return Container(
       decoration: BoxDecoration(
@@ -487,8 +565,9 @@ class _ConnectionBadge extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
+  final KitchenView view;
   final Future<void> Function() onRefresh;
-  const _EmptyState({required this.onRefresh});
+  const _EmptyState({required this.view, required this.onRefresh});
 
   @override
   Widget build(BuildContext context) {
@@ -496,26 +575,26 @@ class _EmptyState extends StatelessWidget {
       onRefresh: onRefresh,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        children: const [
-          SizedBox(height: 120),
-          Icon(
+        children: [
+          const SizedBox(height: 120),
+          const Icon(
             Icons.ramen_dining_outlined,
             size: 56,
             color: AppTheme.textSecondary,
           ),
-          SizedBox(height: 12),
+          const SizedBox(height: 12),
           Center(
             child: Text(
-              'Belum ada pesanan',
-              style: TextStyle(
+              view == KitchenView.server ? 'Tidak ada pesanan yang perlu dibuat' : 'Belum ada pesanan',
+              style: const TextStyle(
                 fontWeight: FontWeight.w900,
                 fontSize: 15,
                 color: AppTheme.textPrimary,
               ),
             ),
           ),
-          SizedBox(height: 6),
-          Center(
+          const SizedBox(height: 6),
+          const Center(
             child: Text(
               'Pesanan yang sudah dibayar akan muncul di sini otomatis.',
               textAlign: TextAlign.center,
