@@ -5,6 +5,8 @@
 /// gudang. Keduanya tidak bisa dibatalkan.
 library;
 
+import 'dart:typed_data';
+
 import 'package:pos_mobile/data/models/stock_pack_model.dart';
 
 class Shipment {
@@ -123,6 +125,12 @@ class ShipmentLine {
   /// (atau BE lama yang belum mengirimnya).
   final StockPack? pack;
 
+  /// Bagian yang rusak / kedaluwarsa saat diterima (Tahap 7, PRD-C2), dalam
+  /// satuan dasar. Tidak masuk stok outlet.
+  final double damagedQty;
+  final double expiredQty;
+  final String? damagePhotoUrl;
+
   ShipmentLine({
     required this.id,
     required this.itemType,
@@ -133,7 +141,12 @@ class ShipmentLine {
     this.unitCost = 0,
     this.subtotal = 0,
     this.pack,
+    this.damagedQty = 0,
+    this.expiredQty = 0,
+    this.damagePhotoUrl,
   });
+
+  bool get hasDamage => damagedQty > 0 || expiredQty > 0;
 
   String get displayName => name.isNotEmpty ? name : '$itemType #$itemId';
 
@@ -163,6 +176,9 @@ class ShipmentLine {
       unitCost: _toDouble(j['unit_cost']),
       subtotal: _toDouble(j['subtotal']),
       pack: StockPack.tryFrom(j['pack']),
+      damagedQty: _toDouble(j['damaged_qty']),
+      expiredQty: _toDouble(j['expired_qty']),
+      damagePhotoUrl: (j['damage_photo_url']?.toString().isNotEmpty ?? false) ? j['damage_photo_url'].toString() : null,
     );
   }
 }
@@ -187,4 +203,74 @@ double _toDouble(dynamic v) {
   if (v == null) return 0;
   if (v is num) return v.toDouble();
   return double.tryParse(v.toString()) ?? 0;
+}
+
+// ---------------------------------------------------------------- terima
+
+/// Isian rusak/kedaluwarsa satu baris saat menerima (Tahap 7, PRD-C2).
+///
+/// Diisi dalam KEMASAN bila barangnya punya kemasan ("2 botol"), selain itu
+/// dalam satuan dasar. Yang dikirim ke server selalu satuan dasar.
+class ReceiveLineInput {
+  final ShipmentLine line;
+  final double damaged;
+  final double expired;
+
+  /// Foto bukti, sudah dibaca ke memori. Wajib bila ada yang rusak/expired.
+  final Uint8List? photo;
+
+  const ReceiveLineInput({required this.line, this.damaged = 0, this.expired = 0, this.photo});
+
+  ReceiveLineInput copyWith({double? damaged, double? expired, Uint8List? photo, bool clearPhoto = false}) =>
+      ReceiveLineInput(
+        line: line,
+        damaged: damaged ?? this.damaged,
+        expired: expired ?? this.expired,
+        photo: clearPhoto ? null : (photo ?? this.photo),
+      );
+
+  /// Isi satu satuan isian dalam satuan dasar: isi kemasan, atau 1.
+  double get factor {
+    final b = line.pack?.baseQty ?? 0;
+    return b > 0 ? b : 1;
+  }
+
+  /// Nama satuan isian ("botol", "ml").
+  String get inputUnit {
+    final n = line.pack?.name.trim() ?? '';
+    return (line.pack?.baseQty ?? 0) > 0 && n.isNotEmpty ? n.replaceFirst(RegExp(r'^1\s*(?=[^\d\s])'), '') : line.unit;
+  }
+
+  /// Jumlah kiriman dalam satuan isian.
+  double get shippedInInput => line.qty / factor;
+
+  double get damagedBase => damaged * factor;
+  double get expiredBase => expired * factor;
+  bool get hasDamage => damaged > 0 || expired > 0;
+
+  /// Yang masuk stok outlet, satuan dasar.
+  double get acceptedBase {
+    final v = line.qty - damagedBase - expiredBase;
+    return v < 0 ? 0 : v;
+  }
+
+  bool get exceeds => damagedBase + expiredBase > line.qty + 1e-6;
+  bool get needsPhoto => hasDamage && photo == null;
+}
+
+/// Apa yang menahan Terima, sebagai kalimat.
+List<String> receiveProblems(List<ReceiveLineInput> lines) => [
+  for (final l in lines)
+    if (l.damaged < 0 || l.expired < 0)
+      '${l.line.displayName}: jumlah tidak boleh minus.'
+    else if (l.exceeds)
+      '${l.line.displayName}: rusak + kedaluwarsa melebihi yang dikirim.'
+    else if (l.needsPhoto)
+      '${l.line.displayName}: ambil foto barang yang rusak/kedaluwarsa.',
+];
+
+/// Angka satuan dasar sebagai teks desimal untuk server ("2", "1.5").
+String receiveQtyParam(double v) {
+  final r = (v * 10000).roundToDouble() / 10000;
+  return r == r.roundToDouble() ? r.toStringAsFixed(0) : r.toString();
 }

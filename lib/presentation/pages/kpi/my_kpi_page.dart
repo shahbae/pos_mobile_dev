@@ -140,7 +140,7 @@ class _MyScoresView extends ConsumerWidget {
                 ? const [
                     SdmEmpty(
                       icon: Icons.insights_outlined,
-                      message: 'Belum ada skor bulan ini.\nSkor muncul untuk crew yang berjadwal dan leader outlet.',
+                      message: 'Belum ada skor bulan ini.\nSkor muncul untuk crew yang berjadwal, leader outlet, dan SPV.',
                     ),
                   ]
                 : [
@@ -205,6 +205,15 @@ class _ScoreSection extends StatelessWidget {
           const SdmNote(
             icon: Icons.info_outline,
             text: 'Skor masih berjalan dan bisa berubah sampai bulan ini ditutup.',
+          ),
+        ],
+        if (score.module == 'SPV') ...[
+          const SizedBox(height: 8),
+          const SdmNote(
+            icon: Icons.groups_outlined,
+            text: 'Reminder, tiket, dan sidak dihitung dari kerjamu sendiri. Hasil outlet '
+                '(omzet, selisih stok, laporan, biaya, opname, skor leader) sama untuk semua '
+                'SPV yang memegang outlet yang sama; targetnya mengikuti jumlah outlet yang kamu pegang.',
           ),
         ],
         if (pools.isNotEmpty) ...[
@@ -327,8 +336,20 @@ class _PoolTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: Text('${i.code} ${i.name}',
-                        style: const TextStyle(fontSize: 12.5, color: AppTheme.textSecondary)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('${i.code} ${i.name}',
+                            style: const TextStyle(fontSize: 12.5, color: AppTheme.textSecondary)),
+                        // Pembilang & penyebut modul pusat (Tahap 7) supaya
+                        // angkanya bisa dicek: "10 dari 12 minggu".
+                        if (i.measure != null && i.measure!.denominator > 0)
+                          Text(
+                            kpiMeasureText(i.measure!),
+                            style: const TextStyle(fontSize: 12, color: AppTheme.textPrimary),
+                          ),
+                      ],
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Text(_indicatorValue(pool, i),

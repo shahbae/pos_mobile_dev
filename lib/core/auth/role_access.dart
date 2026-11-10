@@ -330,15 +330,25 @@ bool canUseHelpTickets(Iterable<String> held) => _norm(held).contains('leader');
 bool canOrderOwnAllowance(Iterable<String> held) =>
     _norm(held).intersection(const {'owner', 'supervisor', 'leader', 'karyawan'}).isNotEmpty;
 
-/// Punya skor KPI sendiri dan boleh menyanggah (Tahap 6): leader & karyawan.
-/// Owner, SPV, finance, dan produksi tidak punya skor Crew/Leader — `/me/kpi`
-/// mereka selalu kosong. Cermin `POST /kpi/disputes` di be-pos.
-bool canSeeOwnKpi(Iterable<String> held) =>
-    _norm(held).intersection(const {'leader', 'karyawan'}).isNotEmpty;
+/// Punya skor KPI sendiri dan boleh menyanggah: leader & karyawan (Crew &
+/// Leader, Tahap 6) dan SPV (modul SPV, Tahap 7). Akun yang juga memegang
+/// owner tidak dinilai. Finance & produksi melihat skornya di app gudang.
+/// Cermin `POST /kpi/disputes` di be-pos.
+bool canSeeOwnKpi(Iterable<String> held) {
+  final r = _norm(held);
+  if (r.contains('owner')) return false;
+  return r.intersection(const {'leader', 'karyawan', 'supervisor'}).isNotEmpty;
+}
 
 /// Mengirim ceklis foto opening/closing (Tahap 6): yang bertugas di outlet.
-/// Cermin `crewApp` (`/me/photo-checklist`) di be-pos.
-bool canUsePhotoChecklist(Iterable<String> held) => canSeeOwnKpi(held);
+/// Cermin `crewApp` (`/me/photo-checklist`) di be-pos. SPV tidak, walau kini
+/// punya skor sendiri.
+bool canUsePhotoChecklist(Iterable<String> held) =>
+    _norm(held).intersection(const {'leader', 'karyawan'}).isNotEmpty;
+
+/// Komplain kualitas atas kiriman yang sudah diterima (Tahap 7, PRD-C1):
+/// leader outlet penerima. Server memastikan outletnya.
+bool canComplainShipment(Iterable<String> held) => _norm(held).contains('leader');
 
 /// Melihat skor tim outlet yang dipimpinnya dan mengirim setoran (Tahap 6).
 /// Leader tidak bisa menilai crew.

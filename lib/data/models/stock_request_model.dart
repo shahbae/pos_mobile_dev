@@ -20,6 +20,11 @@ class StockRequest {
   final String? createdAt;
   final String? approvedAt;
 
+  /// Tenggat yang dipilih outlet (Tahap 7, PRD-A2): kiriman pertama paling
+  /// lambat jam ini dihitung tepat waktu untuk KPI Produksi. Kosong untuk
+  /// permintaan lama.
+  final String? neededBy;
+
   /// Baris permintaan yang sudah diperkaya BE (nama, satuan, stok gudang).
   /// Hanya terisi dari endpoint detail; daftar mengirimnya kosong.
   final List<StockRequestLine> lines;
@@ -35,6 +40,7 @@ class StockRequest {
     this.note = '',
     this.createdAt,
     this.approvedAt,
+    this.neededBy,
     this.lines = const [],
   });
 
@@ -81,6 +87,7 @@ class StockRequest {
       note: j['note']?.toString() ?? '',
       createdAt: j['created_at']?.toString(),
       approvedAt: j['approved_at']?.toString(),
+      neededBy: (j['needed_by']?.toString().isNotEmpty ?? false) ? j['needed_by'].toString() : null,
       lines: rawLines
           .map((e) => StockRequestLine.fromJson(e as Map<String, dynamic>))
           .toList(),
@@ -252,4 +259,32 @@ double _toDouble(dynamic v) {
   if (v == null) return 0;
   if (v is num) return v.toDouble();
   return double.tryParse(v.toString()) ?? 0;
+}
+
+// ---------------------------------------------------------------- tenggat
+
+/// Tenggat bawaan permintaan baru: besok pukul 10.00 (sama dengan bawaan
+/// server untuk app lama).
+DateTime defaultNeededBy(DateTime now) => DateTime(now.year, now.month, now.day + 1, 10);
+
+/// Server menolak tenggat kurang dari 2 jam ke depan (422). Diberi jeda lima
+/// menit supaya waktu mengisi form tidak membuatnya lewat batas.
+const neededByMinLead = Duration(hours: 2, minutes: 5);
+
+/// Kalimat bila tenggat tidak sah, atau null.
+String? neededByProblem(DateTime neededBy, DateTime now) =>
+    neededBy.isBefore(now.add(neededByMinLead)) ? 'Tenggat paling cepat 2 jam dari sekarang.' : null;
+
+/// Bentuk kirim ke server: RFC3339 UTC, tidak bergantung zona waktu HP.
+String neededByParam(DateTime neededBy) => neededBy.toUtc().toIso8601String();
+
+/// Pintasan tenggat yang sering dipakai, semuanya mulai besok.
+List<(String, DateTime)> neededByShortcuts(DateTime now) {
+  DateTime at(int days, int hour) => DateTime(now.year, now.month, now.day + days, hour);
+  return [
+    ('Besok 08.00', at(1, 8)),
+    ('Besok 10.00', at(1, 10)),
+    ('Besok 14.00', at(1, 14)),
+    ('Lusa 10.00', at(2, 10)),
+  ];
 }

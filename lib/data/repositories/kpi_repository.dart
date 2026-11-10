@@ -109,6 +109,42 @@ class KpiRepository {
     }
   }
 
+  // ------------------------------------------------------------ komplain kualitas
+
+  /// `POST /complaints` — komplain kualitas atas kiriman yang sudah diterima
+  /// (Tahap 7, PRD-C1). Finance memvalidasinya; yang valid memotong skor tim
+  /// Produksi gudang pengirim, tidak pernah skor crew.
+  ///
+  /// Outlet, waktu, dan jenis ikut dikirim walau leader biasa tidak
+  /// membutuhkannya: akun leader yang juga SPV melewati jalur pencatat WA di
+  /// server, yang mewajibkan ketiganya.
+  Future<void> createQualityComplaint({
+    required int shipmentId,
+    required int branchId,
+    required String content,
+    required Uint8List photo,
+    DateTime? occurredAt,
+  }) async {
+    final at = occurredAt ?? DateTime.now();
+    String two(int v) => v.toString().padLeft(2, '0');
+    try {
+      await api.dio.post(
+        '/complaints',
+        data: FormData.fromMap({
+          'shipment_id': '$shipmentId',
+          'branch_id': '$branchId',
+          'kind': 'production_quality',
+          'occurred_at': '${at.year}-${two(at.month)}-${two(at.day)} ${two(at.hour)}:${two(at.minute)}',
+          'content': content.trim(),
+          'photo': MultipartFile.fromBytes(photo, filename: 'komplain-kiriman-$shipmentId.jpg'),
+        }),
+        options: Options(contentType: 'multipart/form-data'),
+      );
+    } on DioException catch (e) {
+      throw _error(e, 'Gagal mengirim komplain');
+    }
+  }
+
   // ------------------------------------------------------------ setoran
 
   /// `GET /cash-deposits` — leader selalu dibatasi server ke outlet yang

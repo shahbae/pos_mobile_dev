@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 
 import '../../../data/models/expense_model.dart';
 import '../../providers/expense_provider.dart';
+import '../../widgets/cost_type_field.dart';
 
 class ExpenseFormEditPage extends ConsumerStatefulWidget {
   final ExpenseModel expense;
@@ -24,6 +25,10 @@ class _ExpenseFormEditPageState extends ConsumerState<ExpenseFormEditPage> {
   late final TextEditingController _amountController;
   late final TextEditingController _descController;
   late String _selectedCategory;
+
+  /// Jenis Biaya (Tahap 7) — wajib; pengeluaran lama tanpa jenis diminta
+  /// memilih saat diubah.
+  int? _costTypeId;
   late DateTime _selectedDate;
 
   final List<String> _categories = ['operational', 'marketing', 'salary', 'other'];
@@ -39,6 +44,7 @@ class _ExpenseFormEditPageState extends ConsumerState<ExpenseFormEditPage> {
     _amountController = TextEditingController(text: widget.expense.amount ?? '');
     _descController = TextEditingController(text: widget.expense.description ?? '');
     _selectedCategory = widget.expense.category ?? 'operational';
+    _costTypeId = widget.expense.costTypeId;
     try {
       // `.toLocal()` WAJIB: BE mengirim expense_date sebagai "…T00:00:00+07:00",
       // dan DateTime.parse mengembalikan DateTime UTC begitu ada offset. Tanpa
@@ -137,6 +143,7 @@ class _ExpenseFormEditPageState extends ConsumerState<ExpenseFormEditPage> {
       'category': _selectedCategory,
       'description': _descController.text,
       'expense_date': DateFormat('yyyy-MM-dd').format(_selectedDate),
+      if (_costTypeId != widget.expense.costTypeId) 'cost_type_id': '$_costTypeId',
     };
 
     try {
@@ -268,6 +275,16 @@ class _ExpenseFormEditPageState extends ConsumerState<ExpenseFormEditPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      const Text('Jenis Biaya *', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
+                      const SizedBox(height: 8),
+                      CostTypeField(
+                        value: _costTypeId,
+                        enabled: !_loading,
+                        onChanged: (v) => setState(() => _costTypeId = v),
+                      ),
+
+                      const SizedBox(height: 20),
+
                       const Text('Kategori Pengeluaran *', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
                       const SizedBox(height: 8),
                       DropdownButtonFormField<String>(

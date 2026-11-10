@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../../providers/expense_provider.dart';
+import '../../widgets/cost_type_field.dart';
 
 class ExpenseFormPage extends ConsumerStatefulWidget {
   const ExpenseFormPage({super.key});
@@ -23,6 +24,9 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
   final TextEditingController _descController = TextEditingController();
   
   String _selectedCategory = 'operational';
+
+  /// Jenis Biaya (Tahap 7) — wajib, lihat [CostTypeField].
+  int? _costTypeId;
   DateTime _selectedDate = DateTime.now();
   final List<String> _categories = ['operational', 'marketing', 'salary', 'other'];
 
@@ -114,6 +118,7 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
       'category': _selectedCategory,
       'description': _descController.text,
       'expense_date': DateFormat('yyyy-MM-dd').format(_selectedDate),
+      'cost_type_id': '$_costTypeId',
     };
 
     try {
@@ -209,6 +214,20 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      const Text('Jenis Biaya *',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
+                      const SizedBox(height: 8),
+                      CostTypeField(
+                        value: _costTypeId,
+                        enabled: !_loading,
+                        onChanged: (v) => setState(() => _costTypeId = v),
+                      ),
+                      const SizedBox(height: 4),
+                      Text('Dipakai untuk menilai biaya harian outlet.',
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+
+                      const SizedBox(height: 20),
+
                       const Text('Kategori Pengeluaran *',
                           style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
                       const SizedBox(height: 8),

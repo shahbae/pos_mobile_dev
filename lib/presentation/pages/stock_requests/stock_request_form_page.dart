@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import 'package:pos_mobile/data/models/stock_pack_model.dart';
 import 'package:pos_mobile/data/models/stock_request_model.dart';
@@ -56,12 +57,21 @@ class _StockRequestFormPageState extends ConsumerState<StockRequestFormPage> {
   bool _saving = false;
   bool _prefilled = false;
 
+  /// Tenggat (Tahap 7, PRD-A2). Saat mengubah, hanya dikirim bila disentuh:
+  /// tenggat lama yang kini kurang dari 2 jam tidak boleh menahan simpan.
+  late DateTime _neededBy;
+  bool _neededByTouched = false;
+
   bool get _isEdit => widget.existing != null;
 
   @override
   void initState() {
     super.initState();
     _noteCtrl.text = widget.existing?.note ?? '';
+    final old = widget.existing?.neededBy;
+    _neededBy = (old == null ? null : DateTime.tryParse(old)?.toLocal()) ?? defaultNeededBy(DateTime.now());
+    // Permintaan lama tanpa tenggat: tenggat bawaan ikut dikirim saat disimpan.
+    _neededByTouched = _isEdit && old == null;
     _searchCtrl.addListener(() {
       setState(() => _search = _searchCtrl.text.trim().toLowerCase());
     });
@@ -126,10 +136,20 @@ class _StockRequestFormPageState extends ConsumerState<StockRequestFormPage> {
       return;
     }
 
+    final sendNeededBy = !_isEdit || _neededByTouched;
+    if (sendNeededBy) {
+      final problem = neededByProblem(_neededBy, DateTime.now());
+      if (problem != null) {
+        _snack(problem);
+        return;
+      }
+    }
+
     final yakin = await confirmAction(
       context,
       title: _isEdit ? 'Simpan perubahan permintaan?' : 'Kirim permintaan ke gudang?',
-      message: '${items.length} jenis barang akan diajukan ke gudang.',
+      message: '${items.length} jenis barang akan diajukan ke gudang, '
+          'dibutuhkan paling lambat ${_neededByLabel(_neededBy)}.',
       confirmLabel: 'Ya, kirim',
     );
     if (!yakin || !mounted) return;
@@ -141,10 +161,11 @@ class _StockRequestFormPageState extends ConsumerState<StockRequestFormPage> {
         await repo.updateRequest(
           id: widget.existing!.id,
           note: _noteCtrl.text.trim(),
+          neededBy: sendNeededBy ? _neededBy : null,
           items: items,
         );
       } else {
-        await repo.createRequest(note: _noteCtrl.text.trim(), items: items);
+        await repo.createRequest(note: _noteCtrl.text.trim(), neededBy: _neededBy, items: items);
       }
       if (!mounted) return;
       Navigator.pop(context, true);
@@ -237,6 +258,8 @@ class _StockRequestFormPageState extends ConsumerState<StockRequestFormPage> {
                             ],
                           ],
                           const SizedBox(height: 8),
+                          _neededByField(),
+                          const SizedBox(height: 10),
                           _noteField(),
                         ],
                       ),
@@ -386,6 +409,96 @@ class _StockRequestFormPageState extends ConsumerState<StockRequestFormPage> {
     );
   }
 
+  static final _neededByFormat = DateFormat('EEE d MMM, HH.mm', 'id_ID');
+  String _neededByLabel(DateTime t) => _neededByFormat.format(t);
+
+  void _setNeededBy(DateTime t) => setState(() {
+        _neededBy = t;
+        _neededByTouched = true;
+      });
+
+  Future<void> _pickNeededBy() async {
+    final now = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _neededBy.isBefore(now) ? now : _neededBy,
+      firstDate: DateTime(now.year, now.month, now.day),
+      lastDate: now.add(const Duration(days: 30)),
+      helpText: 'Dibutuhkan tanggal',
+    );
+    if (date == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_neededBy),
+      helpText: 'Dibutuhkan jam',
+    );
+    if (time == null || !mounted) return;
+    _setNeededBy(DateTime(date.year, date.month, date.day, time.hour, time.minute));
+  }
+
+  /// Tenggat permintaan (Tahap 7, PRD-A2): gudang dinilai tepat waktu bila
+  /// kiriman pertamanya berangkat paling lambat jam ini.
+  Widget _neededByField() {
+    final problem = (!_isEdit || _neededByTouched) ? neededByProblem(_neededBy, DateTime.now()) : null;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: problem == null ? AppTheme.borderLight : Colors.red.shade300),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Dibutuhkan paling lambat',
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppTheme.textPrimary)),
+          const SizedBox(height: 8),
+          InkWell(
+            onTap: _saving ? null : _pickNeededBy,
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppTheme.bgLight,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.borderLight),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.schedule, size: 20, color: AppTheme.brandBlue),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(_neededByLabel(_neededBy),
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppTheme.textPrimary)),
+                  ),
+                  const Text('Ubah', style: TextStyle(fontSize: 13, color: AppTheme.brandBlue)),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final (label, at) in neededByShortcuts(DateTime.now()))
+                ChoiceChip(
+                  label: Text(label),
+                  selected: _neededBy == at,
+                  onSelected: _saving ? null : (_) => _setNeededBy(at),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            problem ?? 'Gudang dinilai tepat waktu bila barangnya berangkat sebelum jam ini.',
+            style: TextStyle(fontSize: 12, color: problem == null ? AppTheme.textSecondary : Colors.red.shade700),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _noteField() {
     return Container(
       padding: const EdgeInsets.all(14),
@@ -467,11 +580,15 @@ class _StockRequestFormPageState extends ConsumerState<StockRequestFormPage> {
                     ),
                   ),
                 ),
+                // Boleh turun baris: di layar sempit atau huruf HP yang
+                // diperbesar, teks ini dulu meluap keluar bar.
                 if (filledCount > 0)
-                  const Text(
-                    'gudang bisa menyetujui lebih sedikit',
-                    style:
-                        TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                  const Flexible(
+                    child: Text(
+                      'gudang bisa menyetujui lebih sedikit',
+                      textAlign: TextAlign.end,
+                      style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                    ),
                   ),
               ],
             ),

@@ -72,6 +72,7 @@ class ExpenseRepository {
 
     if (raw != null) {
       if (raw.contains('photo is required')) return 'Foto bukti wajib diisi.';
+      if (raw.contains('jenis biaya')) return 'Jenis biaya tidak dikenal atau sudah nonaktif. Pilih ulang.';
       if (raw.contains('2mb') || raw.contains('≤ 2mb') || raw.contains('large')) {
         return 'Ukuran foto maksimal 2 MB.';
       }
@@ -91,6 +92,25 @@ class ExpenseRepository {
     }
     final msg = (d is Map ? (d['message'] ?? d['error']) : null)?.toString();
     return msg ?? 'Gagal menyimpan pengeluaran (${e.response?.statusCode ?? e.message})';
+  }
+
+  /// `GET /cost-types` — semua jenis biaya (yang nonaktif juga, supaya nama
+  /// pengeluaran lama tetap terbaca). Pilihan di form disaring ke yang aktif.
+  Future<List<CostType>> getCostTypes() async {
+    try {
+      final res = await api.dio.get('/cost-types');
+      final data = res.data['data'];
+      final list = [
+        if (data is List)
+          for (final e in data)
+            if (e is Map) CostType.fromJson(Map<String, dynamic>.from(e)),
+      ]..sort((a, b) => a.sort != b.sort ? a.sort.compareTo(b.sort) : a.name.compareTo(b.name));
+      return list;
+    } on DioException catch (e) {
+      final d = e.response?.data;
+      final m = d is Map ? (d['message'] ?? d['error'])?.toString() : null;
+      throw m ?? 'Gagal memuat jenis biaya';
+    }
   }
 
   Future<ExpenseModel?> getExpenseDetail(int id) async {

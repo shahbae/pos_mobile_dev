@@ -127,7 +127,7 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('Terima Kiriman'), findsOneWidget);
       expect(find.text('Tolak Seluruhnya'), findsOneWidget);
-      expect(find.textContaining('tidak ada terima sebagian'), findsOneWidget);
+      expect(find.textContaining('dicatat saat menerima'), findsOneWidget);
     });
 
     // Inilah jebakan yang meruntuhkan layar Minta Barang: tombol dengan
