@@ -31,10 +31,33 @@ List<Map<String, dynamic>> _maps(dynamic v) => [
 const kpiStatusLabels = {
   'running': 'Berjalan',
   'computed': 'Dihitung',
+  'validated': 'Divalidasi finance',
   'approved': 'Disetujui',
 };
 
-const kpiModuleLabels = {'CREW': 'Crew', 'LEADER': 'Leader'};
+const kpiModuleLabels = {
+  'CREW': 'Crew',
+  'LEADER': 'Leader',
+  'SPV': 'SPV',
+  'PRODUKSI': 'Produksi',
+  'FINANCE': 'Finance',
+};
+
+/// Rincian ukuran indikator modul pusat (Tahap 7, `measure`): pembilang,
+/// penyebut, satuan. Hanya untuk ditampilkan.
+class KpiMeasure {
+  final double numerator;
+  final double denominator;
+  final String unit;
+
+  const KpiMeasure({required this.numerator, required this.denominator, this.unit = ''});
+
+  factory KpiMeasure.fromJson(Map<String, dynamic> j) => KpiMeasure(
+    numerator: _num(j['numerator']),
+    denominator: _num(j['denominator']),
+    unit: '${j['unit'] ?? ''}',
+  );
+}
 
 class KpiIndicatorResult {
   final String code;
@@ -51,6 +74,7 @@ class KpiIndicatorResult {
   final int events;
   final double? actual;
   final double? target;
+  final KpiMeasure? measure;
 
   const KpiIndicatorResult({
     required this.code,
@@ -65,6 +89,7 @@ class KpiIndicatorResult {
     this.events = 0,
     this.actual,
     this.target,
+    this.measure,
   });
 
   factory KpiIndicatorResult.fromJson(Map<String, dynamic> j) => KpiIndicatorResult(
@@ -80,6 +105,7 @@ class KpiIndicatorResult {
     events: _int(j['events']),
     actual: _numOrNull(j['actual']),
     target: _numOrNull(j['target']),
+    measure: j['measure'] is Map ? KpiMeasure.fromJson(Map<String, dynamic>.from(j['measure'] as Map)) : null,
   );
 }
 

@@ -4,6 +4,9 @@ import 'package:intl/intl.dart';
 
 import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/data/models/shipment_model.dart';
+import 'package:pos_mobile/presentation/pages/kpi/kpi_widgets.dart';
+import 'package:pos_mobile/presentation/pages/shipments/shipment_complaint_page.dart';
+import 'package:pos_mobile/presentation/pages/shipments/shipment_receive_page.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/shipment_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
@@ -22,32 +25,24 @@ class _ShipmentDetailPageState extends ConsumerState<ShipmentDetailPage> {
   bool _busy = false;
   bool _changed = false;
 
+  /// Menerima lewat halaman sendiri (Tahap 7, PRD-C2): tiap barang boleh
+  /// diberi jumlah rusak/kedaluwarsa + foto, yang tidak masuk stok cabang.
   Future<void> _receive(Shipment sh) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Terima seluruh kiriman?'),
-        content: const Text(
-            'Stok cabang akan langsung bertambah sesuai isi surat jalan, dan '
-            'ini tidak bisa dibatalkan.\n\n'
-            'Pastikan barangnya sudah benar-benar diturunkan dan jumlahnya '
-            'cocok. Kalau ada yang kurang atau rusak, tolak seluruhnya — '
-            'tidak ada terima sebagian.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Periksa lagi')),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Terima', style: TextStyle(color: Colors.green)),
-          ),
-        ],
-      ),
+    final ok = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => ShipmentReceivePage(shipment: sh)),
     );
-    if (ok != true) return;
-    await _run(() => ref
-        .read(shipmentRepositoryProvider)
-        .receive(sh.id, revision: sh.revision));
+    if (ok != true || !mounted) return;
+    _changed = true;
+    ref.invalidate(shipmentDetailProvider(widget.shipmentId));
+    ref.invalidate(shipmentListProvider);
+  }
+
+  Future<void> _complain(Shipment sh) async {
+    await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => ShipmentComplaintPage(shipment: sh)),
+    );
   }
 
   Future<void> _reject(Shipment sh) async {
@@ -169,6 +164,22 @@ class _ShipmentDetailPageState extends ConsumerState<ShipmentDetailPage> {
                 if (canDecide && sh.isOnTheWay) ...[
                   const SizedBox(height: 16),
                   _actions(sh),
+                ],
+                // Komplain kualitas (Tahap 7, PRD-C1): leader, atas kiriman
+                // yang sudah diterima outletnya.
+                if (sh.isReceived && canComplainShipment(auth.held)) ...[
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    onPressed: () => _complain(sh),
+                    icon: const Icon(Icons.report_outlined),
+                    label: const Text('Komplain kualitas'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.orange.shade800,
+                      side: BorderSide(color: Colors.orange.shade300),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
                 ],
               ],
             ),
@@ -362,7 +373,8 @@ class ShipmentActionBar extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         const Text(
-          'Terima seluruhnya atau tolak seluruhnya — tidak ada terima sebagian.',
+          'Barang rusak atau kedaluwarsa dicatat saat menerima dan tidak masuk '
+          'stok. Tolak seluruhnya hanya bila kirimannya salah.',
           textAlign: TextAlign.center,
           style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
         ),
@@ -384,7 +396,10 @@ class _LineCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppTheme.borderLight),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+      Row(
         children: [
           Expanded(
             child: Column(
@@ -424,6 +439,33 @@ class _LineCard extends StatelessWidget {
                 ),
             ],
           ),
+        ],
+      ),
+      // Rusak/kedaluwarsa saat diterima (Tahap 7): tidak masuk stok cabang.
+      if (line.hasDamage) ...[
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(10)),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${[
+                    if (line.damagedQty > 0) 'Rusak ${_fmtQty(line.damagedQty)} ${line.unit}',
+                    if (line.expiredQty > 0) 'Kedaluwarsa ${_fmtQty(line.expiredQty)} ${line.unit}',
+                  ].join(' · ')} — tidak masuk stok',
+                  style: TextStyle(fontSize: 12, color: Colors.orange.shade900),
+                ),
+              ),
+              if (line.damagePhotoUrl != null) ...[
+                const SizedBox(width: 8),
+                KpiThumb(line.damagePhotoUrl!, size: 44),
+              ],
+            ],
+          ),
+        ),
+      ],
         ],
       ),
     );

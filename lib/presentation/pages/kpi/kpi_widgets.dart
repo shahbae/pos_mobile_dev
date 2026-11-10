@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
+import 'package:pos_mobile/data/models/kpi_model.dart';
 import 'package:pos_mobile/data/services/push_service.dart';
 import 'package:pos_mobile/presentation/pages/reminders/reminder_detail_page.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
+import 'package:pos_mobile/utils/currency.dart';
 
 /// Potongan tampilan bersama halaman KPI (Tahap 6).
 
@@ -20,6 +22,21 @@ String kpiNum(double? v) => v == null ? '—' : _two.format(v);
 String kpiPoints(double v) {
   if (v == 0) return '0';
   return '${v < 0 ? '−' : '+'}${_two.format(v.abs())}';
+}
+
+/// Pembilang & penyebut indikator modul pusat (Tahap 7), dalam kalimat:
+/// "10 dari 12 minggu", "Rp 13.000.000 dari Rp 15.000.000". SPV-C1 mengirim
+/// jumlah skor leader ÷ banyak leader, jadi yang ditampilkan rata-ratanya.
+String kpiMeasureText(KpiMeasure m) {
+  switch (m.unit) {
+    case 'Rp':
+      return '${formatRupiah(m.numerator)} dari ${formatRupiah(m.denominator)}';
+    case 'leader':
+      return 'rata-rata ${kpiNum(m.denominator > 0 ? m.numerator / m.denominator : 0)} '
+          'dari ${kpiNum(m.denominator)} leader';
+    default:
+      return '${kpiNum(m.numerator)} dari ${kpiNum(m.denominator)}${m.unit.isEmpty ? '' : ' ${m.unit}'}';
+  }
 }
 
 Color kpiPredicateColor(String predicate) => switch (predicate) {

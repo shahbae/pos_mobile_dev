@@ -148,6 +148,8 @@ class _StockRequestDetailPageState
             _kv('Diajukan oleh', req.requesterName!),
           if (req.createdAt != null)
             _kv('Tanggal', fmtRequestDate(req.createdAt!)),
+          if (req.neededBy != null)
+            _kv('Dibutuhkan', fmtRequestDate(req.neededBy!)),
           if (req.approvedAt != null)
             _kv('Diputuskan', fmtRequestDate(req.approvedAt!)),
           if (req.note.isNotEmpty) _kv('Catatan', req.note),

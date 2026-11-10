@@ -158,6 +158,15 @@ class ExpenseDetailPage extends ConsumerWidget {
               children: [
                 _infoRow(Icons.calendar_today_outlined, "Tanggal Pengeluaran", _fmtDate(exp.expenseDate)),
                 const Divider(height: 28),
+                Consumer(
+                  builder: (context, ref, _) => _infoRow(
+                    Icons.receipt_long_outlined,
+                    "Jenis Biaya",
+                    costTypeName(ref.watch(costTypesProvider).valueOrNull ?? const [], exp.costTypeId) ??
+                        (exp.costTypeId == null ? 'Belum dipilih' : '#${exp.costTypeId}'),
+                  ),
+                ),
+                const Divider(height: 28),
                 _infoRow(Icons.category_outlined, "Kategori", _categoryLabel(exp.category)),
                 const Divider(height: 28),
                 _infoRow(Icons.description_outlined, "Keterangan", exp.description ?? '-'),

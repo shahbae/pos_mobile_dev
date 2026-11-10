@@ -68,13 +68,18 @@ class StockRequestRepository {
 
   /// items: [{item_type, item_id, template_id, pack_qty}] — `pack_qty` sebagai
   /// TEKS, mengikuti seluruh endpoint stok, supaya pecahan tidak dibulatkan.
+  ///
+  /// [neededBy] = tenggat (Tahap 7, PRD-A2). Kosong = server memakai besok
+  /// 10.00.
   Future<StockRequest> createRequest({
     String? note,
+    DateTime? neededBy,
     required List<Map<String, dynamic>> items,
   }) async {
     try {
       final res = await api.dio.post('/stock-requests', data: {
         if (note != null && note.isNotEmpty) 'note': note,
+        if (neededBy != null) 'needed_by': neededByParam(neededBy),
         'items': items,
       });
       return StockRequest.fromJson(res.data['data'] ?? res.data);
@@ -85,14 +90,18 @@ class StockRequestRepository {
 
   /// Mengganti SELURUH baris, bukan menambah. Hanya selagi berstatus
   /// `submitted`, dan hanya oleh pembuatnya.
+  ///
+  /// [neededBy] kosong = tenggat lama tetap.
   Future<StockRequest> updateRequest({
     required int id,
     String? note,
+    DateTime? neededBy,
     required List<Map<String, dynamic>> items,
   }) async {
     try {
       final res = await api.dio.put('/stock-requests/$id', data: {
         if (note != null && note.isNotEmpty) 'note': note,
+        if (neededBy != null) 'needed_by': neededByParam(neededBy),
         'items': items,
       });
       return StockRequest.fromJson(res.data['data'] ?? res.data);

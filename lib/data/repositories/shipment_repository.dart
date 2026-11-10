@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
@@ -50,11 +52,41 @@ class ShipmentRepository {
   /// [revision] = revisi yang sedang dilihat. Gudang boleh mengubah isi
   /// kiriman sebelum diterima (revisi 17 Okt 2026); server menolak (409) bila
   /// layar ini memuat isi yang lama.
-  Future<void> receive(int id, {int? revision}) async {
+  ///
+  /// [damage] = baris yang rusak/kedaluwarsa (Tahap 7, PRD-C2). Kalau ada,
+  /// dikirim multipart: `lines` JSON + foto `photo_<id baris>`. Bagian itu
+  /// tidak masuk stok outlet. Tanpa kerusakan tetap JSON lama.
+  Future<void> receive(int id, {int? revision, List<ReceiveLineInput> damage = const []}) async {
+    final damaged = damage.where((d) => d.hasDamage).toList();
     try {
+      if (damaged.isEmpty) {
+        await api.dio.post(
+          '/shipments/$id/receive',
+          data: {'revision': ?revision},
+        );
+        return;
+      }
+      final form = FormData.fromMap({
+        if (revision != null) 'revision': '$revision',
+        'lines': jsonEncode([
+          for (final d in damaged)
+            {
+              'id': d.line.id,
+              'damaged_qty': receiveQtyParam(d.damagedBase),
+              'expired_qty': receiveQtyParam(d.expiredBase),
+            },
+        ]),
+      });
+      for (final d in damaged) {
+        form.files.add(MapEntry(
+          'photo_${d.line.id}',
+          MultipartFile.fromBytes(d.photo!, filename: 'rusak-$id-${d.line.id}.jpg'),
+        ));
+      }
       await api.dio.post(
         '/shipments/$id/receive',
-        data: {if (revision != null) 'revision': revision},
+        data: form,
+        options: Options(contentType: 'multipart/form-data', sendTimeout: const Duration(seconds: 90)),
       );
     } on DioException catch (e) {
       throw _msg(e, 'Gagal menerima kiriman');
@@ -106,6 +138,11 @@ class ShipmentRepository {
     // pesan BE di alur ini yang masih berbahasa Inggris dan tidak menyebut
     // sebabnya. Menampilkannya apa adanya membuat kasir mengira dirinya salah
     // pencet, padahal ini kesalahan di sisi server yang tidak bisa dia benahi.
+    // 400 dengan kalimat yang jelas (mis. "foto wajib untuk barang
+    // rusak/expired") ditampilkan apa adanya.
+    if (statusCode == 400 && lower != null && lower.isNotEmpty && lower != 'invalid request') {
+      return raw;
+    }
     if (statusCode == 400) {
       return 'Kiriman ini ditolak server dan bukan karena kesalahanmu. '
           'Muat ulang dulu; kalau masih sama, laporkan ke admin gudang.';

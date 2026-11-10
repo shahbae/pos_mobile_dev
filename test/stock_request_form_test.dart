@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 import 'package:pos_mobile/data/models/stock_request_model.dart';
 import 'package:pos_mobile/presentation/pages/stock_requests/stock_request_form_page.dart';
@@ -76,6 +77,9 @@ Widget _harness(List<RequestableItem> catalogue) {
 }
 
 void main() {
+  // Tenggat (Tahap 7) diformat dengan lokal id_ID, yang dimuat main.dart.
+  setUpAll(() async => initializeDateFormatting('id_ID', null));
+
   testWidgets('halaman minta barang ter-render tanpa error layout',
       (tester) async {
     await tester.pumpWidget(_harness(_catalogue));

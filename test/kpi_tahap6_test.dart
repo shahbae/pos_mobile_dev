@@ -420,15 +420,17 @@ void main() {
       expect(canSeeOwnKpi(r) && canUsePhotoChecklist(r) && canSeeTeamKpi(r) && canSendCashDeposit(r), isTrue);
       expect(canInspect(r), isFalse);
     });
-    test('SPV & owner: sidak saja (tanpa skor Crew/Leader sendiri)', () {
+    test('SPV & owner: sidak; SPV punya skor SPV sendiri (Tahap 7), owner tidak', () {
       for (final r in [
         {'supervisor'},
         {'owner'},
       ]) {
         expect(canInspect(r), isTrue);
-        expect(canSeeOwnKpi(r), isFalse);
         expect(canUsePhotoChecklist(r), isFalse);
       }
+      expect(canSeeOwnKpi({'supervisor'}), isTrue);
+      expect(canSeeOwnKpi({'owner'}), isFalse);
+      expect(canSeeOwnKpi({'owner', 'supervisor'}), isFalse, reason: 'owner tidak dinilai');
     });
     test('leader + SPV: semuanya (server menolak sidak di outlet yang dipimpinnya)', () {
       const r = {'leader', 'supervisor'};

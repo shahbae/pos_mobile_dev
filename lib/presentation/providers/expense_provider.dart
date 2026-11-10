@@ -24,3 +24,9 @@ final expenseDetailProvider = FutureProvider.family<ExpenseModel?, int>((ref, id
   final repo = ref.watch(expenseRepositoryProvider);
   return repo.getExpenseDetail(id);
 });
+
+/// Jenis Biaya (Tahap 7). Tidak autoDispose: form catat, form ubah, dan
+/// detail membacanya bergantian, dan isinya jarang berubah.
+final costTypesProvider = FutureProvider<List<CostType>>((ref) {
+  return ref.watch(expenseRepositoryProvider).getCostTypes();
+});
