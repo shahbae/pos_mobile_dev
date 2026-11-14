@@ -156,6 +156,16 @@ class ExpenseDetailPage extends ConsumerWidget {
             ),
             child: Column(
               children: [
+                if (exp.approvalLabel.isNotEmpty) ...[
+                  _infoRow(
+                    exp.isRejected ? Icons.block_rounded : Icons.hourglass_top_rounded,
+                    "Status ACC SPV",
+                    exp.isRejected
+                        ? 'Ditolak${exp.approvalNote.isEmpty ? '' : ': ${exp.approvalNote}'}. Uangnya harus kembali ke laci dan ikut disetor; ubah pengeluaran ini untuk mengajukan ulang.'
+                        : 'Menunggu ACC: melewati standar harian jenis biaya ini. Sampai disetujui, uangnya dianggap masih di laci.',
+                  ),
+                  const Divider(height: 28),
+                ],
                 _infoRow(Icons.calendar_today_outlined, "Tanggal Pengeluaran", _fmtDate(exp.expenseDate)),
                 const Divider(height: 28),
                 Consumer(

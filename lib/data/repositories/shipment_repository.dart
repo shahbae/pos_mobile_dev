@@ -44,8 +44,7 @@ class ShipmentRepository {
     }
   }
 
-  /// Menerima seluruh kiriman. Tidak ada isian jumlah — outlet menerima
-  /// seluruhnya atau menolak seluruhnya.
+  /// Menerima kiriman.
   ///
   /// Stok outlet naik di sini, dan permintaan aslinya jadi selesai.
   ///
@@ -53,29 +52,34 @@ class ShipmentRepository {
   /// kiriman sebelum diterima (revisi 17 Okt 2026); server menolak (409) bila
   /// layar ini memuat isi yang lama.
   ///
-  /// [damage] = baris yang rusak/kedaluwarsa (Tahap 7, PRD-C2). Kalau ada,
-  /// dikirim multipart: `lines` JSON + foto `photo_<id baris>`. Bagian itu
-  /// tidak masuk stok outlet. Tanpa kerusakan tetap JSON lama.
-  Future<void> receive(int id, {int? revision, List<ReceiveLineInput> damage = const []}) async {
-    final damaged = damage.where((d) => d.hasDamage).toList();
+  /// [lines] = isian tiap baris. Semua baris membawa `received_qty` (revisi
+  /// KPI 11 Nov, L2.B: jumlah yang diketik leader; berbeda dari surat jalan
+  /// lebih dari batas = antrean Selisih Terima SPV). Baris yang rusak/
+  /// kedaluwarsa (Tahap 7, PRD-C2) ikut membawa jumlahnya, dan bila ada
+  /// dikirim multipart dengan foto `photo_<id baris>`; bagian itu tidak masuk
+  /// stok outlet. Tanpa kerusakan dikirim JSON.
+  Future<void> receive(int id, {int? revision, List<ReceiveLineInput> lines = const []}) async {
+    final damaged = lines.where((d) => d.hasDamage).toList();
+    final body = [
+      for (final d in lines)
+        {
+          'id': d.line.id,
+          if (d.received != null) 'received_qty': receiveQtyParam(d.receivedBase),
+          if (d.hasDamage) 'damaged_qty': receiveQtyParam(d.damagedBase),
+          if (d.hasDamage) 'expired_qty': receiveQtyParam(d.expiredBase),
+        },
+    ];
     try {
       if (damaged.isEmpty) {
         await api.dio.post(
           '/shipments/$id/receive',
-          data: {'revision': ?revision},
+          data: {'revision': ?revision, if (body.isNotEmpty) 'lines': body},
         );
         return;
       }
       final form = FormData.fromMap({
         if (revision != null) 'revision': '$revision',
-        'lines': jsonEncode([
-          for (final d in damaged)
-            {
-              'id': d.line.id,
-              'damaged_qty': receiveQtyParam(d.damagedBase),
-              'expired_qty': receiveQtyParam(d.expiredBase),
-            },
-        ]),
+        'lines': jsonEncode(body),
       });
       for (final d in damaged) {
         form.files.add(MapEntry(

@@ -147,13 +147,15 @@ class _ExpenseFormEditPageState extends ConsumerState<ExpenseFormEditPage> {
     };
 
     try {
-      await repo.updateExpense(
+      final res = await repo.updateExpense(
         widget.expense.id!,
         payload,
         photoPath: _newPhoto?.path, // null = foto bukti lama dipertahankan
       );
       if (!mounted) return;
-      _snack('Berhasil mengupdate pengeluaran');
+      _snack(expenseApprovalOf(res) == 'pending'
+          ? 'Tersimpan. Melewati standar harian: menunggu ACC SPV.'
+          : 'Berhasil mengupdate pengeluaran');
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;

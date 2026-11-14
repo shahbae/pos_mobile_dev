@@ -196,6 +196,10 @@ class _ExpenseListPageState extends ConsumerState<ExpenseListPage> {
                     color: Colors.red,
                   ),
                 ),
+                if (exp.approvalLabel.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  ExpenseApprovalPill(exp),
+                ],
               ],
             ),
           )
@@ -246,5 +250,25 @@ class _ExpenseListPageState extends ConsumerState<ExpenseListPage> {
       });
       ref.invalidate(expenseListProvider);
     }
+  }
+}
+
+/// Penanda status ACC SPV (revisi KPI 11 Nov, SPV-A7).
+class ExpenseApprovalPill extends StatelessWidget {
+  final ExpenseModel exp;
+  const ExpenseApprovalPill(this.exp, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final rejected = exp.isRejected;
+    final fg = rejected ? const Color(0xFFB91C1C) : const Color(0xFFB45309);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: rejected ? const Color(0xFFFEF2F2) : const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(exp.approvalLabel, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: fg)),
+    );
   }
 }

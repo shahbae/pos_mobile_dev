@@ -27,6 +27,7 @@ import '../../../pages/help/help_ticket_list_page.dart';
 import '../../../pages/kpi/cash_deposit_page.dart';
 import '../../../pages/kpi/inspection_list_page.dart';
 import '../../../pages/kpi/my_kpi_page.dart';
+import '../../kpi/directives_page.dart';
 import '../../../pages/kpi/photo_checklist_page.dart';
 
 class SettingTab extends ConsumerWidget {
@@ -194,6 +195,19 @@ class SettingTab extends ConsumerWidget {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const MyKpiPage()),
+            ),
+          ),
+        ],
+        if (canSeeDirectives(auth.held)) ...[
+          const SizedBox(height: 16),
+          _SettingMenuCard(
+            title: "Arahan SPV",
+            subtitle: "Arahan bertenggat dan evaluasi bulanan dari SPV",
+            icon: Icons.assignment_outlined,
+            color: accent,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const DirectivesPage()),
             ),
           ),
         ],

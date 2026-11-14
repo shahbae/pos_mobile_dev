@@ -7,6 +7,11 @@ class ShiftModel {
   final num? cashSales; // tunai bersih masuk laci (BE: cash_sales, dulu net_cash)
   final num? expectedCash; // kas seharusnya (dari BE bila tersedia)
   final num totalExpense; // total pengeluaran shift (BE: total_expense)
+
+  /// Pengeluaran shift yang masih menunggu ACC SPV (revisi KPI 11 Nov,
+  /// SPV-A7). Belum dihitung sebagai pengeluaran: uangnya dianggap masih di
+  /// laci sampai disetujui.
+  final num pendingExpense;
   final num? difference; // selisih kas (dari BE bila tersedia)
   final List<ShiftPayment> payments;
   final String status; // open / closed
@@ -28,6 +33,7 @@ class ShiftModel {
     required this.cashSales,
     required this.expectedCash,
     this.totalExpense = 0,
+    this.pendingExpense = 0,
     required this.difference,
     required this.payments,
     required this.status,
@@ -79,6 +85,7 @@ class ShiftModel {
           : _num(data['cash_sales'] ?? data['net_cash']),
       expectedCash: data['expected_cash'] == null ? null : _num(data['expected_cash']),
       totalExpense: _num(data['total_expense']),
+      pendingExpense: _num(data['pending_expense']),
       difference: (data['difference'] ?? data['cash_difference']) == null
           ? null
           : _num(data['difference'] ?? data['cash_difference']),
