@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pos_mobile/utils/currency.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:pos_mobile/presentation/providers/expense_provider.dart';
@@ -45,7 +46,8 @@ class CostTypeField extends ConsumerWidget {
             if (t.isActive || t.id == value) t,
         ];
         final current = shown.any((t) => t.id == value) ? value : null;
-        return DropdownButtonFormField<int>(
+        final standard = [for (final t in shown) if (t.id == current) t.dailyStandard].firstOrNull;
+        final field = DropdownButtonFormField<int>(
           key: const ValueKey('cost-type-field'),
           initialValue: current,
           isExpanded: true,
@@ -56,6 +58,22 @@ class CostTypeField extends ConsumerWidget {
           ],
           validator: (v) => v == null ? 'Pilih jenis biaya' : null,
           onChanged: enabled ? onChanged : null,
+        );
+        if (standard == null) return field;
+        // Revisi KPI 11 Nov (SPV-A7): lewat standar harian = menunggu ACC SPV.
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            field,
+            Padding(
+              padding: const EdgeInsets.only(top: 6, left: 4),
+              child: Text(
+                'Standar harian ${formatRupiah(standard)}. Kalau total jenis ini hari ini lewat dari itu, '
+                'pengeluaran menunggu ACC SPV dulu.',
+                style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+              ),
+            ),
+          ],
         );
       },
     );

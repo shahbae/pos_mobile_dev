@@ -12,10 +12,12 @@ final _num = NumberFormat('#,##0.####', 'id_ID');
 
 String _fmt(double v) => _num.format(v);
 
-/// Menerima kiriman (Tahap 7, PRD-C2). Seluruh kiriman tetap diterima dalam
-/// satu tekan, tapi tiap barang boleh diberi jumlah yang rusak atau
-/// kedaluwarsa beserta fotonya. Bagian itu tidak masuk stok outlet dan
-/// dihitung di KPI Produksi gudang pengirim.
+/// Menerima kiriman. Leader mengetik jumlah yang benar-benar diterima tiap
+/// barang (revisi KPI 11 Nov, L2.B); berbeda dari surat jalan lebih dari batas
+/// = SPV memeriksa, dan bila ternyata salah ketik leader dipotong. Tiap barang
+/// juga boleh diberi jumlah yang rusak atau kedaluwarsa beserta fotonya
+/// (Tahap 7, PRD-C2); bagian itu tidak masuk stok outlet dan dihitung di KPI
+/// Produksi gudang pengirim.
 ///
 /// Mengembalikan `true` lewat `pop` bila kiriman diterima.
 class ShipmentReceivePage extends ConsumerStatefulWidget {
@@ -42,13 +44,19 @@ class _ShipmentReceivePageState extends ConsumerState<ShipmentReceivePage> {
       return;
     }
     final damaged = _lines.where((l) => l.hasDamage).toList();
+    final differs = _lines.where((l) => l.differs).toList();
     final ok = await confirmAction(
       context,
       title: 'Terima kiriman ini?',
-      message: damaged.isEmpty
-          ? 'Semua barang masuk stok cabang sekarang juga. Ini tidak bisa dibatalkan.'
-          : '${damaged.length} barang ada yang rusak/kedaluwarsa dan bagian itu TIDAK masuk stok. '
-              'Sisanya masuk stok cabang sekarang juga. Ini tidak bisa dibatalkan.',
+      message: [
+        if (differs.isNotEmpty)
+          '${differs.length} barang jumlah diterimanya beda dari surat jalan. SPV akan memeriksanya; '
+              'kalau ternyata salah ketik, nilai KPI leader dipotong.',
+        if (damaged.isNotEmpty) '${damaged.length} barang ada yang rusak/kedaluwarsa dan bagian itu TIDAK masuk stok.',
+        damaged.isEmpty && differs.isEmpty
+            ? 'Semua barang masuk stok cabang sekarang juga. Ini tidak bisa dibatalkan.'
+            : 'Sisanya masuk stok cabang sekarang juga. Ini tidak bisa dibatalkan.',
+      ].join('\n\n'),
       confirmLabel: 'Ya, terima',
     );
     if (!ok || !mounted) return;
@@ -56,7 +64,7 @@ class _ShipmentReceivePageState extends ConsumerState<ShipmentReceivePage> {
     try {
       await ref
           .read(shipmentRepositoryProvider)
-          .receive(widget.shipment.id, revision: widget.shipment.revision, damage: _lines);
+          .receive(widget.shipment.id, revision: widget.shipment.revision, lines: _lines);
       if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
@@ -77,6 +85,7 @@ class _ShipmentReceivePageState extends ConsumerState<ShipmentReceivePage> {
     final sh = widget.shipment;
     final bottomInset = MediaQuery.of(context).padding.bottom;
     final damagedCount = _lines.where((l) => l.hasDamage).length;
+    final unfilled = _lines.where((l) => l.received == null).length;
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
       appBar: AppBar(title: Text('Terima Kiriman #${sh.id}'), centerTitle: true),
@@ -87,8 +96,9 @@ class _ShipmentReceivePageState extends ConsumerState<ShipmentReceivePage> {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(12)),
             child: Text(
-              'Hitung barangnya. Kalau ada yang rusak atau kedaluwarsa, ketuk barangnya, isi '
-              'jumlahnya, dan foto. Bagian itu tidak masuk stok cabang.',
+              'Hitung barangnya dan ketik jumlah yang benar-benar diterima tiap barang. Kalau ada '
+              'yang rusak atau kedaluwarsa, ketuk "Ada rusak?", isi jumlahnya, dan foto. Bagian itu '
+              'tidak masuk stok cabang.',
               style: TextStyle(fontSize: 13, color: Colors.blue.shade900),
             ),
           ),
@@ -119,6 +129,15 @@ class _ShipmentReceivePageState extends ConsumerState<ShipmentReceivePage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (unfilled > 0)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  'Isi jumlah diterima: $unfilled barang lagi',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary, fontWeight: FontWeight.w700),
+                ),
+              ),
             if (damagedCount > 0)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
@@ -171,11 +190,13 @@ class _LineEditor extends StatefulWidget {
 }
 
 class _LineEditorState extends State<_LineEditor> {
+  final _received = TextEditingController();
   final _damaged = TextEditingController();
   final _expired = TextEditingController();
 
   @override
   void dispose() {
+    _received.dispose();
     _damaged.dispose();
     _expired.dispose();
     super.dispose();
@@ -188,6 +209,8 @@ class _LineEditorState extends State<_LineEditor> {
     final d = widget.input;
     final l = d.line;
     final bad = d.exceeds || d.needsPhoto;
+    final shipped = 'Dikirim ${_fmt(d.shippedInInput)} ${d.inputUnit}'
+        '${d.factor == 1 ? '' : ' (${_fmt(l.qty)} ${l.unit})'}';
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -213,16 +236,12 @@ class _LineEditorState extends State<_LineEditor> {
                         Text(l.displayName,
                             style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppTheme.textPrimary)),
                         const SizedBox(height: 2),
-                        Text(
-                          d.hasDamage
-                              ? 'Masuk stok ${_fmt(d.acceptedBase)} ${l.unit} dari ${_fmt(l.qty)} ${l.unit}'
-                              : 'Dikirim ${_fmt(d.shippedInInput)} ${d.inputUnit}'
-                                  '${d.factor == 1 ? '' : ' (${_fmt(l.qty)} ${l.unit})'}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: d.hasDamage ? Colors.orange.shade800 : AppTheme.textSecondary,
+                        Text(shipped, style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                        if (d.hasDamage || d.differs)
+                          Text(
+                            'Masuk stok ${_fmt(d.acceptedBase)} ${l.unit}',
+                            style: TextStyle(fontSize: 12, color: Colors.orange.shade800),
                           ),
-                        ),
                       ],
                     ),
                   ),
@@ -232,6 +251,37 @@ class _LineEditorState extends State<_LineEditor> {
                   ),
                 ],
               ),
+            ),
+          ),
+          Padding(
+            padding: EdgeInsets.fromLTRB(14, 0, 14, widget.open ? 10 : 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: _received,
+                  enabled: widget.enabled,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                    labelText: 'Jumlah diterima',
+                    hintText: 'Hitung lalu ketik',
+                    suffixText: d.inputUnit,
+                    isDense: true,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onChanged: (v) => widget.onChanged(
+                    v.trim().isEmpty ? d.copyWith(clearReceived: true) : d.copyWith(received: _read(v)),
+                  ),
+                ),
+                if (d.differs) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'Beda dari surat jalan. Pastikan sudah dihitung ulang: SPV akan memeriksa, dan '
+                    'kalau ternyata salah ketik, nilai KPI leader dipotong.',
+                    style: TextStyle(fontSize: 12, color: Colors.orange.shade800),
+                  ),
+                ],
+              ],
             ),
           ),
           if (widget.open)
@@ -249,7 +299,7 @@ class _LineEditorState extends State<_LineEditor> {
                   ),
                   if (d.exceeds) ...[
                     const SizedBox(height: 6),
-                    Text('Melebihi yang dikirim (${_fmt(d.shippedInInput)} ${d.inputUnit}).',
+                    Text('Melebihi yang diterima (${_fmt(d.receivedBase / d.factor)} ${d.inputUnit}).',
                         style: TextStyle(fontSize: 12, color: Colors.red.shade700)),
                   ],
                   if (d.hasDamage) ...[

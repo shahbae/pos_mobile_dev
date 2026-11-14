@@ -346,6 +346,14 @@ bool canSeeOwnKpi(Iterable<String> held) {
 bool canUsePhotoChecklist(Iterable<String> held) =>
     _norm(held).intersection(const {'leader', 'karyawan'}).isNotEmpty;
 
+/// Sesi Live TikTok di Beranda (revisi KPI 11 Nov, C3.4): yang bisa
+/// dijadwalkan Live di outlet. Cermin `crewApp` (`/me/live-sessions`).
+bool canDoLive(Iterable<String> held) => canUsePhotoChecklist(held);
+
+/// Arahan dan evaluasi SPV (revisi KPI 11 Nov, SPV-A2): leader. Cermin
+/// `leaderApp` (`/me/directives`, `/me/evaluations`).
+bool canSeeDirectives(Iterable<String> held) => _norm(held).contains('leader');
+
 /// Komplain kualitas atas kiriman yang sudah diterima (Tahap 7, PRD-C1):
 /// leader outlet penerima. Server memastikan outletnya.
 bool canComplainShipment(Iterable<String> held) => _norm(held).contains('leader');

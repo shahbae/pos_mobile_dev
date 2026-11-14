@@ -1,3 +1,4 @@
+import 'package:pos_mobile/data/models/kpi_revisi_model.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:pos_mobile/data/models/kpi_model.dart';
@@ -34,4 +35,17 @@ final inspectionItemsProvider = FutureProvider.autoDispose<List<InspectionItem>>
 
 final inspectionsProvider = FutureProvider.autoDispose<List<Inspection>>((ref) {
   return ref.watch(kpiRepositoryProvider).inspections();
+});
+
+// Revisi KPI 11 Nov: sesi Live (C3.4), arahan & evaluasi SPV (SPV-A2).
+final myLiveSessionsProvider = FutureProvider.autoDispose<List<LiveSlot>>((ref) {
+  return ref.watch(kpiRepositoryProvider).myLiveSessions();
+});
+
+final myDirectivesProvider = FutureProvider.autoDispose<List<LeaderDirective>>((ref) {
+  return ref.watch(kpiRepositoryProvider).myDirectives();
+});
+
+final myEvaluationsProvider = FutureProvider.autoDispose<List<LeaderEvaluation>>((ref) {
+  return ref.watch(kpiRepositoryProvider).myEvaluations();
 });

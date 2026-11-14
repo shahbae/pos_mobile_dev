@@ -131,6 +131,15 @@ class ShipmentLine {
   final double expiredQty;
   final String? damagePhotoUrl;
 
+  /// Jumlah yang diketik leader saat menerima (revisi KPI 11 Nov, L2.B),
+  /// satuan dasar. Null untuk kiriman yang belum diterima atau BE lama.
+  final double? receivedQty;
+
+  /// `pending` = berbeda dari surat jalan lebih dari batas, menunggu SPV;
+  /// `input_error` = SPV memutus salah input; `real_diff` = memang selisih;
+  /// kosong = sama.
+  final String receiveDiffStatus;
+
   ShipmentLine({
     required this.id,
     required this.itemType,
@@ -144,9 +153,27 @@ class ShipmentLine {
     this.damagedQty = 0,
     this.expiredQty = 0,
     this.damagePhotoUrl,
+    this.receivedQty,
+    this.receiveDiffStatus = '',
   });
 
   bool get hasDamage => damagedQty > 0 || expiredQty > 0;
+
+  /// Jumlah diterima berbeda dari yang dikirim.
+  bool get receivedDiffers => receivedQty != null && (receivedQty! - qty).abs() > 1e-6;
+
+  String get receiveDiffLabel {
+    switch (receiveDiffStatus) {
+      case 'pending':
+        return 'Selisih menunggu SPV';
+      case 'input_error':
+        return 'SPV: salah input';
+      case 'real_diff':
+        return 'SPV: memang selisih';
+      default:
+        return '';
+    }
+  }
 
   String get displayName => name.isNotEmpty ? name : '$itemType #$itemId';
 
@@ -179,6 +206,8 @@ class ShipmentLine {
       damagedQty: _toDouble(j['damaged_qty']),
       expiredQty: _toDouble(j['expired_qty']),
       damagePhotoUrl: (j['damage_photo_url']?.toString().isNotEmpty ?? false) ? j['damage_photo_url'].toString() : null,
+      receivedQty: j['received_qty'] == null ? null : _toDouble(j['received_qty']),
+      receiveDiffStatus: j['receive_diff_status']?.toString() ?? '',
     );
   }
 }
@@ -207,23 +236,36 @@ double _toDouble(dynamic v) {
 
 // ---------------------------------------------------------------- terima
 
-/// Isian rusak/kedaluwarsa satu baris saat menerima (Tahap 7, PRD-C2).
+/// Isian satu baris saat menerima: jumlah yang benar-benar diterima (revisi
+/// KPI 11 Nov, L2.B) dan bagian yang rusak/kedaluwarsa (Tahap 7, PRD-C2).
 ///
 /// Diisi dalam KEMASAN bila barangnya punya kemasan ("2 botol"), selain itu
 /// dalam satuan dasar. Yang dikirim ke server selalu satuan dasar.
 class ReceiveLineInput {
   final ShipmentLine line;
+
+  /// Jumlah diterima yang diketik leader, satuan isian. Null = belum diisi
+  /// (wajib sebelum Terima).
+  final double? received;
   final double damaged;
   final double expired;
 
   /// Foto bukti, sudah dibaca ke memori. Wajib bila ada yang rusak/expired.
   final Uint8List? photo;
 
-  const ReceiveLineInput({required this.line, this.damaged = 0, this.expired = 0, this.photo});
+  const ReceiveLineInput({required this.line, this.received, this.damaged = 0, this.expired = 0, this.photo});
 
-  ReceiveLineInput copyWith({double? damaged, double? expired, Uint8List? photo, bool clearPhoto = false}) =>
+  ReceiveLineInput copyWith({
+    double? received,
+    bool clearReceived = false,
+    double? damaged,
+    double? expired,
+    Uint8List? photo,
+    bool clearPhoto = false,
+  }) =>
       ReceiveLineInput(
         line: line,
+        received: clearReceived ? null : (received ?? this.received),
         damaged: damaged ?? this.damaged,
         expired: expired ?? this.expired,
         photo: clearPhoto ? null : (photo ?? this.photo),
@@ -248,23 +290,32 @@ class ReceiveLineInput {
   double get expiredBase => expired * factor;
   bool get hasDamage => damaged > 0 || expired > 0;
 
+  /// Jumlah diterima dalam satuan dasar; belum diisi = dianggap sama dengan
+  /// yang dikirim (hanya untuk tampilan; Terima menahannya).
+  double get receivedBase => received == null ? line.qty : received! * factor;
+
+  /// Diketik dan berbeda dari surat jalan.
+  bool get differs => received != null && (receivedBase - line.qty).abs() > 1e-6;
+
   /// Yang masuk stok outlet, satuan dasar.
   double get acceptedBase {
-    final v = line.qty - damagedBase - expiredBase;
+    final v = receivedBase - damagedBase - expiredBase;
     return v < 0 ? 0 : v;
   }
 
-  bool get exceeds => damagedBase + expiredBase > line.qty + 1e-6;
+  bool get exceeds => damagedBase + expiredBase > receivedBase + 1e-6;
   bool get needsPhoto => hasDamage && photo == null;
 }
 
 /// Apa yang menahan Terima, sebagai kalimat.
 List<String> receiveProblems(List<ReceiveLineInput> lines) => [
   for (final l in lines)
-    if (l.damaged < 0 || l.expired < 0)
+    if (l.received == null)
+      '${l.line.displayName}: isi jumlah yang diterima.'
+    else if (l.received! < 0 || l.damaged < 0 || l.expired < 0)
       '${l.line.displayName}: jumlah tidak boleh minus.'
     else if (l.exceeds)
-      '${l.line.displayName}: rusak + kedaluwarsa melebihi yang dikirim.'
+      '${l.line.displayName}: rusak + kedaluwarsa melebihi yang diterima.'
     else if (l.needsPhoto)
       '${l.line.displayName}: ambil foto barang yang rusak/kedaluwarsa.',
 ];

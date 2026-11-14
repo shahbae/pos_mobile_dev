@@ -59,9 +59,9 @@ class _FakeShipments implements ShipmentRepository {
   int? revision;
 
   @override
-  Future<void> receive(int id, {int? revision, List<ReceiveLineInput> damage = const []}) async {
+  Future<void> receive(int id, {int? revision, List<ReceiveLineInput> lines = const []}) async {
     this.revision = revision;
-    this.damage = damage.where((d) => d.hasDamage).toList();
+    damage = lines.where((d) => d.hasDamage).toList();
   }
 
   @override
@@ -81,8 +81,10 @@ class _FakeKpi implements KpiRepository {
     required String content,
     required Uint8List photo,
     DateTime? occurredAt,
+    String? itemType,
+    int? itemId,
   }) async {
-    complaint = {'shipment': shipmentId, 'branch': branchId, 'content': content, 'photo': photo.length};
+    complaint = {'shipment': shipmentId, 'branch': branchId, 'content': content, 'photo': photo.length, 'item': '$itemType:$itemId'};
   }
 
   @override
@@ -202,7 +204,7 @@ void main() {
     });
 
     test('rusak/kedaluwarsa diisi dalam kemasan, dikirim satuan dasar', () {
-      final s = ReceiveLineInput(line: _sirup());
+      final s = ReceiveLineInput(line: _sirup(), received: 6);
       expect(s.inputUnit, 'botol');
       expect(s.shippedInInput, 6);
       final d = s.copyWith(damaged: 2, expired: 0.5);
@@ -286,11 +288,15 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Dikirim 6 botol (6.000 ml)'), findsOneWidget);
+      // Revisi KPI 11 Nov: jumlah diterima wajib diketik tiap barang.
+      await tester.enterText(find.widgetWithText(TextField, 'Jumlah diterima').at(0), '6');
+      await tester.enterText(find.widgetWithText(TextField, 'Jumlah diterima').at(1), '5000');
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Ada rusak?').first);
       await tester.pumpAndSettle();
       await tester.enterText(find.widgetWithText(TextField, 'Rusak'), '2');
       await tester.pumpAndSettle();
-      expect(find.text('Masuk stok 4.000 ml dari 6.000 ml'), findsOneWidget);
+      expect(find.text('Masuk stok 4.000 ml'), findsOneWidget);
 
       await tester.tap(find.text('Terima Kiriman'));
       await tester.pumpAndSettle();
@@ -323,18 +329,27 @@ void main() {
 
       ElevatedButton send() => tester.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'Kirim komplain'));
       expect(send().onPressed, isNull);
+      // Revisi KPI 11 Nov (PRD-C1): barangnya wajib dipilih.
+      await tester.tap(find.text('Sirup Leci'));
       await tester.enterText(find.byType(TextField), 'Teh dari jerigen ini terasa asam');
       await tester.pumpAndSettle();
       expect(send().onPressed, isNull, reason: 'foto belum ada');
+      await tester.scrollUntilVisible(find.text('Ambil foto'), 200, scrollable: _page());
       await tester.tap(find.text('Ambil foto'));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Kirim komplain'));
+      await tester.scrollUntilVisible(find.text('Kirim komplain'), 200, scrollable: _page());
       await tester.tap(find.text('Kirim komplain'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Ya, kirim'));
       await tester.pumpAndSettle();
 
-      expect(kpi.complaint, {'shipment': 77, 'branch': 12, 'content': 'Teh dari jerigen ini terasa asam', 'photo': _png.length});
+      expect(kpi.complaint, {
+        'shipment': 77,
+        'branch': 12,
+        'content': 'Teh dari jerigen ini terasa asam',
+        'photo': _png.length,
+        'item': 'material:9',
+      });
     });
 
     testWidgets('Minta stok: tenggat bawaan besok 10.00 ikut terkirim', (tester) async {

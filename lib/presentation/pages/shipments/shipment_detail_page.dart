@@ -442,6 +442,18 @@ class _LineCard extends StatelessWidget {
         ],
       ),
       // Rusak/kedaluwarsa saat diterima (Tahap 7): tidak masuk stok cabang.
+      if (line.receivedQty != null && (line.receivedDiffers || line.receiveDiffStatus.isNotEmpty)) ...[
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(10)),
+          child: Text(
+            'Diterima ${_fmtQty(line.receivedQty!)} ${line.unit} (dikirim ${_fmtQty(line.qty)} ${line.unit})'
+            '${line.receiveDiffLabel.isEmpty ? '' : ' · ${line.receiveDiffLabel}'}',
+            style: TextStyle(fontSize: 12, color: Colors.amber.shade900),
+          ),
+        ),
+      ],
       if (line.hasDamage) ...[
         const SizedBox(height: 10),
         Container(

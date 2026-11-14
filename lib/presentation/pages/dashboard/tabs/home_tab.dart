@@ -10,6 +10,8 @@ import 'package:pos_mobile/presentation/providers/dashboard_operational_provider
 import 'package:pos_mobile/presentation/providers/kpi_provider.dart';
 import 'package:pos_mobile/presentation/widgets/branch_switch_sheet.dart';
 import 'package:pos_mobile/presentation/widgets/photo_checklist_card.dart';
+import 'package:pos_mobile/presentation/widgets/live_session_card.dart';
+import 'package:pos_mobile/presentation/pages/kpi/directives_page.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/utils/currency.dart';
 
@@ -28,6 +30,8 @@ class HomeTab extends ConsumerWidget {
           onRefresh: () async {
             ref.invalidate(dashboardProvider);
             if (canUsePhotoChecklist(ref.read(authProvider).held)) ref.invalidate(myChecklistProvider);
+            if (canDoLive(ref.read(authProvider).held)) ref.invalidate(myLiveSessionsProvider);
+            if (canSeeDirectives(ref.read(authProvider).held)) ref.invalidate(myDirectivesProvider);
           },
           child: Center(
             child: ConstrainedBox(
@@ -40,6 +44,10 @@ class HomeTab extends ConsumerWidget {
                   const SizedBox(height: 14),
                   // Ceklis foto shift ini yang belum terkirim (Tahap 6).
                   const PhotoChecklistCard(),
+                  // Jadwal Live TikTok hari ini (revisi KPI 11 Nov, C3.4).
+                  const LiveSessionCard(),
+                  // Arahan SPV yang belum dikerjakan (leader, SPV-A2).
+                  const DirectivesCard(),
                   dashboardAsync.when(
                     data: (data) => _DashboardSections(data: data),
                     loading: () => const _DashboardSkeleton(),

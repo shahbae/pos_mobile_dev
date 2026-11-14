@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
+import '../../../data/models/expense_model.dart';
 import '../../providers/expense_provider.dart';
 import '../../widgets/cost_type_field.dart';
 
@@ -122,10 +123,17 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
     };
 
     try {
-      await repo.createExpense(payload, photoPath: _photo!.path);
+      final res = await repo.createExpense(payload, photoPath: _photo!.path);
       if (!mounted) return;
+      final pending = expenseApprovalOf(res) == 'pending';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Berhasil mencatat pengeluaran')),
+        SnackBar(
+          content: Text(pending
+              ? 'Tercatat, tapi melewati standar harian: menunggu ACC SPV. Sampai disetujui, uangnya dianggap masih di laci.'
+              : 'Berhasil mencatat pengeluaran'),
+          backgroundColor: pending ? const Color(0xFFB45309) : null,
+          duration: Duration(seconds: pending ? 6 : 3),
+        ),
       );
       Navigator.pop(context, true);
     } catch (e) {

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 
 import '../models/kpi_model.dart';
+import '../models/kpi_revisi_model.dart';
 import '../services/api_services.dart';
 
 /// Galat KPI dengan `code` dari server, supaya layar bisa bereaksi khusus
@@ -124,6 +125,8 @@ class KpiRepository {
     required String content,
     required Uint8List photo,
     DateTime? occurredAt,
+    String? itemType,
+    int? itemId,
   }) async {
     final at = occurredAt ?? DateTime.now();
     String two(int v) => v.toString().padLeft(2, '0');
@@ -136,6 +139,10 @@ class KpiRepository {
           'kind': 'production_quality',
           'occurred_at': '${at.year}-${two(at.month)}-${two(at.day)} ${two(at.hour)}:${two(at.minute)}',
           'content': content.trim(),
+          // Revisi KPI 11 Nov (PRD-C1): barang yang dikomplain; hanya barang di
+          // daftar Konfigurasi KPI yang memotong nilai Produksi.
+          if (itemType != null && itemId != null) 'item_type': itemType,
+          if (itemType != null && itemId != null) 'item_id': '$itemId',
           'photo': MultipartFile.fromBytes(photo, filename: 'komplain-kiriman-$shipmentId.jpg'),
         }),
         options: Options(contentType: 'multipart/form-data'),
@@ -296,6 +303,108 @@ class KpiRepository {
       return Inspection.fromJson(_data(res));
     } on DioException catch (e) {
       throw _error(e, 'Gagal mengirim sidak');
+    }
+  }
+
+  // ------------------------------------------- Live TikTok (revisi 11 Nov)
+
+  /// `GET /me/live-sessions` — jadwal Live kemarin (bila shift belum
+  /// berakhir) dan hari ini, beserta sesinya.
+  Future<List<LiveSlot>> myLiveSessions() async {
+    try {
+      final res = await api.dio.get('/me/live-sessions');
+      final data = res.data['data'];
+      if (data is! List) return const [];
+      return [for (final e in data) if (e is Map) LiveSlot.fromJson(Map<String, dynamic>.from(e))];
+    } on DioException catch (e) {
+      throw _error(e, 'Gagal memuat jadwal Live');
+    }
+  }
+
+  /// `POST /me/live-sessions/start`.
+  Future<LiveSession> startLive(int scheduleId) async {
+    try {
+      final res = await api.dio.post('/me/live-sessions/start', data: {'schedule_id': scheduleId});
+      return LiveSession.fromJson(_data(res));
+    } on DioException catch (e) {
+      throw _error(e, 'Gagal memulai Live');
+    }
+  }
+
+  /// `POST /me/live-sessions/:id/finish` — screenshot ringkasan TikTok wajib.
+  Future<LiveSession> finishLive(int sessionId, Uint8List screenshot) => _livePhoto(
+    '/me/live-sessions/$sessionId/finish',
+    screenshot,
+    'live-$sessionId.jpg',
+    'Gagal menutup Live',
+  );
+
+  /// `POST /me/live-sessions/:id/screenshot` — susulan, selama SPV belum
+  /// memutus.
+  Future<LiveSession> addLiveScreenshot(int sessionId, Uint8List screenshot) => _livePhoto(
+    '/me/live-sessions/$sessionId/screenshot',
+    screenshot,
+    'live-$sessionId-susulan.jpg',
+    'Gagal mengirim screenshot',
+  );
+
+  Future<LiveSession> _livePhoto(String path, Uint8List bytes, String filename, String fallback) async {
+    try {
+      final res = await api.dio.post(
+        path,
+        data: FormData.fromMap({'photo': MultipartFile.fromBytes(bytes, filename: filename)}),
+        options: Options(contentType: 'multipart/form-data', sendTimeout: const Duration(seconds: 90)),
+      );
+      return LiveSession.fromJson(_data(res));
+    } on DioException catch (e) {
+      throw _error(e, fallback);
+    }
+  }
+
+  // -------------------------------- Arahan & evaluasi SPV (revisi 11 Nov)
+
+  /// `GET /me/directives` — leader: arahan yang belum dicek, ditambah 60
+  /// hari terakhir.
+  Future<List<LeaderDirective>> myDirectives() async {
+    try {
+      final res = await api.dio.get('/me/directives');
+      final data = res.data['data'];
+      if (data is! List) return const [];
+      return [for (final e in data) if (e is Map) LeaderDirective.fromJson(Map<String, dynamic>.from(e))];
+    } on DioException catch (e) {
+      throw _error(e, 'Gagal memuat arahan');
+    }
+  }
+
+  /// `POST /me/directives/:id/done` — catatan dan foto opsional.
+  Future<LeaderDirective> markDirectiveDone(int id, {String note = '', Uint8List? photo}) async {
+    try {
+      final res = await api.dio.post(
+        '/me/directives/$id/done',
+        data: FormData.fromMap({
+          'note': note.trim(),
+          if (photo != null) 'photo': MultipartFile.fromBytes(photo, filename: 'arahan-$id.jpg'),
+        }),
+        options: Options(contentType: 'multipart/form-data', sendTimeout: const Duration(seconds: 90)),
+      );
+      return LeaderDirective.fromJson(_data(res));
+    } on DioException catch (e) {
+      throw _error(e, 'Gagal menandai arahan');
+    }
+  }
+
+  /// `GET /me/evaluations` — evaluasi bulanan milik leader, terbaru dulu.
+  Future<List<LeaderEvaluation>> myEvaluations() async {
+    try {
+      final res = await api.dio.get('/me/evaluations');
+      final data = res.data['data'];
+      if (data is! List) return const [];
+      return [
+        for (final e in data)
+          if (e is Map) ?LeaderEvaluation.tryFrom(Map<String, dynamic>.from(e)),
+      ];
+    } on DioException catch (e) {
+      throw _error(e, 'Gagal memuat evaluasi');
     }
   }
 

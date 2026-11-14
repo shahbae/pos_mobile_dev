@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show appFlavor;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:pos_mobile/presentation/pages/kpi/directives_page.dart';
 
 import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/data/models/reminder_model.dart';
@@ -157,6 +158,9 @@ Future<void> openPushTarget(BuildContext context, String target) async {
     'reminders' when id != null => ReminderDetailPage(reminderId: id),
     'help-tickets' when id != null => HelpTicketDetailPage(ticketId: id),
     'schedule' => const MySchedulePage(),
+    // Revisi KPI 11 Nov (SPV-A2): arahan baru dari SPV untuk leader.
+    'directives' => const DirectivesPage(),
+    'evaluations' => const DirectivesPage(initialTab: 1),
     _ => null,
   };
   if (page == null) return;

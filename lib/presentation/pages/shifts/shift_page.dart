@@ -476,6 +476,7 @@ class _ActiveShiftCard extends StatelessWidget {
               _row('Penjualan', formatRupiah(shift.totalSales)),
               _row('Penjualan Tunai', formatRupiah(shift.cashSalesResolved)),
               _row('Pengeluaran', '- ${formatRupiah(shift.totalExpense)}'),
+              if (shift.pendingExpense > 0) _pendingRow(shift.pendingExpense),
               _row('Kas Seharusnya', formatRupiah(shift.expectedCashResolved)),
               const SizedBox(height: 16),
               SizedBox(
@@ -536,6 +537,7 @@ class _ShiftSummaryDialog extends StatelessWidget {
             _row('Penjualan', formatRupiah(shift.totalSales)),
             _row('Penjualan Tunai', formatRupiah(shift.cashSalesResolved)),
             _row('Pengeluaran', '- ${formatRupiah(shift.totalExpense)}'),
+            if (shift.pendingExpense > 0) _pendingRow(shift.pendingExpense),
             const Divider(height: 24),
             _row('Kas Seharusnya', formatRupiah(shift.expectedCashResolved)),
             if (shift.closingCash != null) _row('Kas Akhir (Fisik)', formatRupiah(shift.closingCash!)),
@@ -609,4 +611,28 @@ class _ShiftSummaryDialog extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Pengeluaran yang menunggu ACC SPV (revisi KPI 11 Nov, SPV-A7): belum
+/// mengurangi kas seharusnya, jadi uangnya harus masih ada di laci.
+Widget _pendingRow(num amount) {
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 5),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Flexible(child: Text('Menunggu ACC SPV', style: TextStyle(color: Color(0xFFB45309)))),
+            Text(formatRupiah(amount), style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFFB45309))),
+          ],
+        ),
+        const Text(
+          'Belum dihitung sebagai pengeluaran: uangnya masih harus ada di laci sampai disetujui SPV.',
+          style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+        ),
+      ],
+    ),
+  );
 }

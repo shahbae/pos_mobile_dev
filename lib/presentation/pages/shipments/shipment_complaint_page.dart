@@ -26,6 +26,9 @@ class ShipmentComplaintPage extends ConsumerStatefulWidget {
 class _ShipmentComplaintPageState extends ConsumerState<ShipmentComplaintPage> {
   final _content = TextEditingController();
   Uint8List? _photo;
+
+  /// Barang yang dikomplain (revisi KPI 11 Nov, PRD-C1), wajib.
+  ShipmentLine? _item;
   bool _busy = false;
 
   @override
@@ -34,7 +37,7 @@ class _ShipmentComplaintPageState extends ConsumerState<ShipmentComplaintPage> {
     super.dispose();
   }
 
-  bool get _ready => _content.text.trim().isNotEmpty && _photo != null;
+  bool get _ready => _item != null && _content.text.trim().isNotEmpty && _photo != null;
 
   Future<void> _submit() async {
     final ok = await confirmAction(
@@ -51,6 +54,8 @@ class _ShipmentComplaintPageState extends ConsumerState<ShipmentComplaintPage> {
             branchId: widget.shipment.branchId,
             content: _content.text,
             photo: _photo!,
+            itemType: _item!.itemType,
+            itemId: _item!.itemId,
           );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -78,6 +83,33 @@ class _ShipmentComplaintPageState extends ConsumerState<ShipmentComplaintPage> {
             icon: Icons.info_outline,
             text: 'Untuk mutu barang dari gudang (rasa, warna, kekentalan, kemasan). '
                 'Barang rusak atau kedaluwarsa saat datang dicatat waktu menerima, bukan di sini.',
+          ),
+          const SizedBox(height: 12),
+          SdmCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Barang yang dikomplain (wajib)',
+                    style: TextStyle(fontWeight: FontWeight.w800, color: AppTheme.textPrimary)),
+                const SizedBox(height: 4),
+                for (final l in widget.shipment.lines)
+                  ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    enabled: !_busy,
+                    onTap: () => setState(() => _item = l),
+                    leading: Icon(
+                      _item?.id == l.id ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                      color: _item?.id == l.id ? AppTheme.brandBlue : AppTheme.textSecondary,
+                    ),
+                    title: Text(l.displayName, style: const TextStyle(fontWeight: FontWeight.w700)),
+                    subtitle: Text(l.typeLabel),
+                  ),
+                if (widget.shipment.lines.isEmpty)
+                  const Text('Isi kiriman tidak termuat. Tutup lalu buka lagi kirimannya.',
+                      style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+              ],
+            ),
           ),
           const SizedBox(height: 12),
           SdmCard(
