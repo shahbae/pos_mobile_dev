@@ -42,6 +42,30 @@ class _PhotoChecklistPageState extends ConsumerState<PhotoChecklistPage> {
   /// `scheduleId:itemId` yang sedang dikirim.
   final _sending = <String>{};
 
+  /// `itemId` deep cleaning yang sedang dikirim.
+  final _sendingDeep = <int>{};
+
+  Future<void> _shootDeep(DeepCleanItem i) async {
+    final bytes = await pickKpiPhoto(context);
+    if (bytes == null || !mounted) return;
+    setState(() => _sendingDeep.add(i.itemId));
+    try {
+      await ref.read(kpiRepositoryProvider).submitDeepClean(itemId: i.itemId, photo: bytes);
+      _snack('${i.name} terkirim.');
+    } on KpiApiError catch (e) {
+      // Rekan di outlet yang sama sudah memfoto butir ini: itu bukan galat.
+      final dup = e.code == 'deep_clean_already_sent' || e.code == 'deep_clean_approved';
+      _snack(dup ? '${i.name} sudah difoto rekanmu minggu ini.' : e.message, error: !dup);
+    } catch (e) {
+      _snack('$e', error: true);
+    } finally {
+      if (mounted) {
+        setState(() => _sendingDeep.remove(i.itemId));
+        ref.invalidate(myDeepCleanProvider);
+      }
+    }
+  }
+
   String _key(ChecklistSet s, ChecklistItemState i) => '${s.scheduleId}:${s.duty}:${i.itemId}';
 
   Future<void> _shoot(ChecklistSet s, ChecklistItemState i) async {
@@ -101,7 +125,10 @@ class _PhotoChecklistPageState extends ConsumerState<PhotoChecklistPage> {
       backgroundColor: AppTheme.bgLight,
       appBar: AppBar(title: const Text('Ceklis Foto'), centerTitle: true),
       body: RefreshIndicator(
-        onRefresh: () async => ref.invalidate(myChecklistProvider),
+        onRefresh: () async {
+          ref.invalidate(myChecklistProvider);
+          ref.invalidate(myDeepCleanProvider);
+        },
         child: async.when(
           // Saat memuat ulang sesudah kirim, daftar lama tetap tampil.
           skipLoadingOnRefresh: true,
@@ -137,9 +164,158 @@ class _PhotoChecklistPageState extends ConsumerState<PhotoChecklistPage> {
                   const SizedBox(height: 16),
                 ],
               ],
+              _DeepCleanCard(sending: _sendingDeep, onShoot: _shootDeep),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Kartu deep cleaning mingguan outlet. Muat sendiri: galatnya (belum ada
+/// jadwal, jaringan) hanya tampil di kartu ini, tidak di ceklis harian.
+class _DeepCleanCard extends ConsumerWidget {
+  final Set<int> sending;
+  final void Function(DeepCleanItem) onShoot;
+
+  const _DeepCleanCard({required this.sending, required this.onShoot});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(myDeepCleanProvider);
+    return async.when(
+      skipLoadingOnRefresh: true,
+      loading: () => const SdmCard(child: Center(child: Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator()))),
+      error: (e, _) => SdmCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Deep cleaning mingguan', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: AppTheme.textPrimary)),
+            const SizedBox(height: 8),
+            Text('$e', style: const TextStyle(color: AppTheme.textSecondary)),
+            TextButton(onPressed: () => ref.invalidate(myDeepCleanProvider), child: const Text('Coba lagi')),
+          ],
+        ),
+      ),
+      data: (set) => SdmCard(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Deep cleaning mingguan', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: AppTheme.textPrimary)),
+            const SizedBox(height: 2),
+            Text(
+              [
+                set.branchName,
+                if (set.weekStart.isNotEmpty) 'minggu ${_dayMonth(set.weekStart)} – ${_dayMonth(set.weekEnd)}',
+              ].where((x) => x.isNotEmpty).join(' · '),
+              style: const TextStyle(fontSize: 12.5, color: AppTheme.textSecondary),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                if (!set.scored) const SdmPill('Belum dinilai KPI'),
+                if (set.deadline != null) SdmPill('Batas ${_day.format(set.deadline!.toLocal())}, ${_hm.format(set.deadline!.toLocal())}'),
+              ],
+            ),
+            if (set.isEmpty) ...[
+              const SizedBox(height: 12),
+              const Text(
+                'Belum ada butir deep cleaning. Owner atau SPV mengisinya di web admin.',
+                style: TextStyle(color: AppTheme.textSecondary),
+              ),
+              const SizedBox(height: 8),
+            ] else ...[
+              const SizedBox(height: 8),
+              Text(
+                'Difoto ${set.sent}/${set.total} · di-ACC ${set.approved}. Satu butir cukup difoto satu orang di outlet ini; '
+                'yang ditolak bisa difoto ulang sampai batas.',
+                style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+              ),
+              const SizedBox(height: 12),
+              for (final i in set.items)
+                _DeepCleanRow(item: i, sending: sending.contains(i.itemId), onShoot: () => onShoot(i)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _dayMonth(String ymd) {
+  final d = DateTime.tryParse(ymd);
+  return d == null ? ymd : DateFormat('d MMM', 'id_ID').format(d);
+}
+
+class _DeepCleanRow extends StatelessWidget {
+  final DeepCleanItem item;
+  final bool sending;
+  final VoidCallback onShoot;
+
+  const _DeepCleanRow({required this.item, required this.sending, required this.onShoot});
+
+  @override
+  Widget build(BuildContext context) {
+    final i = item;
+    final by = [
+      if (i.uploadedByName != null) i.uploadedByName!,
+      if (i.takenAt != null) _hm.format(i.takenAt!.toLocal()),
+    ].join(' · ');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (i.photoUrl != null) ...[
+                KpiThumb(i.photoUrl!, size: 52),
+                const SizedBox(width: 10),
+              ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(i.name, style: const TextStyle(fontWeight: FontWeight.w700, color: AppTheme.textPrimary)),
+                    const SizedBox(height: 4),
+                    SdmPill(checklistStatusLabels[i.status] ?? i.status, color: checklistStatusColor(i.status)),
+                    if (by.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(by, style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                    ],
+                    if (i.status == 'rejected' && i.rejectReason.isNotEmpty)
+                      Text('Ditolak: ${i.rejectReason}', style: const TextStyle(fontSize: 12, color: AppTheme.danger)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (!i.isSent) ...[
+            const SizedBox(height: 8),
+            // Tombol di bawah baris, selebar kartu (pelajaran revisi uji 31 Okt).
+            if (sending)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(8),
+                  child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)),
+                ),
+              )
+            else
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: onShoot,
+                  icon: const Icon(Icons.photo_camera_outlined, size: 18),
+                  label: Text(i.status == 'rejected' ? 'Foto ulang' : 'Ambil foto'),
+                ),
+              ),
+          ],
+        ],
       ),
     );
   }

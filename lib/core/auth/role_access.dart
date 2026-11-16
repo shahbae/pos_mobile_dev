@@ -28,6 +28,7 @@ enum AppFeature {
   stockRequest, // /stock-requests (Permintaan Stok ke gudang)
   shipment, // /shipments (Kiriman Gudang — terima / tolak)
   expenses, // /expenses (Pengeluaran)
+  branchWaste, // /branch-wastes (Catat Waste outlet; BE: owner, leader, karyawan)
   shift, // /shifts (Shift Kasir)
   attendance, // /attendance/check-in|out (Absensi)
   kitchenDisplay, // /kds/stream, /kds/orders (Monitoring Pesanan / KDS)
@@ -58,6 +59,7 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.stockRequest,
         AppFeature.shipment,
         AppFeature.expenses,
+        AppFeature.branchWaste,
         AppFeature.shift,
         AppFeature.kitchenDisplay,
       };
@@ -110,6 +112,7 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.stockRequest,
         AppFeature.shipment,
         AppFeature.expenses,
+        AppFeature.branchWaste,
         AppFeature.shift,
         AppFeature.attendance,
         AppFeature.kitchenDisplay,
@@ -134,6 +137,8 @@ Set<AppFeature> featuresForRole(String? role) {
         AppFeature.pos,
         AppFeature.transactions,
         AppFeature.stockAudit,
+        // Waste dicatat kasir maupun penyaji (tidak masuk cashierDutyFeatures).
+        AppFeature.branchWaste,
         AppFeature.shift,
         AppFeature.attendance,
         AppFeature.kitchenDisplay,

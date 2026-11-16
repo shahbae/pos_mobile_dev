@@ -707,7 +707,18 @@ class InspectionItem {
   final int sort;
   final bool isActive;
 
-  const InspectionItem({required this.id, required this.group, required this.name, this.sort = 0, this.isActive = true});
+  /// Butir wajib difoto (revisi 15 Nov). Bawaan `true`: butir lama dan server
+  /// yang belum mengirim penanda dianggap wajib, sama dengan aturan server.
+  final bool photoRequired;
+
+  const InspectionItem({
+    required this.id,
+    required this.group,
+    required this.name,
+    this.sort = 0,
+    this.isActive = true,
+    this.photoRequired = true,
+  });
 
   factory InspectionItem.fromJson(Map<String, dynamic> j) => InspectionItem(
     id: _int(j['id']),
@@ -715,6 +726,7 @@ class InspectionItem {
     name: '${j['name'] ?? ''}',
     sort: _int(j['sort']),
     isActive: j['is_active'] != false,
+    photoRequired: j['photo_required'] != false,
   );
 }
 
@@ -801,3 +813,87 @@ DateTime weekStartOf(DateTime d) {
 
 /// Periode `YYYY-MM` dari tanggal.
 String kpiPeriodOf(DateTime d) => '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}';
+
+// ------------------------------------------------ deep cleaning mingguan
+
+/// Satu butir ceklis deep cleaning minggu ini (revisi 15 Nov, poin 4).
+class DeepCleanItem {
+  final int itemId;
+  final String name;
+
+  /// `missing`, `pending`, `approved`, `rejected`.
+  final String status;
+  final String? photoUrl;
+  final DateTime? takenAt;
+  final String? uploadedByName;
+  final String rejectReason;
+
+  const DeepCleanItem({
+    required this.itemId,
+    required this.name,
+    required this.status,
+    this.photoUrl,
+    this.takenAt,
+    this.uploadedByName,
+    this.rejectReason = '',
+  });
+
+  /// Sudah difoto dan tidak ditolak (menunggu ACC atau di-ACC): tak perlu
+  /// difoto lagi oleh siapa pun di outlet itu minggu ini.
+  bool get isSent => status == 'pending' || status == 'approved';
+
+  factory DeepCleanItem.fromJson(Map<String, dynamic> j) => DeepCleanItem(
+    itemId: _int(j['item_id']),
+    name: '${j['name'] ?? ''}',
+    status: '${j['status'] ?? 'missing'}',
+    photoUrl: _str(j['photo_url']),
+    takenAt: _time(j['taken_at']),
+    uploadedByName: _str(j['uploaded_by_name']),
+    rejectReason: '${j['reject_reason'] ?? ''}',
+  );
+}
+
+/// Set deep cleaning satu outlet untuk satu minggu (Senin–Minggu), dikirim
+/// kapan saja dalam minggu itu, batas Minggu 23.59.
+class DeepCleanSet {
+  final int branchId;
+  final String branchName;
+  final String weekStart;
+  final String weekEnd;
+  final DateTime? deadline;
+
+  /// `false` = belum dinilai KPI (kartu berlabel "Belum dinilai KPI").
+  final bool scored;
+  final int total;
+  final int sent;
+  final int approved;
+  final List<DeepCleanItem> items;
+
+  const DeepCleanSet({
+    this.branchId = 0,
+    this.branchName = '',
+    this.weekStart = '',
+    this.weekEnd = '',
+    this.deadline,
+    this.scored = false,
+    this.total = 0,
+    this.sent = 0,
+    this.approved = 0,
+    this.items = const [],
+  });
+
+  bool get isEmpty => items.isEmpty;
+
+  factory DeepCleanSet.fromJson(Map<String, dynamic> j) => DeepCleanSet(
+    branchId: _int(j['branch_id']),
+    branchName: '${j['branch_name'] ?? ''}',
+    weekStart: _ymd(j['week_start']),
+    weekEnd: _ymd(j['week_end']),
+    deadline: _time(j['deadline']),
+    scored: _bool(j['scored']),
+    total: _int(j['total']),
+    sent: _int(j['sent']),
+    approved: _int(j['approved']),
+    items: [for (final m in _maps(j['items'])) DeepCleanItem.fromJson(m)],
+  );
+}

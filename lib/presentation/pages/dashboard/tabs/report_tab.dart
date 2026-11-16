@@ -115,7 +115,7 @@ class ReportTab extends ConsumerWidget {
           const SizedBox(height: 16),
           _ReportMenuCard(
             title: "Stok Menipis",
-            subtitle: "Daftar produk di bawah threshold",
+            subtitle: "Barang yang stoknya di bawah batasnya",
             icon: Icons.warning_amber_rounded,
             color: accent,
             onTap: () {
