@@ -25,6 +25,12 @@ final myChecklistProvider = FutureProvider<List<ChecklistSet>>((ref) {
   return ref.watch(kpiRepositoryProvider).myChecklist();
 });
 
+/// Deep cleaning outlet minggu ini. Terpisah dari [myChecklistProvider]: galatnya
+/// (mis. belum ada jadwal) tidak boleh menjatuhkan ceklis foto harian.
+final myDeepCleanProvider = FutureProvider.autoDispose<DeepCleanSet>((ref) {
+  return ref.watch(kpiRepositoryProvider).myDeepClean();
+});
+
 final cashDepositsProvider = FutureProvider.autoDispose<List<CashDeposit>>((ref) {
   return ref.watch(kpiRepositoryProvider).cashDeposits();
 });

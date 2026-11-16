@@ -30,6 +30,12 @@ class _Answer {
   bool? passed;
   String note = '';
   Uint8List? photo;
+
+  /// Sudah dijawab, beralasan, dan berfoto bila butirnya mewajibkan foto
+  /// (aturan server sejak revisi 15 Nov: "Sesuai atau tidak, wajib punya foto
+  /// dan alasan").
+  bool completeFor(InspectionItem item) =>
+      passed != null && note.trim().isNotEmpty && (!item.photoRequired || photo != null);
 }
 
 /// Sidak satu outlet: pilih outlet → cek lokasi → foto SPV → checklist →
@@ -129,6 +135,15 @@ class _InspectionFormPageState extends ConsumerState<InspectionFormPage> {
 
   Future<void> _submit(List<InspectionItem> items) async {
     final failed = items.where((i) => _answers[i.id]?.passed == false && i.group != 'info').length;
+    final incomplete = _incomplete(items);
+    if (incomplete > 0) {
+      _snack('$incomplete butir belum lengkap alasan atau fotonya.', error: true);
+      return;
+    }
+    if (_followUp.text.trim().isEmpty) {
+      _snack('Tindak lanjut wajib diisi.', error: true);
+      return;
+    }
     final size = (_selfie?.length ?? 0) + _answers.values.fold<int>(0, (s, a) => s + (a.photo?.length ?? 0));
     if (size > _kMaxUploadBytes) {
       _snack('Total foto lebih dari 28 MB. Hapus beberapa foto temuan.', error: true);
@@ -182,7 +197,7 @@ class _InspectionFormPageState extends ConsumerState<InspectionFormPage> {
                   itemId: i.id,
                   passed: _answers[i.id]!.passed!,
                   note: _answers[i.id]!.note.trim(),
-                  photo: _answers[i.id]!.passed! ? null : _answers[i.id]!.photo,
+                  photo: _answers[i.id]!.photo,
                 ),
             ],
           );
@@ -195,6 +210,11 @@ class _InspectionFormPageState extends ConsumerState<InspectionFormPage> {
       _snack(e is KpiApiError ? e.message : '$e', error: true);
     }
   }
+
+  /// Butir yang belum lengkap: belum dijawab, tanpa alasan, atau tanpa foto
+  /// padahal wajib.
+  int _incomplete(List<InspectionItem> items) =>
+      items.where((i) => !(_answers[i.id]?.completeFor(i) ?? false)).length;
 
   void _snack(String msg, {bool error = false}) {
     if (!mounted) return;
@@ -213,7 +233,13 @@ class _InspectionFormPageState extends ConsumerState<InspectionFormPage> {
     final items = itemsAsync.valueOrNull ?? const <InspectionItem>[];
     final answered = items.where((i) => _answers[i.id]?.passed != null).length;
     final geoOk = _branch != null && _branch!.hasGeo && _pos != null && _inRadius;
-    final ready = geoOk && _selfie != null && items.isNotEmpty && answered == items.length;
+    final incomplete = _incomplete(items);
+    final ready = geoOk &&
+        _selfie != null &&
+        items.isNotEmpty &&
+        answered == items.length &&
+        incomplete == 0 &&
+        _followUp.text.trim().isNotEmpty;
 
     return PopScope(
       canPop: !_busy,
@@ -360,7 +386,8 @@ class _InspectionFormPageState extends ConsumerState<InspectionFormPage> {
                         maxLines: 3,
                         maxLength: 1000,
                         textCapitalization: TextCapitalization.sentences,
-                        decoration: const InputDecoration(labelText: 'Tindak lanjut (opsional)'),
+                        onChanged: (_) => setState(() {}),
+                        decoration: const InputDecoration(labelText: 'Tindak lanjut (wajib)'),
                       ),
                     ],
                   ),
@@ -380,7 +407,11 @@ class _InspectionFormPageState extends ConsumerState<InspectionFormPage> {
                                       ? 'Lokasi di luar radius outlet.'
                                       : _selfie == null
                                           ? 'Ambil foto SPV dulu.'
-                                          : 'Jawab semua butir checklist (${items.length - answered} lagi).',
+                                          : answered < items.length
+                                              ? 'Jawab semua butir checklist (${items.length - answered} lagi).'
+                                              : incomplete > 0
+                                                  ? '$incomplete butir belum lengkap: isi alasan dan foto di tiap butir.'
+                                                  : 'Isi tindak lanjut dulu.',
                       textAlign: TextAlign.center,
                       style: const TextStyle(color: AppTheme.textSecondary),
                     ),
@@ -555,15 +586,22 @@ class _ItemTile extends StatelessWidget {
               ),
             ],
           ),
-          if (a.passed == false) ...[
+          if (a.passed != null) ...[
             const SizedBox(height: 6),
             TextFormField(
               initialValue: a.note,
               enabled: enabled,
               maxLength: 500,
               textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(labelText: 'Temuan (opsional)', isDense: true),
-              onChanged: (v) => a.note = v,
+              decoration: InputDecoration(
+                labelText: a.passed == true ? 'Alasan (wajib)' : 'Temuan dan alasan (wajib)',
+                isDense: true,
+                errorText: a.note.trim().isEmpty ? 'Alasan wajib diisi' : null,
+              ),
+              onChanged: (v) {
+                a.note = v;
+                onChanged();
+              },
             ),
             if (a.photo != null)
               Row(
@@ -590,7 +628,8 @@ class _ItemTile extends StatelessWidget {
                 child: TextButton.icon(
                   onPressed: enabled ? onPhoto : null,
                   icon: const Icon(Icons.add_a_photo_outlined, size: 18),
-                  label: const Text('Foto temuan (opsional)'),
+                  style: item.photoRequired ? TextButton.styleFrom(foregroundColor: AppTheme.danger) : null,
+                  label: Text(item.photoRequired ? 'Foto (wajib)' : 'Foto (opsional)'),
                 ),
               ),
           ],

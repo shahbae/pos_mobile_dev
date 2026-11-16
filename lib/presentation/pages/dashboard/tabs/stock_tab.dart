@@ -13,6 +13,7 @@ import 'package:pos_mobile/presentation/pages/plastic_stock/plastic_stock_moveme
 import 'package:pos_mobile/presentation/pages/sedotan_stock/sedotan_stock_page.dart';
 import 'package:pos_mobile/presentation/pages/sedotan_stock/sedotan_stock_movement_page.dart';
 import 'package:pos_mobile/presentation/pages/expenses/expense_list_page.dart';
+import 'package:pos_mobile/presentation/pages/waste/waste_form_page.dart';
 import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/presentation/providers/duty_provider.dart';
 import 'package:pos_mobile/presentation/providers/shipment_provider.dart';
@@ -251,6 +252,19 @@ class StockTab extends ConsumerWidget {
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const ExpenseListPage()),
+              ),
+            ),
+          ],
+          if (features.contains(AppFeature.branchWaste)) ...[
+            const SizedBox(height: 16),
+            _menuItem(
+              context,
+              icon: Icons.delete_sweep_outlined,
+              title: "Catat Waste",
+              subtitle: "Barang yang dibuang (tumpah, basi, rusak) + foto",
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const WasteFormPage()),
               ),
             ),
           ],

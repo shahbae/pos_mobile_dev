@@ -778,7 +778,9 @@ void main() {
       await tester.tap(find.text('Tidak').last);
       await tester.pumpAndSettle();
       expect(find.text('4. Checklist (3/3)'), findsOneWidget);
-      expect(find.text('Foto temuan (opsional)'), findsOneWidget);
+      // Revisi 15 Nov: alasan dan foto wajib di SETIAP butir yang sudah dijawab.
+      expect(find.text('Foto (wajib)'), findsNWidgets(3));
+      expect(find.text('Alasan wajib diisi'), findsNWidgets(3));
       // Semua dijawab, tapi koordinat outlet kosong: tetap tidak bisa dikirim.
       await tester.scrollUntilVisible(_button('Kirim sidak'), 300, scrollable: _vScroll);
       expect(find.text('Koordinat outlet belum diatur.'), findsOneWidget);

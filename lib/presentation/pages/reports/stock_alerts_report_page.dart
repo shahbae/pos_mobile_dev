@@ -83,7 +83,7 @@ class StockAlertsReportPage extends ConsumerWidget {
                 padding: const EdgeInsets.all(20),
                 physics: const AlwaysScrollableScrollPhysics(),
                 children: [
-                  _HeaderCard(threshold: data.threshold, total: 0),
+                  _HeaderCard(total: 0),
                   const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.all(16),
@@ -92,12 +92,29 @@ class StockAlertsReportPage extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: AppTheme.borderLight),
                     ),
-                    child: const Text(
-                      "Tidak ada produk yang stoknya menipis",
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.textSecondary,
-                      ),
+                    child: const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Tidak ada barang yang stoknya menipis",
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.textPrimary,
+                          ),
+                        ),
+                        SizedBox(height: 6),
+                        Text(
+                          "Layar ini juga kosong bila batas stok belum diisi. "
+                          "Barang tanpa batas tidak pernah diperingatkan; "
+                          "owner atau SPV mengisi batasnya di web admin "
+                          "(menu Atur Batas Stok).",
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -108,7 +125,7 @@ class StockAlertsReportPage extends ConsumerWidget {
               padding: const EdgeInsets.all(20),
               physics: const AlwaysScrollableScrollPhysics(),
               children: [
-                _HeaderCard(threshold: data.threshold, total: data.rows.length),
+                _HeaderCard(total: data.rows.length),
                 const SizedBox(height: 12),
                 for (final row in data.rows) ...[
                   Container(
@@ -145,9 +162,9 @@ class StockAlertsReportPage extends ConsumerWidget {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                row.sku == null || row.sku!.isEmpty
-                                    ? "SKU: -"
-                                    : "SKU: ${row.sku}",
+                                row.branchName.isEmpty
+                                    ? row.typeLabel
+                                    : "${row.typeLabel} · ${row.branchName}",
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w600,
                                   color: AppTheme.textSecondary,
@@ -156,7 +173,8 @@ class StockAlertsReportPage extends ConsumerWidget {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                "Update: ${fmt.format(row.updatedAt)}",
+                                "Batas ${row.thresholdText} · ${row.baseText}"
+                                "${row.updatedAt == null ? '' : ' · ${fmt.format(row.updatedAt!.toLocal())}'}",
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w600,
                                   color: AppTheme.textSecondary,
@@ -167,21 +185,28 @@ class StockAlertsReportPage extends ConsumerWidget {
                           ),
                         ),
                         const SizedBox(width: 12),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppTheme.danger.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            "Stok: ${row.qtyOnHand}",
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w900,
-                              color: AppTheme.danger,
-                              fontSize: 12,
+                        // Angka kemasan lebih panjang dari angka dulu ("1,4 Jerigen"):
+                        // dibatasi lebarnya dan boleh turun baris, supaya di HP 360 dp
+                        // tidak meluap.
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 104),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppTheme.danger.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Text(
+                              "Stok: ${row.stockText}",
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                                color: AppTheme.danger,
+                                fontSize: 12,
+                              ),
                             ),
                           ),
                         ),
@@ -200,13 +225,9 @@ class StockAlertsReportPage extends ConsumerWidget {
 }
 
 class _HeaderCard extends StatelessWidget {
-  final int threshold;
   final int total;
 
-  const _HeaderCard({
-    required this.threshold,
-    required this.total,
-  });
+  const _HeaderCard({required this.total});
 
   @override
   Widget build(BuildContext context) {
@@ -228,22 +249,22 @@ class _HeaderCard extends StatelessWidget {
             child: const Icon(Icons.inventory_2_outlined, color: AppTheme.brandBlue),
           ),
           const SizedBox(width: 12),
-          Expanded(
+          const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  "Threshold",
+                Text(
+                  "Batas stok",
                   style: TextStyle(
                     fontWeight: FontWeight.w800,
                     color: AppTheme.textSecondary,
                     fontSize: 12,
                   ),
                 ),
-                const SizedBox(height: 2),
+                SizedBox(height: 2),
                 Text(
-                  "Stok ≤ $threshold",
-                  style: const TextStyle(
+                  "Per barang, dalam kemasan",
+                  style: TextStyle(
                     fontWeight: FontWeight.w900,
                     color: AppTheme.textPrimary,
                   ),
@@ -271,4 +292,3 @@ class _HeaderCard extends StatelessWidget {
     );
   }
 }
-

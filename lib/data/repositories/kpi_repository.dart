@@ -110,6 +110,38 @@ class KpiRepository {
     }
   }
 
+  // ------------------------------------------------ deep cleaning mingguan
+
+  /// `GET /me/deep-clean` — set deep cleaning outlet minggu ini (revisi 15 Nov).
+  /// Leader dan karyawan; karyawan di cabang yang mewajibkan jadwal ditolak
+  /// 403 tanpa jadwal hari ini, pesannya ditampilkan apa adanya.
+  Future<DeepCleanSet> myDeepClean() async {
+    try {
+      final res = await api.dio.get('/me/deep-clean');
+      return DeepCleanSet.fromJson(_data(res));
+    } on DioException catch (e) {
+      throw _error(e, 'Gagal memuat deep cleaning');
+    }
+  }
+
+  /// `POST /me/deep-clean` — satu butir, foto dari kamera. 409
+  /// `deep_clean_already_sent` / `deep_clean_approved` bila butirnya sudah
+  /// difoto (oleh siapa pun di outlet itu) atau sudah di-ACC.
+  Future<void> submitDeepClean({required int itemId, required Uint8List photo}) async {
+    try {
+      await api.dio.post(
+        '/me/deep-clean',
+        data: FormData.fromMap({
+          'item_id': '$itemId',
+          'photo': MultipartFile.fromBytes(photo, filename: 'deep-clean-$itemId.jpg'),
+        }),
+        options: Options(contentType: 'multipart/form-data'),
+      );
+    } on DioException catch (e) {
+      throw _error(e, 'Gagal mengirim foto deep cleaning');
+    }
+  }
+
   // ------------------------------------------------------------ komplain kualitas
 
   /// `POST /complaints` — komplain kualitas atas kiriman yang sudah diterima
@@ -266,7 +298,8 @@ class KpiRepository {
   static const inspectionSendTimeout = Duration(minutes: 3);
 
   /// `POST /inspections` (multipart). Semua butir aktif wajib dijawab tepat
-  /// sekali; foto temuan opsional per butir.
+  /// sekali, dengan alasan di setiap butir; foto per butir wajib bila butirnya
+  /// `photoRequired`; `followUp` (tindak lanjut) wajib (revisi 15 Nov).
   Future<Inspection> createInspection({
     required int branchId,
     required double latitude,

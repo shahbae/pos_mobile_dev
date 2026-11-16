@@ -41,6 +41,7 @@ class DashboardPage extends ConsumerWidget {
       AppFeature.stockRequest,
       AppFeature.shipment,
       AppFeature.expenses,
+      AppFeature.branchWaste,
     };
     return features.any(stockish.contains);
   }
