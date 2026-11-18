@@ -80,7 +80,7 @@ class _NotificationReadinessCardState extends ConsumerState<NotificationReadines
         _Item(
           title: 'Alarm pengecekan foto',
           okText: 'Menyala',
-          badText: 'Dimatikan — permintaan foto tidak berbunyi',
+          badText: 'Dimatikan — permintaan foto tidak muncul di layar (bunyinya tetap)',
           ok: _alarmChannel,
           action: 'Nyalakan',
           onFix: () => PushService.openChannelSettings(PushService.channelAlarm),

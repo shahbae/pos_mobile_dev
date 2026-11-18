@@ -69,6 +69,14 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+
+    // AlarmMessagingService (layanan FCM milik app) dan notifikasi alarm native
+    // memakai kelas yang oleh plugin disembunyikan (`implementation` di modul
+    // plugin), jadi harus diminta sendiri. BoM 35.1.0 = FirebaseSDKVersion di
+    // firebase_core 5.1.0; samakan bila firebase_core dinaikkan.
+    implementation(platform("com.google.firebase:firebase-bom:35.1.0"))
+    implementation("com.google.firebase:firebase-messaging")
+    implementation("androidx.core:core:1.18.0")
 }
 
 // Baru flavor dev yang terdaftar di Firebase (project es-teh-candi). Flavor

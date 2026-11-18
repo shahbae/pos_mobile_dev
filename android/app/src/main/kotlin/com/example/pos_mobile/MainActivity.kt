@@ -18,6 +18,9 @@ class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         showOverLockIfAlarm(intent)
         super.onCreate(savedInstanceState)
+        // Saluran alarm harus ada begitu app pernah dibuka, supaya kartu
+        // "Notifikasi siap?" di Profil bisa memeriksanya.
+        AlarmNotifier.ensureChannels(this)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -37,10 +40,18 @@ class MainActivity : FlutterActivity() {
     // manifest: kalau dipasang, layar POS bisa dibuka tanpa membuka kunci HP.
     // Payload notifikasi alarm diawali "alarm|" (lihat PushService).
     private fun showOverLockIfAlarm(intent: Intent?) {
-        if (intent?.action == "SELECT_NOTIFICATION" &&
-            intent.getStringExtra("payload")?.startsWith("alarm|") == true
+        if (intent?.action == AlarmNotifier.ACTION_SELECT &&
+            intent.getStringExtra(AlarmNotifier.EXTRA_PAYLOAD)?.startsWith("alarm|") == true
         ) {
             setShowOverLock(true)
+            // Ketukan orangnya = alarm sudah dilihat: bunyi berhenti. Full-screen
+            // intent yang membuka app di HP terkunci BUKAN ketukan: bunyi terus
+            // sampai layar pengecekan dibuka. Activity yang dipulihkan dari
+            // daftar app terbaru membawa intent lamanya; itu pun bukan ketukan.
+            val fromHistory = intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0
+            if (!intent.getBooleanExtra(AlarmNotifier.EXTRA_FROM_FULL_SCREEN, false) && !fromHistory) {
+                AlarmService.silence()
+            }
         }
     }
 
@@ -108,6 +119,12 @@ class MainActivity : FlutterActivity() {
                     }
                     "setShowOverLock" -> {
                         setShowOverLock(call.argument<Boolean>("on") == true)
+                        result.success(null)
+                    }
+                    // Reminder dibuka atau dijawab: tutup notifikasi alarmnya dan
+                    // hentikan bunyinya bila itu alarm terakhir (PushService.cancelTag).
+                    "stopAlarm" -> {
+                        AlarmService.stopFor(this, call.argument<String>("tag") ?: "")
                         result.success(null)
                     }
                     // Kamera bawaan HP adalah activity app lain tanpa izin tampil
