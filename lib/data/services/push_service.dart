@@ -12,12 +12,17 @@ import 'package:pos_mobile/data/services/app_identity.dart';
 /// Notifikasi push (Tahap 4). Kontrak: be-pos `docs/api-push-fe.md`.
 ///
 /// Server mengirim *data message* tanpa blok `notification`, jadi app yang
-/// menggambar notifikasinya — di depan lewat [FirebaseMessaging.onMessage], di
-/// latar dan saat app mati lewat [pushBackgroundHandler]. Dua saluran:
-/// - `biasa`: jadwal, catatan reminder, tiket bantuan.
-/// - `alarm`: permintaan pengecekan foto. Berbunyi lewat volume alarm (tetap
-///   terdengar di mode senyap), berulang sampai dibuka, dan menyalakan layar
-///   di atas kunci layar.
+/// menggambar notifikasinya. Dua jalur:
+/// - `level=normal` (jadwal, catatan reminder, tiket bantuan): Dart, di depan
+///   lewat [FirebaseMessaging.onMessage], di latar dan saat app mati lewat
+///   [pushBackgroundHandler]. Saluran `biasa`.
+/// - `level=alarm` (permintaan pengecekan foto): KOTLIN, bukan Dart.
+///   `AlarmMessagingService` menerima pesannya langsung dan `AlarmService`
+///   memutar bunyinya lewat volume alarm (tetap terdengar di mode senyap),
+///   berulang sampai reminder dibuka, dan menyalakan layar di atas kunci
+///   layar. Alasannya dua: bunyi notifikasi sistem dibungkam tombol volume,
+///   dan alarm tak boleh menunggu mesin Dart menyala di isolate latar.
+///   Dart hanya menghentikannya lewat [cancelTag].
 ///
 /// Ketukan tidak membuka layar dari sini: tujuannya ditaruh di
 /// [pendingTarget], lalu `PushBinder` — yang hidup di bawah navigator sesi
@@ -26,7 +31,9 @@ class PushService {
   PushService._();
 
   static const channelNormal = 'biasa';
-  static const channelAlarm = 'alarm';
+
+  /// Saluran tampilan alarm (tanpa bunyi), dibuat `AlarmNotifier` di Kotlin.
+  static const channelAlarm = 'alarm_layar';
 
   static final _local = FlutterLocalNotificationsPlugin();
   static const _native = MethodChannel('estehcandi/notif');
@@ -85,7 +92,7 @@ class PushService {
     final android = _local.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
     if (android == null) return;
     await android.createNotificationChannel(_normalChannel);
-    await android.createNotificationChannel(_alarmChannel);
+    // Saluran alarm dibuat di Kotlin (AlarmNotifier.ensureChannels).
   }
 
   static const _normalChannel = AndroidNotificationChannel(
@@ -95,68 +102,52 @@ class PushService {
     importance: Importance.high,
   );
 
-  static final _alarmSound = UriAndroidNotificationSound('content://settings/system/alarm_alert');
-
-  static final _alarmChannel = AndroidNotificationChannel(
-    channelAlarm,
-    'Alarm pengecekan foto',
-    description: 'Permintaan foto kebersihan. Berbunyi walau HP dalam mode senyap.',
-    importance: Importance.max,
-    sound: _alarmSound,
-    audioAttributesUsage: AudioAttributesUsage.alarm,
-    vibrationPattern: Int64List.fromList([0, 800, 400, 800, 400, 800]),
-  );
-
-  /// Gambar satu notifikasi dari isi pesan server. Dipakai di depan dan di
-  /// latar (isolate terpisah).
+  /// Gambar satu notifikasi biasa dari isi pesan server. Dipakai di depan dan
+  /// di latar (isolate terpisah).
+  ///
+  /// Pesan `level=alarm` DILEWATI di sini: `AlarmMessagingService` (Kotlin)
+  /// sudah menggambar dan membunyikannya. Menggambarnya lagi dari Dart
+  /// membuat dua notifikasi untuk satu alarm.
   static Future<void> show(Map<String, dynamic> data) async {
+    if (data['level'] == 'alarm') return;
     final title = '${data['title'] ?? ''}';
     if (title.isEmpty) return;
     final body = '${data['body'] ?? ''}';
     final tag = '${data['tag'] ?? ''}';
     final target = '${data['target'] ?? ''}';
-    final alarm = data['level'] == 'alarm';
 
-    final details = alarm
-        ? AndroidNotificationDetails(
-            channelAlarm,
-            _alarmChannel.name,
-            channelDescription: _alarmChannel.description,
-            importance: Importance.max,
-            priority: Priority.max,
-            sound: _alarmSound,
-            audioAttributesUsage: AudioAttributesUsage.alarm,
-            vibrationPattern: _alarmChannel.vibrationPattern,
-            category: AndroidNotificationCategory.alarm,
-            fullScreenIntent: true,
-            // FLAG_INSISTENT: suara berulang sampai notifikasinya disentuh.
-            additionalFlags: Int32List.fromList([4]),
-            visibility: NotificationVisibility.public,
-            styleInformation: BigTextStyleInformation(body),
-            tag: tag.isEmpty ? null : tag,
-          )
-        : AndroidNotificationDetails(
-            channelNormal,
-            _normalChannel.name,
-            channelDescription: _normalChannel.description,
-            importance: Importance.high,
-            priority: Priority.high,
-            styleInformation: BigTextStyleInformation(body),
-            tag: tag.isEmpty ? null : tag,
-          );
+    final details = AndroidNotificationDetails(
+      channelNormal,
+      _normalChannel.name,
+      channelDescription: _normalChannel.description,
+      importance: Importance.high,
+      priority: Priority.high,
+      styleInformation: BigTextStyleInformation(body),
+      tag: tag.isEmpty ? null : tag,
+    );
 
     await _local.show(
       id: notificationId(tag.isEmpty ? '${data['id'] ?? title}' : tag),
       title: title,
       body: body,
       notificationDetails: NotificationDetails(android: details),
-      payload: payloadOf(alarm: alarm, target: target),
+      payload: payloadOf(alarm: false, target: target),
     );
   }
 
   /// Tutup notifikasi bertag itu, mis. alarm reminder yang layarnya sudah
-  /// dibuka.
-  static Future<void> cancelTag(String tag) => _local.cancel(id: notificationId(tag), tag: tag);
+  /// dibuka. Untuk alarm, bunyinya ikut berhenti bila itu alarm terakhir yang
+  /// sedang berbunyi (`AlarmService.stopFor` di Kotlin); untuk notifikasi biasa
+  /// perintah itu tak berefek.
+  ///
+  /// Dua perintah itu berdiri sendiri dan keduanya aman diulang, jadi tak ada
+  /// yang menunggu yang lain: penutupan notifikasi tidak boleh tertunda oleh
+  /// kanal native, yang tak ada di APK lama maupun di tes.
+  static Future<void> cancelTag(String tag) {
+    final cancelled = _local.cancel(id: notificationId(tag), tag: tag);
+    unawaited(_call('stopAlarm', {'tag': tag}));
+    return cancelled;
+  }
 
   /// `POST /me/push-devices`. Dipanggil saat sesi mulai dan tiap app kembali
   /// ke depan (memperbarui `last_seen_at`). Gagal diam-diam: notifikasi bukan
