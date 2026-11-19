@@ -94,6 +94,20 @@ class ExpenseRepository {
     return msg ?? 'Gagal menyimpan pengeluaran (${e.response?.statusCode ?? e.message})';
   }
 
+  /// `GET /expense-limits` — batas pengeluaran outlet token + pratinjau hari
+  /// ini (revisi 19 Nov). Leader selalu mendapat outletnya sendiri.
+  Future<ExpenseLimitPreview> getExpenseLimit() async {
+    try {
+      final res = await api.dio.get('/expense-limits');
+      final data = res.data['data'];
+      return ExpenseLimitPreview.fromJson(data is Map ? Map<String, dynamic>.from(data) : const {});
+    } on DioException catch (e) {
+      final d = e.response?.data;
+      final m = d is Map ? (d['message'] ?? d['error'])?.toString() : null;
+      throw m ?? 'Gagal memuat batas pengeluaran';
+    }
+  }
+
   /// `GET /cost-types` — semua jenis biaya (yang nonaktif juga, supaya nama
   /// pengeluaran lama tetap terbaca). Pilihan di form disaring ke yang aktif.
   Future<List<CostType>> getCostTypes() async {

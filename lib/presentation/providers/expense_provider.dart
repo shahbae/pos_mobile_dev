@@ -30,3 +30,13 @@ final expenseDetailProvider = FutureProvider.family<ExpenseModel?, int>((ref, id
 final costTypesProvider = FutureProvider<List<CostType>>((ref) {
   return ref.watch(expenseRepositoryProvider).getCostTypes();
 });
+
+/// Batas pengeluaran outlet + pratinjau hari ini (revisi 19 Nov). Gagal
+/// memuat (mis. server lama) = null: form tetap jalan tanpa perkiraan.
+final expenseLimitProvider = FutureProvider.autoDispose<ExpenseLimitPreview?>((ref) async {
+  try {
+    return await ref.watch(expenseRepositoryProvider).getExpenseLimit();
+  } catch (_) {
+    return null;
+  }
+});

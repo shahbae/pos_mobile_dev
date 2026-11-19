@@ -22,6 +22,17 @@ class ExpenseModel {
   final String approvalStatus;
   final String approvalNote;
 
+  /// Pemutus ACC. Kosong pada pengeluaran yang disetujui = lolos sendiri
+  /// (di bawah batas saat dicatat, atau dinilai ulang otomatis).
+  final int? approvalDecidedBy;
+
+  /// Batas pengeluaran persen omzet (revisi 19 Nov): grup `A` (harian) / `B`
+  /// (bulanan), akumulasi grup termasuk baris ini, dan batas rupiahnya saat
+  /// dinilai. Kosong untuk data lama.
+  final String limitGroup;
+  final double? limitAccum;
+  final double? limitPagu;
+
   ExpenseModel({
     this.id,
     this.tenantId,
@@ -35,10 +46,18 @@ class ExpenseModel {
     this.costTypeId,
     this.approvalStatus = 'approved',
     this.approvalNote = '',
+    this.approvalDecidedBy,
+    this.limitGroup = '',
+    this.limitAccum,
+    this.limitPagu,
   });
 
   bool get isPendingApproval => approvalStatus == 'pending';
   bool get isRejected => approvalStatus == 'rejected';
+
+  /// Sempat menunggu lalu lolos sendiri saat dinilai ulang (bukan diputus SPV).
+  bool get isAutoApproved =>
+      approvalStatus == 'approved' && approvalDecidedBy == null && approvalNote.startsWith('Lolos otomatis');
 
   /// Label status ACC untuk daftar & detail; kosong bila sudah disetujui.
   String get approvalLabel => isPendingApproval ? 'Menunggu ACC SPV' : (isRejected ? 'Ditolak SPV' : '');
@@ -59,6 +78,10 @@ class ExpenseModel {
       costTypeId: j['cost_type_id'] is num ? (j['cost_type_id'] as num).toInt() : int.tryParse('${j['cost_type_id'] ?? ''}'),
       approvalStatus: (j['approval_status']?.toString().isNotEmpty ?? false) ? j['approval_status'].toString() : 'approved',
       approvalNote: j['approval_note']?.toString() ?? '',
+      approvalDecidedBy: j['approval_decided_by'] is num ? (j['approval_decided_by'] as num).toInt() : null,
+      limitGroup: j['limit_group']?.toString() ?? '',
+      limitAccum: _toDouble(j['limit_accum']),
+      limitPagu: _toDouble(j['limit_pagu']),
     );
   }
 
@@ -71,6 +94,8 @@ class ExpenseModel {
     };
   }
 }
+
+double? _toDouble(Object? v) => v == null ? null : (v is num ? v.toDouble() : double.tryParse('$v'));
 
 /// Jenis Biaya (`GET /cost-types`). Daftarnya milik owner/finance di web.
 class CostType {
@@ -85,6 +110,12 @@ class CostType {
   /// standar.
   final double? dailyStandard;
 
+  /// Grup batas pengeluaran (revisi 19 Nov): `A` = es kristal & air galon,
+  /// batas harian; `B` = lainnya, batas bulanan.
+  final String expenseGroup;
+
+  bool get isDailyGroup => expenseGroup == expenseGroupDaily;
+
   const CostType({
     required this.id,
     required this.name,
@@ -92,6 +123,7 @@ class CostType {
     this.isActive = true,
     this.sort = 0,
     this.dailyStandard,
+    this.expenseGroup = expenseGroupMonthly,
   });
 
   factory CostType.fromJson(Map<String, dynamic> j) => CostType(
@@ -101,6 +133,7 @@ class CostType {
     isActive: j['is_active'] != false,
     sort: j['sort'] is num ? (j['sort'] as num).toInt() : 0,
     dailyStandard: j['daily_standard'] == null ? null : double.tryParse('${j['daily_standard']}'),
+    expenseGroup: '${j['expense_group'] ?? ''}' == expenseGroupDaily ? expenseGroupDaily : expenseGroupMonthly,
   );
 }
 
@@ -117,4 +150,80 @@ String? costTypeName(List<CostType> types, int? id) {
 String expenseApprovalOf(Map<String, dynamic>? res) {
   final d = res?['data'];
   return d is Map ? (d['approval_status']?.toString() ?? '') : '';
+}
+
+const expenseGroupDaily = 'A';
+const expenseGroupMonthly = 'B';
+
+/// Pratinjau batas pengeluaran outlet hari ini (`GET /expense-limits`,
+/// revisi 19 Nov). Grup A: total hari ini ≤ [dailyPct]% omzet hari ini.
+/// Grup B: total bulan ini ≤ [monthlyPct]% omzet bulan berjalan / target.
+class ExpenseLimitPreview {
+  final double dailyPct;
+  final double monthlyPct;
+  final String monthlyBasis;
+  final double dailyOmzet;
+  final double dailyPagu;
+  final double todayGroupA;
+  final double monthBase;
+  final double monthlyPagu;
+  final double monthGroupB;
+  final int cutoffHour;
+
+  const ExpenseLimitPreview({
+    this.dailyPct = 9,
+    this.monthlyPct = 0.8,
+    this.monthlyBasis = 'mtd',
+    this.dailyOmzet = 0,
+    this.dailyPagu = 0,
+    this.todayGroupA = 0,
+    this.monthBase = 0,
+    this.monthlyPagu = 0,
+    this.monthGroupB = 0,
+    this.cutoffHour = 21,
+  });
+
+  factory ExpenseLimitPreview.fromJson(Map<String, dynamic> j) {
+    final setting = j['setting'] is Map ? Map<String, dynamic>.from(j['setting']) : const <String, dynamic>{};
+    final p = j['preview'] is Map ? Map<String, dynamic>.from(j['preview']) : const <String, dynamic>{};
+    return ExpenseLimitPreview(
+      dailyPct: _toDouble(setting['daily_pct']) ?? 9,
+      monthlyPct: _toDouble(setting['monthly_pct']) ?? 0.8,
+      monthlyBasis: '${p['monthly_basis'] ?? setting['monthly_basis'] ?? 'mtd'}',
+      dailyOmzet: _toDouble(p['daily_omzet']) ?? 0,
+      dailyPagu: _toDouble(p['daily_pagu']) ?? 0,
+      todayGroupA: _toDouble(p['today_group_a']) ?? 0,
+      monthBase: _toDouble(p['month_base']) ?? 0,
+      monthlyPagu: _toDouble(p['monthly_pagu']) ?? 0,
+      monthGroupB: _toDouble(p['month_group_b']) ?? 0,
+      cutoffHour: p['cutoff_hour'] is num ? (p['cutoff_hour'] as num).toInt() : 21,
+    );
+  }
+
+  /// Perkiraan status pengeluaran baru sebesar [amount] di [group].
+  /// [replacing] = nominal lama baris yang sedang diubah (sudah ikut dihitung
+  /// server), supaya tidak terhitung dua kali.
+  ExpenseLimitProjection project(String group, double amount, {double replacing = 0}) {
+    final daily = group == expenseGroupDaily;
+    final used = (daily ? todayGroupA : monthGroupB) - replacing;
+    final pagu = daily ? dailyPagu : monthlyPagu;
+    return ExpenseLimitProjection(
+      group: daily ? expenseGroupDaily : expenseGroupMonthly,
+      used: used < 0 ? 0 : used,
+      accum: (used < 0 ? 0 : used) + amount,
+      pagu: pagu,
+    );
+  }
+}
+
+class ExpenseLimitProjection {
+  final String group;
+  final double used;
+  final double accum;
+  final double pagu;
+
+  const ExpenseLimitProjection({required this.group, required this.used, required this.accum, required this.pagu});
+
+  /// Sama dengan aturan server: lewat batas bila akumulasi > batas.
+  bool get overLimit => accum > pagu;
 }

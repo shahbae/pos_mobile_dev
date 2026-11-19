@@ -162,7 +162,20 @@ class ExpenseDetailPage extends ConsumerWidget {
                     "Status ACC SPV",
                     exp.isRejected
                         ? 'Ditolak${exp.approvalNote.isEmpty ? '' : ': ${exp.approvalNote}'}. Uangnya harus kembali ke laci dan ikut disetor; ubah pengeluaran ini untuk mengajukan ulang.'
-                        : 'Menunggu ACC: melewati standar harian jenis biaya ini. Sampai disetujui, uangnya dianggap masih di laci.',
+                        : 'Menunggu ACC: melewati batas pengeluaran ${exp.limitGroup == expenseGroupDaily ? 'Grup A (harian)' : exp.limitGroup == expenseGroupMonthly ? 'Grup B (bulanan)' : 'outlet'}. '
+                            'Dinilai ulang otomatis; kalau omzet sudah cukup, lolos sendiri. Sampai disetujui, uangnya dianggap masih di laci.',
+                  ),
+                  const Divider(height: 28),
+                ],
+                if (exp.isAutoApproved) ...[
+                  _infoRow(Icons.verified_outlined, "Status ACC", 'Otomatis. ${exp.approvalNote}'),
+                  const Divider(height: 28),
+                ],
+                if (exp.limitGroup.isNotEmpty && exp.limitPagu != null) ...[
+                  _infoRow(
+                    Icons.speed_rounded,
+                    "Batas pengeluaran",
+                    '${exp.limitGroup == expenseGroupDaily ? 'Grup A (harian)' : 'Grup B (bulanan)'} · akumulasi ${formatRupiah(exp.limitAccum ?? 0)} dari batas ${formatRupiah(exp.limitPagu!)} saat dicatat',
                   ),
                   const Divider(height: 28),
                 ],
