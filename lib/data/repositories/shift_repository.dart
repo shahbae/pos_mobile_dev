@@ -21,6 +21,16 @@ class DailyAuditRequired implements Exception {
   String toString() => message;
 }
 
+/// Buka shift ditolak karena cabang masih punya opname yang belum di-ACC
+/// (revisi 19 Nov — 422 audit_pending). [auditId] opname yang disebut server.
+class AuditPending implements Exception {
+  final String message;
+  final int? auditId;
+  AuditPending(this.message, {this.auditId});
+  @override
+  String toString() => message;
+}
+
 class ShiftRepository {
   final ApiService api;
   ShiftRepository(this.api);
@@ -46,6 +56,14 @@ class ShiftRepository {
       final res = await api.dio.post('/shifts', data: <String, dynamic>{});
       return ShiftModel.fromJson(res.data as Map<String, dynamic>);
     } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map && data['code'] == 'audit_pending') {
+        final detail = data['data'];
+        throw AuditPending(
+          '${data['message'] ?? 'Opname cabang ini belum di-ACC. Kasir belum bisa dibuka.'}',
+          auditId: detail is Map ? (detail['audit_id'] as num?)?.toInt() : null,
+        );
+      }
       throw e.response?.data?['message'] ?? 'Gagal membuka shift';
     }
   }

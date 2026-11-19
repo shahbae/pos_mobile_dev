@@ -232,7 +232,7 @@ class _StockAuditDetailPageState extends ConsumerState<StockAuditDetailPage> {
                       ),
                     ),
                     const Divider(height: 1, color: AppTheme.borderLight),
-                    ...audit.items.map(_itemRow),
+                    ...audit.items.map((it) => _itemRow(it, draft: audit.isDraft)),
                   ],
                 ),
               ),
@@ -281,7 +281,7 @@ class _StockAuditDetailPageState extends ConsumerState<StockAuditDetailPage> {
     );
   }
 
-  Widget _itemRow(StockAuditItem it) {
+  Widget _itemRow(StockAuditItem it, {bool draft = false}) {
     final diffColor = it.diff == 0
         ? AppTheme.textSecondary
         : (it.diff < 0 ? AppTheme.danger : Colors.green);
@@ -308,6 +308,7 @@ class _StockAuditDetailPageState extends ConsumerState<StockAuditDetailPage> {
                   Text('Rugi ${formatRupiah(it.lossValue)}',
                       style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppTheme.danger)),
                 if (it.shortfallQty > 0) _shortfallNote(it),
+                if (draft && it.diff > 0) _surplusNote(it),
                 // Tahap 5: keterangan terhadap batas wajar, stok keluar, dan
                 // jejak perubahan angka fisik.
                 if (it.verdict != null || it.stockOut != null)
@@ -382,6 +383,18 @@ class _StockAuditDetailPageState extends ConsumerState<StockAuditDetailPage> {
               ),
             ),
           ],
+        ),
+      );
+
+  /// Fisik lebih banyak dari sistem (revisi 19 Nov): selisihnya diajukan
+  /// sebagai penyesuaian dan baru sah saat SPV meng-ACC. Selisih ditambahkan
+  /// sebelum retur dipotong, jadi retur ikut terkirim penuh.
+  Widget _surplusNote(StockAuditItem it) => Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Text(
+          'Lebih ${_fmtQty(it.diff)} dari sistem: diajukan sebagai penyesuaian, sah saat SPV ACC'
+          '${it.returnedQty > 0 ? '; retur ${_fmtQty(it.returnedQty)} ikut terkirim penuh' : ''}.',
+          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppTheme.brandBlue),
         ),
       );
 
