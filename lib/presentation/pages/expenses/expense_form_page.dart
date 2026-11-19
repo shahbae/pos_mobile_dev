@@ -129,7 +129,7 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(pending
-              ? 'Tercatat, tapi melewati standar harian: menunggu ACC SPV. Sampai disetujui, uangnya dianggap masih di laci.'
+              ? 'Tercatat, tapi melewati batas pengeluaran grupnya: menunggu ACC SPV (atau lolos sendiri saat dinilai ulang). Sampai disetujui, uangnya dianggap masih di laci.'
               : 'Berhasil mencatat pengeluaran'),
           backgroundColor: pending ? const Color(0xFFB45309) : null,
           duration: Duration(seconds: pending ? 6 : 3),
@@ -228,11 +228,9 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
                       CostTypeField(
                         value: _costTypeId,
                         enabled: !_loading,
+                        amountController: _amountController,
                         onChanged: (v) => setState(() => _costTypeId = v),
                       ),
-                      const SizedBox(height: 4),
-                      Text('Dipakai untuk menilai biaya harian outlet.',
-                          style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
 
                       const SizedBox(height: 20),
 

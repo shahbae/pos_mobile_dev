@@ -154,7 +154,7 @@ class _ExpenseFormEditPageState extends ConsumerState<ExpenseFormEditPage> {
       );
       if (!mounted) return;
       _snack(expenseApprovalOf(res) == 'pending'
-          ? 'Tersimpan. Melewati standar harian: menunggu ACC SPV.'
+          ? 'Tersimpan. Melewati batas pengeluaran grupnya: menunggu ACC SPV.'
           : 'Berhasil mengupdate pengeluaran');
       Navigator.pop(context, true);
     } catch (e) {
@@ -282,6 +282,11 @@ class _ExpenseFormEditPageState extends ConsumerState<ExpenseFormEditPage> {
                       CostTypeField(
                         value: _costTypeId,
                         enabled: !_loading,
+                        amountController: _amountController,
+                        // Nominal lama sudah dihitung server di pemakaian grupnya
+                        // (kecuali yang ditolak, yang tidak dihitung).
+                        replacingAmount: widget.expense.isRejected ? 0 : double.tryParse(widget.expense.amount ?? '') ?? 0,
+                        replacingGroup: widget.expense.limitGroup,
                         onChanged: (v) => setState(() => _costTypeId = v),
                       ),
 

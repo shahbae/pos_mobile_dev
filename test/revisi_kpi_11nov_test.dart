@@ -401,17 +401,23 @@ void main() {
       expect(find.byType(DirectivesPage), findsOneWidget);
     });
 
-    testWidgets('Pengeluaran: standar harian di form, status ACC di daftar', (tester) async {
+    // Revisi 19 Nov: standar harian per jenis diganti batas persen omzet per
+    // grup (lihat revisi_19nov_g3_test.dart); tanpa pratinjau server, form
+    // tetap menjelaskan aturannya.
+    testWidgets('Pengeluaran: aturan batas grup di form tanpa pratinjau server', (tester) async {
       _phone(tester);
       await tester.pumpWidget(_app(const ExpenseFormPage(), [
-        costTypesProvider.overrideWith((ref) async => const [CostType(id: 1, name: 'Es kristal', dailyStandard: 100000)]),
+        costTypesProvider.overrideWith(
+            (ref) async => const [CostType(id: 1, name: 'Es kristal', dailyStandard: 100000, expenseGroup: 'A')]),
+        expenseLimitProvider.overrideWith((ref) async => null),
       ]));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('cost-type-field')));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Es kristal').last);
       await tester.pumpAndSettle();
-      expect(find.textContaining('Standar harian Rp'), findsOneWidget);
+      expect(find.textContaining('Standar harian Rp'), findsNothing);
+      expect(find.textContaining('Grup A: batas harian'), findsOneWidget);
       expect(find.textContaining('menunggu ACC SPV'), findsOneWidget);
     });
 
