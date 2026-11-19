@@ -10,7 +10,10 @@ import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/data/models/reminder_model.dart';
 import 'package:pos_mobile/data/services/api_provider.dart';
 import 'package:pos_mobile/data/services/push_service.dart';
+import 'package:pos_mobile/presentation/pages/expenses/expense_list_page.dart';
 import 'package:pos_mobile/presentation/pages/help/help_ticket_detail_page.dart';
+import 'package:pos_mobile/presentation/pages/shipments/shipment_detail_page.dart';
+import 'package:pos_mobile/presentation/pages/stock_audits/stock_audit_detail_page.dart';
 import 'package:pos_mobile/presentation/pages/reminders/reminder_detail_page.dart';
 import 'package:pos_mobile/presentation/pages/schedules/my_schedule_page.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
@@ -161,6 +164,10 @@ Future<void> openPushTarget(BuildContext context, String target) async {
     // Revisi KPI 11 Nov (SPV-A2): arahan baru dari SPV untuk leader.
     'directives' => const DirectivesPage(),
     'evaluations' => const DirectivesPage(initialTab: 1),
+    // Revisi 19 Nov: opname di-ACC, pengeluaran diputus SPV, kiriman berangkat.
+    'stock-audits' when id != null => StockAuditDetailPage(auditId: id),
+    'expenses' => const ExpenseListPage(),
+    'shipments' when id != null => ShipmentDetailPage(shipmentId: id),
     _ => null,
   };
   if (page == null) return;
