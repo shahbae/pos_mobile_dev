@@ -63,6 +63,32 @@ Future<void> showDailyAuditRequired(BuildContext context, WidgetRef ref) async {
   }
 }
 
+/// Buka shift ditolak karena opname belum di-ACC (revisi 19 Nov). Kasir tidak
+/// bisa meng-ACC sendiri; dialog ini menjelaskan siapa yang harus bertindak
+/// dan, bila server menyebut opnamenya, membuka detailnya.
+Future<void> showAuditPending(BuildContext context, String message, int? auditId) async {
+  final open = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: const Text('Opname belum di-ACC'),
+      content: Text('$message\n\nStok cabang baru sah sesudah opname di-ACC, jadi jualan belum bisa dimulai.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Tutup')),
+        if (auditId != null)
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(minimumSize: const Size(0, 40)),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Lihat opname'),
+          ),
+      ],
+    ),
+  );
+  if (open == true && auditId != null && context.mounted) {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => StockAuditDetailPage(auditId: auditId)));
+  }
+}
+
 Future<bool?> _askDailyAudit(BuildContext context, DailyAuditBlock block) {
   final missing = block == DailyAuditBlock.missing;
   return showDialog<bool>(

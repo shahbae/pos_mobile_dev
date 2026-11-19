@@ -85,10 +85,19 @@ class ShiftPage extends ConsumerWidget {
     final confirmed = await _confirmOpenShift(context, defaultOpeningCash);
     if (confirmed != true) return;
 
+    AuditPending? pending;
     await _runWithLoading(context, () async {
       await ref.read(shiftRepositoryProvider).open();
       ref.invalidate(currentShiftProvider);
-    }, successMsg: 'Shift dibuka');
+    }, successMsg: 'Shift dibuka', onError: (e) {
+      // Opname yang belum di-ACC mengunci kasir (revisi 19 Nov): dijelaskan
+      // lewat dialog, bukan snackbar yang cepat hilang.
+      if (e is! AuditPending) return false;
+      pending = e;
+      return true;
+    });
+    final p = pending;
+    if (p != null && context.mounted) await showAuditPending(context, p.message, p.auditId);
   }
 
   Future<void> _closeShift(BuildContext context, WidgetRef ref, ShiftModel shift) async {
