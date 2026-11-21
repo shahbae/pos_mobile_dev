@@ -220,23 +220,33 @@ Set<String> heldRoles(String? role, Iterable<String> roles) {
   return held;
 }
 
-/// Role yang membebaskan dari kunci absensi, apa pun role lain yang ikut
-/// dipegang.
-const _attendanceGateExempt = {'owner', 'supervisor', 'leader'};
+/// Role yang membuat seseorang bukan "karyawan murni", apa pun role lain yang
+/// ikut dipegang.
+const _crewOnlyExempt = {'owner', 'supervisor', 'leader'};
 
-/// Aplikasi terkunci mengikuti absensi: sebelum absen masuk dan sesudah absen
-/// pulang, yang terbuka hanya halaman Absensi.
+/// Karyawan murni: memegang karyawan dan tidak memegang owner/supervisor/
+/// leader. Dipakai untuk memilih pesan "belum ada jadwal" di halaman Absensi.
 ///
-/// Hanya karyawan (hotfix 19 Okt 2026 untuk kasir; revisi 17 Okt mengunci
-/// semua yang ikut absen; karyawan sejak Tahap 1 SDM, kasir dihapus 31 Okt).
-/// Owner, supervisor dan leader bebas — juga kalau dia sekaligus karyawan.
-/// Karena itu yang dibaca seluruh role, bukan role utama: finance mengalahkan
-/// leader di urutan role utama, jadi finance + leader + karyawan akan terbaca
-/// "finance" dan aturannya meleset.
-bool requiresAttendanceGate(Iterable<String> held) {
+/// Dulu ini juga kunci layar absensi (revisi 17 Okt, hotfix 19 Okt). Revisi
+/// owner 21 Nov 2026 membuang kunci itu: semua akun boleh masuk aplikasi; yang
+/// dikunci hanya buka shift (lihat [mustCheckInToOpenShift]). Yang dibaca
+/// seluruh role, bukan role utama: finance mengalahkan leader di urutan role
+/// utama, jadi finance + leader + karyawan akan terbaca "finance".
+bool isCrewOnly(Iterable<String> held) {
   final roles = _norm(held);
-  return roles.contains('karyawan') && roles.intersection(_attendanceGateExempt).isEmpty;
+  return roles.contains('karyawan') && roles.intersection(_crewOnlyExempt).isEmpty;
 }
+
+/// Buka shift wajib sudah absen masuk (revisi owner 21 Nov 2026): semua akun
+/// selain owner, termasuk leader dan supervisor. Cermin `POST /shifts` yang
+/// menolak 403 `check_in_required`.
+bool mustCheckInToOpenShift(Iterable<String> held) => !_norm(held).contains('owner');
+
+/// Boleh melihat Kas Seharusnya dan Selisih (revisi owner 21 Nov 2026, tutup
+/// shift buta): owner, supervisor, leader, finance. Kasir hanya mengisi kas
+/// fisik; selisihnya dibaca leader dan finance.
+bool canSeeCashDifference(Iterable<String> held) =>
+    _norm(held).intersection(const {'owner', 'supervisor', 'leader', 'finance'}).isNotEmpty;
 
 Set<String> _norm(Iterable<String> held) => upgradeLegacyRoles(held).toSet();
 

@@ -54,14 +54,22 @@ class StockAuditListPage extends ConsumerWidget {
     }
 
     // Jenis berperiode yang sudah dibuat untuk periodenya dibuka, bukan dibuat
-    // ulang (server membalas 409). Bulanan hanya owner & SPV.
+    // ulang (server membalas 409). Bulanan hanya owner & SPV. Opname Umum
+    // tidak lagi ditawarkan di aplikasi (revisi owner 21 Nov 2026); yang lama
+    // tetap bisa dibuka dari daftar, dan web masih bisa membuatnya.
     Future<void> pickType() async {
       final periods = ref.read(auditPeriodsProvider).valueOrNull;
       final types = [
         for (final t in AuditTypes.periodic)
           if ((t != AuditTypes.monthly || ownerLevel) && (periods?.of(t)?.listedCount ?? 1) > 0) t,
-        AuditTypes.general,
       ];
+      if (types.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Belum ada barang yang perlu diopname di jenis mana pun.'),
+          behavior: SnackBarBehavior.floating,
+        ));
+        return;
+      }
       final chosen = await showModalBottomSheet<String>(
         context: context,
         showDragHandle: true,

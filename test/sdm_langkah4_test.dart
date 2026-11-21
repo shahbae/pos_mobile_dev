@@ -256,9 +256,9 @@ void main() {
     });
 
     test('karyawan ikut terkunci; leader yang juga karyawan tidak', () {
-      expect(requiresAttendanceGate({'karyawan'}), isTrue);
-      expect(requiresAttendanceGate({'karyawan', 'leader'}), isFalse);
-      expect(requiresAttendanceGate({'kasir'}), isTrue);
+      expect(isCrewOnly({'karyawan'}), isTrue);
+      expect(isCrewOnly({'karyawan', 'leader'}), isFalse);
+      expect(isCrewOnly({'kasir'}), isTrue);
     });
   });
 

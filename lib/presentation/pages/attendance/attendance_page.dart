@@ -203,7 +203,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       }
     } else {
       if (auth.branchId == null) {
-        _snack(requiresAttendanceGate(auth.held) ? kNoScheduleTodayMsg : kNoBranchAssignedMsg,
+        _snack(isCrewOnly(auth.held) ? kNoScheduleTodayMsg : kNoBranchAssignedMsg,
             error: true);
         return;
       }
@@ -296,18 +296,10 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       return;
     }
 
-    final gated = requiresAttendanceGate(ref.read(authProvider).held);
-    final next = day.hasNextShift;
     final yakin = await confirmAction(
       context,
       title: 'Absen pulang sekarang?',
-      message: !gated
-          ? 'Jam pulang dicatat saat ini juga dan hanya bisa diubah oleh owner.'
-          : next
-              ? 'Jam pulang dicatat saat ini juga. Aplikasi terbuka lagi setelah '
-                  'kamu absen masuk shift berikutnya.'
-              : 'Jam pulang dicatat saat ini juga. Sesudah itu aplikasi terkunci '
-                  'sampai besok.',
+      message: 'Jam pulang dicatat saat ini juga dan hanya bisa diubah oleh owner.',
       confirmLabel: 'Ya, absen pulang',
     );
     if (!yakin || !mounted) return;
@@ -326,13 +318,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
             latitude: pos.latitude,
             longitude: pos.longitude,
           );
-    }, successMsg: 'Absen pulang berhasil.', afterSuccess: (_) async {
-      // Dibuka dari menu: kembali ke layar paling bawah, yang kini sudah
-      // berganti jadi layar terkunci (atau Absensi, bila masih ada shift).
-      if (gated && !widget.isRoot && mounted) {
-        Navigator.of(context).popUntil((r) => r.isFirst);
-      }
-    });
+    }, successMsg: 'Absen pulang berhasil.');
   }
 
   Future<void> _startLeaveOut(List<OnDutyModel> colleagues) async {
@@ -399,7 +385,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       if (att != null) {
         await afterSuccess?.call(att);
         if (!mounted) return;
-        // Penguncian aplikasi dan tugas hari ini ikut membaca ulang.
+        // Kunci Buka Shift dan tugas hari ini ikut membaca ulang.
         refreshMyDay(ref);
         ref.invalidate(attendanceTodayProvider);
         ref.invalidate(attendanceGateProvider);
@@ -487,7 +473,7 @@ class _Content extends ConsumerWidget {
       if (noBranch) ...[
         _InfoBanner(
           icon: Icons.event_busy_outlined,
-          text: requiresAttendanceGate(auth.held) ? kNoScheduleTodayMsg : kNoBranchAssignedMsg,
+          text: isCrewOnly(auth.held) ? kNoScheduleTodayMsg : kNoBranchAssignedMsg,
           warning: true,
         ),
         const SizedBox(height: 8),

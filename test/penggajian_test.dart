@@ -9,12 +9,10 @@ import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/data/models/payroll_model.dart';
 import 'package:pos_mobile/presentation/pages/payroll/cash_loan_page.dart';
 import 'package:pos_mobile/presentation/pages/payroll/my_loans_page.dart';
-import 'package:pos_mobile/presentation/pages/payroll/payroll_widgets.dart';
 import 'package:pos_mobile/presentation/pages/payroll/payslip_detail_page.dart';
 import 'package:pos_mobile/presentation/pages/payroll/payslip_list_page.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/payroll_provider.dart';
-import 'package:pos_mobile/presentation/widgets/attendance_gate.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
 /// Tahap 2 SDM, langkah 4: slip gaji, pinjaman, komplain, dan serah pinjaman
@@ -347,14 +345,5 @@ void main() {
       expect(find.textContaining('Pilih cabang aktif dulu'), findsOneWidget);
     });
 
-    testWidgets('sesudah absen pulang: slip & pinjaman tetap bisa dibuka', (tester) async {
-      await tester.pumpWidget(_host(const CheckedOutLockPage(), auth: _auth(['kasir'])));
-      await tester.pumpAndSettle();
-      expect(find.byType(PayrollMenuButton), findsOneWidget);
-      await tester.tap(find.byType(PayrollMenuButton));
-      await tester.pumpAndSettle();
-      expect(find.text('Slip Gaji'), findsOneWidget);
-      expect(find.text('Pinjaman'), findsOneWidget);
-    });
   });
 }

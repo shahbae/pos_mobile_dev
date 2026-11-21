@@ -8,9 +8,12 @@ import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/core/utils/currency_input_formatter.dart';
 import 'package:pos_mobile/data/models/shift_model.dart';
 import 'package:pos_mobile/data/repositories/shift_repository.dart';
+import 'package:pos_mobile/presentation/pages/attendance/attendance_page.dart';
 import 'package:pos_mobile/presentation/pages/payroll/cash_loan_page.dart';
 import 'package:pos_mobile/presentation/pages/shifts/shift_list_page.dart';
 import 'package:pos_mobile/presentation/pages/stock_audits/daily_audit_gate.dart';
+import 'package:pos_mobile/presentation/providers/attendance_gate_provider.dart';
+import 'package:pos_mobile/presentation/providers/attendance_provider.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/branch_provider.dart';
 import 'package:pos_mobile/presentation/providers/payroll_provider.dart';
@@ -45,7 +48,11 @@ class ShiftPage extends ConsumerWidget {
       body: !canOperate
           ? const _ReadOnlyShiftBody()
           : RefreshIndicator(
-              onRefresh: () async => ref.invalidate(currentShiftProvider),
+              onRefresh: () async {
+                ref.invalidate(currentShiftProvider);
+                refreshMyDay(ref);
+                ref.invalidate(attendanceGateProvider);
+              },
               child: ref.watch(currentShiftProvider).when(
                     loading: () => const Center(child: CircularProgressIndicator()),
                     error: (e, _) => ListView(
@@ -65,7 +72,11 @@ class ShiftPage extends ConsumerWidget {
                       padding: const EdgeInsets.all(20),
                       children: [
                         if (shift == null)
-                          _NoShiftCard(onOpen: () => _openShift(context, ref))
+                          _NoShiftCard(
+                            needsCheckIn: _needsCheckIn(ref),
+                            onOpen: () => _openShift(context, ref),
+                            onCheckIn: () => _goCheckIn(context, ref),
+                          )
                         else ...[
                           // Pinjaman tunai yang menunggu: uangnya keluar dari laci
                           // shift ini, jadi diingatkan di sini sebelum tutup shift.
@@ -79,6 +90,23 @@ class ShiftPage extends ConsumerWidget {
     );
   }
 
+  /// Buka shift terkunci sampai absen masuk (revisi owner 21 Nov 2026), untuk
+  /// semua selain owner. Status absen yang belum termuat atau gagal dibaca
+  /// tidak mengunci: server tetap penentunya (403 check_in_required).
+  bool _needsCheckIn(WidgetRef ref) {
+    if (!mustCheckInToOpenShift(ref.watch(authProvider).held)) return false;
+    return ref.watch(attendanceGateProvider).maybeWhen(
+          data: (s) => s != AttendanceGateStatus.working,
+          orElse: () => false,
+        );
+  }
+
+  Future<void> _goCheckIn(BuildContext context, WidgetRef ref) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const AttendancePage()));
+    refreshMyDay(ref);
+    ref.invalidate(attendanceGateProvider);
+  }
+
   Future<void> _openShift(BuildContext context, WidgetRef ref) async {
     // Kas awal kini otomatis dari master cabang; kasir tidak input/override.
     final defaultOpeningCash = ref.read(currentBranchProvider)?.defaultOpeningCash;
@@ -90,6 +118,13 @@ class ShiftPage extends ConsumerWidget {
       await ref.read(shiftRepositoryProvider).open();
       ref.invalidate(currentShiftProvider);
     }, successMsg: 'Shift dibuka', onError: (e) {
+      // Server bilang belum absen: status absen di HP basi, baca ulang supaya
+      // kartunya berubah jadi "Absen masuk dulu".
+      if (e is CheckInRequired) {
+        refreshMyDay(ref);
+        ref.invalidate(attendanceGateProvider);
+        return false;
+      }
       // Opname yang belum di-ACC mengunci kasir (revisi 19 Nov): dijelaskan
       // lewat dialog, bukan snackbar yang cepat hilang.
       if (e is! AuditPending) return false;
@@ -141,7 +176,10 @@ class ShiftPage extends ConsumerWidget {
     if (result != null && context.mounted) {
       await showDialog(
         context: context,
-        builder: (_) => _ShiftSummaryDialog(shift: result!),
+        builder: (_) => _ShiftSummaryDialog(
+          shift: result!,
+          showExpected: canSeeCashDifference(ref.read(authProvider).held),
+        ),
       );
     }
   }
@@ -353,7 +391,12 @@ class _ReadOnlyShiftBody extends StatelessWidget {
 
 class _NoShiftCard extends StatelessWidget {
   final VoidCallback onOpen;
-  const _NoShiftCard({required this.onOpen});
+
+  /// Belum absen masuk: tombol Buka Shift diganti ajakan absen (revisi owner
+  /// 21 Nov 2026).
+  final bool needsCheckIn;
+  final VoidCallback onCheckIn;
+  const _NoShiftCard({required this.onOpen, required this.needsCheckIn, required this.onCheckIn});
 
   @override
   Widget build(BuildContext context) {
@@ -375,18 +418,20 @@ class _NoShiftCard extends StatelessWidget {
           const Text('Belum Ada Shift Aktif',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppTheme.textPrimary)),
           const SizedBox(height: 8),
-          const Text(
-            'Buka shift terlebih dahulu sebelum mulai transaksi.',
+          Text(
+            needsCheckIn
+                ? 'Absen masuk dulu sebelum buka shift. Menu lain tetap bisa dipakai.'
+                : 'Buka shift terlebih dahulu sebelum mulai transaksi.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: AppTheme.textSecondary, height: 1.4),
+            style: const TextStyle(color: AppTheme.textSecondary, height: 1.4),
           ),
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: onOpen,
-              icon: const Icon(Icons.play_arrow_rounded),
-              label: const Text('Buka Shift', style: TextStyle(fontWeight: FontWeight.w800)),
+              onPressed: needsCheckIn ? onCheckIn : onOpen,
+              icon: Icon(needsCheckIn ? Icons.fingerprint : Icons.play_arrow_rounded),
+              label: Text(needsCheckIn ? 'Absen Masuk' : 'Buka Shift', style: const TextStyle(fontWeight: FontWeight.w800)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.brandBlue,
                 foregroundColor: Colors.white,
@@ -526,7 +571,11 @@ class _ActiveShiftCard extends StatelessWidget {
 /// Ringkasan saat shift ditutup (selisih kas + breakdown pembayaran).
 class _ShiftSummaryDialog extends StatelessWidget {
   final ShiftModel shift;
-  const _ShiftSummaryDialog({required this.shift});
+
+  /// Kas Seharusnya & Selisih hanya untuk leader ke atas dan finance (revisi
+  /// owner 21 Nov 2026, tutup shift buta).
+  final bool showExpected;
+  const _ShiftSummaryDialog({required this.shift, required this.showExpected});
 
   @override
   Widget build(BuildContext context) {
@@ -548,9 +597,9 @@ class _ShiftSummaryDialog extends StatelessWidget {
             _row('Pengeluaran', '- ${formatRupiah(shift.totalExpense)}'),
             if (shift.pendingExpense > 0) _pendingRow(shift.pendingExpense),
             const Divider(height: 24),
-            _row('Kas Seharusnya', formatRupiah(shift.expectedCashResolved)),
+            if (showExpected) _row('Kas Seharusnya', formatRupiah(shift.expectedCashResolved)),
             if (shift.closingCash != null) _row('Kas Akhir (Fisik)', formatRupiah(shift.closingCash!)),
-            if (shift.differenceResolved != null) ...[
+            if (showExpected && shift.differenceResolved != null) ...[
               const SizedBox(height: 4),
               Builder(builder: (_) {
                 final diff = shift.differenceResolved!;
