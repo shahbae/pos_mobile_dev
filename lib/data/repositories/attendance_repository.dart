@@ -52,21 +52,31 @@ class AttendanceRepository {
   /// [branchId] hanya dikirim untuk owner & supervisor — untuk role lain BE
   /// mengabaikannya dan selalu memakai cabang dari token
   /// (docs/api-finance-absensi-fe.md §2), jadi kirim `null` saja.
+  ///
+  /// [warehouseId]: absen di gudang lewat `/attendance/warehouse/check-in`.
+  /// Dipakai SPV yang jadwal hariannya di Jadwal Gudang (revisi owner 21 Nov
+  /// 2026); [branchId] diabaikan bila ini diisi.
   Future<AttendanceModel> checkIn({
     required String photoPath,
     int? branchId,
+    int? warehouseId,
     String? shift,
     required double latitude,
     required double longitude,
   }) async {
     final form = FormData.fromMap({
       'photo': await _photoPart(photoPath),
-      if (branchId != null) 'branch_id': branchId,
+      if (warehouseId != null) 'warehouse_id': warehouseId,
+      if (warehouseId == null && branchId != null) 'branch_id': branchId,
       if (shift != null) 'shift': shift,
       'latitude': latitude,
       'longitude': longitude,
     });
-    return _submit('/attendance/check-in', form, 'Gagal melakukan absen masuk');
+    return _submit(
+      warehouseId != null ? '/attendance/warehouse/check-in' : '/attendance/check-in',
+      form,
+      'Gagal melakukan absen masuk',
+    );
   }
 
   /// Check-out: branch_id diambil otomatis dari record check-in hari ini.

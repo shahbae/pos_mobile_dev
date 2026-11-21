@@ -44,6 +44,11 @@ final inspectionItemsProvider = FutureProvider.autoDispose<List<InspectionItem>>
   return ref.watch(kpiRepositoryProvider).inspectionItems();
 });
 
+/// Jadwal sidak hari ini: SPV hanya bisa sidak di outlet jadwalnya.
+final inspectionTodayProvider = FutureProvider.autoDispose<InspectionToday>((ref) {
+  return ref.watch(kpiRepositoryProvider).inspectionToday();
+});
+
 final inspectionsProvider = FutureProvider.autoDispose<List<Inspection>>((ref) {
   return ref.watch(kpiRepositoryProvider).inspections();
 });

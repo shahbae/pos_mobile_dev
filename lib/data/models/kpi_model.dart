@@ -868,6 +868,63 @@ class InspectionResult {
   );
 }
 
+/// Satu jadwal sidak SPV hari ini (`GET /inspections/today`, revisi owner 21
+/// Nov 2026): outlet yang disidak menurut Jadwal SPV Keliling.
+class InspectionPlan {
+  final int branchId;
+  final String branchName;
+  final String shiftName;
+  final String? startTime;
+  final String? endTime;
+
+  /// Sidak yang sudah dikirim SPV ini di outlet itu hari ini.
+  final int? inspectionId;
+
+  const InspectionPlan({
+    required this.branchId,
+    required this.branchName,
+    this.shiftName = '',
+    this.startTime,
+    this.endTime,
+    this.inspectionId,
+  });
+
+  bool get done => inspectionId != null;
+
+  String get hours => startTime != null && endTime != null
+      ? '${startTime!.replaceAll(':', '.')}–${endTime!.replaceAll(':', '.')}'
+      : '';
+
+  factory InspectionPlan.fromJson(Map<String, dynamic> j) => InspectionPlan(
+        branchId: _int(j['branch_id']),
+        branchName: _str(j['branch_name']) ?? '',
+        shiftName: _str(j['shift_name']) ?? '',
+        startTime: _str(j['start_time']),
+        endTime: _str(j['end_time']),
+        inspectionId: j['inspection_id'] == null ? null : _int(j['inspection_id']),
+      );
+}
+
+/// Jadwal sidak hari ini. [free] = owner, boleh sidak di outlet mana pun.
+/// [legacy] = server lama tanpa endpoint ini: app bersikap seperti dulu (bebas).
+class InspectionToday {
+  final bool free;
+  final bool legacy;
+  final List<InspectionPlan> items;
+
+  const InspectionToday({this.free = false, this.legacy = false, this.items = const []});
+
+  bool get unlocked => free || legacy;
+
+  factory InspectionToday.fromJson(Map<String, dynamic> j) => InspectionToday(
+        free: j['free'] == true,
+        items: [
+          for (final e in (j['items'] as List? ?? const []))
+            if (e is Map) InspectionPlan.fromJson(Map<String, dynamic>.from(e)),
+        ],
+      );
+}
+
 class Inspection {
   final int id;
   final int branchId;

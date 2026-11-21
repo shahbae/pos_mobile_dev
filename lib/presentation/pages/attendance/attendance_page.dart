@@ -193,7 +193,15 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     // Owner/supervisor wajib mengirim cabang. Kalau absennya menempel ke
     // jadwal di cabang tertentu, server memakai cabang jadwal itu.
     final int? branchId;
-    if (canChooseBranch) {
+    // SPV kerja harian di gudang (revisi owner 21 Nov 2026): kalau shift yang
+    // sedang atau akan diabsen ada di gudang, absen lewat jalur gudang tanpa
+    // memilih cabang.
+    final atWarehouse = canChooseBranch ? (current ?? day.nextShift) : null;
+    final int? warehouseId =
+        atWarehouse != null && atWarehouse.location.isWarehouse ? atWarehouse.location.id : null;
+    if (warehouseId != null) {
+      branchId = null;
+    } else if (canChooseBranch) {
       branchId = current != null && current.location.isBranch
           ? current.location.id
           : _selectedBranchId ?? auth.branchId;
@@ -233,6 +241,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       return ref.read(attendanceRepositoryProvider).checkIn(
             photoPath: photo.path,
             branchId: branchId,
+            warehouseId: warehouseId,
             // Shift hanya untuk absen tanpa jadwal.
             shift: current == null ? _selectedShift : null,
             latitude: pos.latitude,

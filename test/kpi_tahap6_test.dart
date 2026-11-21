@@ -79,6 +79,12 @@ class _Repo implements KpiRepository {
   @override
   Future<List<InspectionItem>> inspectionItems() async => items;
 
+  /// Bawaan: server lama tanpa jadwal sidak (bebas seperti dulu).
+  InspectionToday today = const InspectionToday(legacy: true);
+
+  @override
+  Future<InspectionToday> inspectionToday() async => today;
+
   @override
   Future<List<Inspection>> inspections({int? branchId, String? from, String? to, int limit = 50}) async =>
       inspectionRows;
@@ -796,6 +802,58 @@ void main() {
       expect(find.text('Koordinat outlet belum diatur.'), findsOneWidget);
       expect(tester.widget<ButtonStyleButton>(_button('Kirim sidak')).onPressed, isNull);
       expect(tester.takeException(), isNull);
+    });
+
+    // Revisi owner 21 Nov 2026: SPV hanya bisa sidak di outlet Jadwal SPV
+    // Keliling hari ini; tanpa jadwal tidak ada outlet yang bisa dipilih.
+    testWidgets('Form sidak SPV: outlet dikunci ke jadwal sidak hari ini', (tester) async {
+      final repo = _Repo()
+        ..items = const [InspectionItem(id: 1, group: 'L6.1A', name: 'Area depan')]
+        ..today = const InspectionToday(items: [
+          InspectionPlan(branchId: 12, branchName: 'JUNTIKEBON', shiftName: 'Shift 1', startTime: '07:00', endTime: '15:00'),
+        ]);
+      await _pump(tester, const InspectionFormPage(), repo, roles: const ['supervisor'], extra: [
+        branchListProvider.overrideWith((ref) async => const [
+              BranchModel(id: 8, name: 'JUNTIKEDOKAN'),
+              BranchModel(id: 12, name: 'JUNTIKEBON', latitude: -6.7, longitude: 108.5),
+            ]),
+      ]);
+      expect(tester.takeException(), isNull);
+      expect(find.byType(DropdownButtonFormField<int>), findsNothing);
+      expect(find.text('JUNTIKEBON · Shift 1 · 07.00–15.00'), findsOneWidget);
+      expect(find.textContaining('JUNTIKEDOKAN'), findsNothing);
+      expect(find.text('Outlet sidak dikunci sesuai Jadwal SPV Keliling hari ini.'), findsOneWidget);
+      // Satu jadwal langsung terpilih: langkah berikutnya meminta cek lokasi.
+      final chip = tester.widget<ChoiceChip>(find.byType(ChoiceChip).first);
+      expect(chip.selected, isTrue);
+      await tester.scrollUntilVisible(_button('Kirim sidak'), 300, scrollable: _vScroll);
+      expect(find.text('Cek lokasi dulu.'), findsOneWidget);
+    });
+
+    testWidgets('Form sidak SPV tanpa jadwal: pesan, tanpa pilihan outlet', (tester) async {
+      final repo = _Repo()
+        ..items = const [InspectionItem(id: 1, group: 'L6.1A', name: 'Area depan')]
+        ..today = const InspectionToday();
+      await _pump(tester, const InspectionFormPage(), repo, roles: const ['supervisor'], extra: [
+        branchListProvider.overrideWith((ref) async => const [BranchModel(id: 12, name: 'JUNTIKEBON')]),
+      ]);
+      expect(tester.takeException(), isNull);
+      expect(find.byType(DropdownButtonFormField<int>), findsNothing);
+      expect(find.textContaining('Tidak ada jadwal sidak hari ini. Jadwal sidak diisi finance'), findsOneWidget);
+      await tester.scrollUntilVisible(_button('Kirim sidak'), 300, scrollable: _vScroll);
+      expect(find.text('Tidak ada jadwal sidak hari ini.'), findsOneWidget);
+      expect(tester.widget<ButtonStyleButton>(_button('Kirim sidak')).onPressed, isNull);
+    });
+
+    testWidgets('Form sidak owner: bebas memilih outlet', (tester) async {
+      final repo = _Repo()
+        ..items = const [InspectionItem(id: 1, group: 'L6.1A', name: 'Area depan')]
+        ..today = const InspectionToday(free: true);
+      await _pump(tester, const InspectionFormPage(), repo, roles: const ['owner'], extra: [
+        branchListProvider.overrideWith((ref) async => const [BranchModel(id: 12, name: 'JUNTIKEBON')]),
+      ]);
+      expect(tester.takeException(), isNull);
+      expect(find.byType(DropdownButtonFormField<int>), findsOneWidget);
     });
 
     testWidgets('Hasil sidak: per kelompok, tidak dinilai ditandai', (tester) async {

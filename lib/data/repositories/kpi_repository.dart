@@ -296,6 +296,18 @@ class KpiRepository {
     }
   }
 
+  /// `GET /inspections/today` — jadwal sidak hari ini (revisi owner 21 Nov
+  /// 2026). Server lama (404) → bebas seperti dulu.
+  Future<InspectionToday> inspectionToday() async {
+    try {
+      final res = await api.dio.get('/inspections/today');
+      return InspectionToday.fromJson(_data(res));
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return const InspectionToday(legacy: true);
+      throw _error(e, 'Gagal memuat jadwal sidak');
+    }
+  }
+
   /// `GET /inspections/:id` — dengan hasil tiap butir.
   Future<Inspection> inspection(int id) async {
     try {
