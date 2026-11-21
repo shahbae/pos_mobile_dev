@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/data/models/product_model.dart';
 import 'package:pos_mobile/data/models/product_variant_model.dart';
+import 'package:pos_mobile/presentation/providers/duty_provider.dart';
+import 'package:pos_mobile/presentation/widgets/kitchen_queue_strip.dart';
 import 'package:pos_mobile/presentation/providers/checkout_pricing_provider.dart';
 import 'package:pos_mobile/presentation/providers/pos_catalog_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_pagination_provider.dart';
@@ -139,12 +141,16 @@ class _ProductTransactionPageState extends ConsumerState<ProductTransactionPage>
 
     final productState = ref.watch(productPaginationProvider);
     final cartState = ref.watch(productTransactionProvider);
+    // Pita monitoring kasir menggantikan judul (revisi owner 21 Nov 2026), untuk
+    // yang bertugas kasir di cabang aktif.
+    final showQueue = !widget.ownAllowance && ref.watch(showKitchenStripProvider);
 
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
       appBar: AppBar(
-        title: Text(widget.ownAllowance ? "Pesan Jatah" : "Pilih Produk"),
-        centerTitle: true,
+        title: showQueue ? const KitchenQueueStrip() : Text(widget.ownAllowance ? "Pesan Jatah" : "Pilih Produk"),
+        centerTitle: !showQueue,
+        titleSpacing: showQueue ? 0 : null,
       ),
       body: Column(
         children: [

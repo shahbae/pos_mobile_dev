@@ -81,3 +81,10 @@ final kitchenViewsProvider = Provider<Set<KitchenView>>((ref) {
   if (day == null) return KitchenView.values.toSet();
   return kitchenViewsForDuties(day.shiftsAtBranch(auth.branchId).map((s) => s.duty));
 });
+
+/// Pita monitoring kasir di kepala Pilih Produk (revisi owner 21 Nov 2026):
+/// untuk yang bertugas kasir di cabang aktif.
+final showKitchenStripProvider = Provider<bool>((ref) {
+  if (ref.watch(authProvider.select((s) => s.branchId)) == null) return false;
+  return ref.watch(kitchenViewsProvider).contains(KitchenView.cashier);
+});

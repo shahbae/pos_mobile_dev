@@ -24,12 +24,14 @@ class KitchenRepository {
   KitchenRepository(this.api);
 
   /// Snapshot pesanan aktif — INI sumber kebenaran layar, bukan stream.
-  Future<List<KitchenOrder>> listActive({int? branchId}) async {
+  /// [withSkipped]: ikut memuat pesanan Ditinggal (revisi 21 Nov) dalam
+  /// satu permintaan; pemanggil memisahkannya menurut status.
+  Future<List<KitchenOrder>> listActive({int? branchId, bool withSkipped = false}) async {
     try {
       final res = await api.dio.get(
         '/kds/orders',
         queryParameters: {
-          'status': kitchenActiveStatuses.join(','),
+          'status': [...kitchenActiveStatuses, if (withSkipped) kitchenStatusSkipped].join(','),
           if (branchId != null) 'branch_id': branchId,
         },
       );
