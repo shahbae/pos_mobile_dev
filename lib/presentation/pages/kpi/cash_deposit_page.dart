@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import 'package:pos_mobile/core/utils/currency_input_formatter.dart';
 import 'package:pos_mobile/data/models/kpi_model.dart';
 import 'package:pos_mobile/presentation/pages/kpi/kpi_widgets.dart';
 import 'package:pos_mobile/presentation/providers/kpi_provider.dart';
@@ -181,8 +180,13 @@ class _DepositCard extends StatelessWidget {
 }
 
 /// Form kirim setoran. Tanggal otomatis kemarin; tanggal yang lebih lama boleh
-/// untuk setoran tertinggal. [retry]: setoran yang ditolak, tanggal dan
-/// nominalnya diisikan lagi. [pickPhoto]: pengganti pemilih foto untuk tes.
+/// untuk setoran tertinggal. [retry]: setoran yang ditolak, tanggalnya
+/// diisikan lagi. [pickPhoto]: pengganti pemilih foto untuk tes.
+///
+/// Nominal tidak diketik (revisi owner 21 Nov 2026): dikunci dari laporan
+/// leader = Σ (kas fisik − modal awal) tiap shift + tombok tunai kasir yang
+/// kurang. Shift kurang yang kasirnya tidak menombok dimatikan sakelarnya;
+/// kekurangannya keluar dari setoran dan dipotong dari gaji.
 class CashDepositFormPage extends ConsumerStatefulWidget {
   final CashDeposit? retry;
   final Future<Uint8List?> Function(BuildContext context)? pickPhoto;
@@ -194,10 +198,9 @@ class CashDepositFormPage extends ConsumerStatefulWidget {
 
 class _CashDepositFormPageState extends ConsumerState<CashDepositFormPage> {
   late DateTime _date = _initialDate();
-  late final _amount = TextEditingController(
-    text: widget.retry == null ? '' : NumberFormat.decimalPattern('id_ID').format(widget.retry!.amount.round()),
-  );
   final _note = TextEditingController();
+  // Shift kurang yang kasirnya TIDAK menombok tunai.
+  final Set<int> _unpaid = {};
   final List<Uint8List> _photos = [];
   bool _busy = false;
 
@@ -220,13 +223,11 @@ class _CashDepositFormPageState extends ConsumerState<CashDepositFormPage> {
 
   @override
   void dispose() {
-    _amount.dispose();
     _note.dispose();
     super.dispose();
   }
 
-  int get _amountValue => int.tryParse(_amount.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
-  bool get _ready => _amountValue > 0 && _photos.isNotEmpty;
+  String get _dateKey => _ymd.format(_date);
 
   Future<void> _addPhoto() async {
     final pick = widget.pickPhoto ?? pickKpiPhotoAnySource;
@@ -243,17 +244,23 @@ class _CashDepositFormPageState extends ConsumerState<CashDepositFormPage> {
       lastDate: _yesterday(),
       helpText: 'Tanggal operasional',
     );
-    if (d != null && mounted) setState(() => _date = d);
+    if (d != null && mounted) {
+      setState(() {
+        _date = d;
+        _unpaid.clear();
+      });
+    }
   }
 
-  Future<void> _submit() async {
+  Future<void> _submit(DepositPreview preview) async {
     setState(() => _busy = true);
     try {
       final d = await ref.read(kpiRepositoryProvider).createCashDeposit(
-            operationalDate: _ymd.format(_date),
-            amount: _amountValue,
+            operationalDate: _dateKey,
+            amount: preview.nominalFor(_unpaid).round(),
             photos: _photos,
             note: _note.text.trim(),
+            unpaidShiftIds: _unpaid.toList()..sort(),
           );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -271,6 +278,10 @@ class _CashDepositFormPageState extends ConsumerState<CashDepositFormPage> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).padding.bottom;
+    final previewAsync = ref.watch(cashDepositPreviewProvider(_dateKey));
+    final preview = previewAsync.valueOrNull;
+    final nominal = preview?.nominalFor(_unpaid) ?? 0;
+    final ready = preview != null && preview.allClosed && nominal > 0 && _photos.isNotEmpty;
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
       appBar: AppBar(title: const Text('Kirim Setoran'), centerTitle: true),
@@ -294,12 +305,27 @@ class _CashDepositFormPageState extends ConsumerState<CashDepositFormPage> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  controller: _amount,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [CurrencyInputFormatter()],
-                  decoration: const InputDecoration(labelText: 'Nominal', prefixText: 'Rp '),
-                  onChanged: (_) => setState(() {}),
+                previewAsync.when(
+                  loading: () => const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                  error: (e, _) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('$e', style: const TextStyle(color: AppTheme.danger)),
+                      TextButton(
+                        onPressed: () => ref.invalidate(cashDepositPreviewProvider(_dateKey)),
+                        child: const Text('Coba lagi'),
+                      ),
+                    ],
+                  ),
+                  data: (p) => _LockedNominal(
+                    preview: p,
+                    unpaid: _unpaid,
+                    enabled: !_busy,
+                    onTombok: (shiftId, paid) => setState(() => paid ? _unpaid.remove(shiftId) : _unpaid.add(shiftId)),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -350,13 +376,94 @@ class _CashDepositFormPageState extends ConsumerState<CashDepositFormPage> {
           ),
           const SizedBox(height: 20),
           ElevatedButton(
-            onPressed: _busy || !_ready ? null : _submit,
+            onPressed: _busy || !ready ? null : () => _submit(preview),
             child: _busy
                 ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                 : const Text('Kirim setoran'),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Nominal terkunci + rincian shift (revisi owner 21 Nov 2026). Shift kurang
+/// punya sakelar "Sudah ditombok tunai"; shift lebih hanya diberi tahu bahwa
+/// kelebihannya ikut disetor dan dipotong dari gaji kasirnya.
+class _LockedNominal extends StatelessWidget {
+  final DepositPreview preview;
+  final Set<int> unpaid;
+  final bool enabled;
+  final void Function(int shiftId, bool paid) onTombok;
+  const _LockedNominal({required this.preview, required this.unpaid, required this.enabled, required this.onTombok});
+
+  @override
+  Widget build(BuildContext context) {
+    if (preview.shifts.isEmpty) {
+      return const Text('Belum ada shift di tanggal ini, jadi belum ada yang perlu disetor.',
+          style: TextStyle(color: AppTheme.textSecondary));
+    }
+    final nominal = preview.nominalFor(unpaid);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppTheme.brandBlue.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.lock_outline, size: 16, color: AppTheme.textSecondary),
+                  SizedBox(width: 6),
+                  Flexible(
+                    child: Text('Nominal (terkunci otomatis dari laporan leader)',
+                        style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(formatRupiah(nominal),
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: AppTheme.brandBlue)),
+              const SizedBox(height: 4),
+              Text(
+                'Kas fisik laci ${formatRupiah(preview.physicalCollected)} − modal ditinggal ${formatRupiah(preview.modalKept)}'
+                '${preview.minus > 0 ? ' + tombok' : ''}. QRIS ${formatRupiah(preview.qris)} masuk sendiri.',
+                style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+              ),
+            ],
+          ),
+        ),
+        if (!preview.allClosed) ...[
+          const SizedBox(height: 8),
+          const Text('Masih ada shift yang belum ditutup di tanggal ini. Tutup shift dulu, baru setoran bisa dikirim.',
+              style: TextStyle(color: AppTheme.danger, fontWeight: FontWeight.w600)),
+        ],
+        for (final s in preview.shifts)
+          if (s.isShort)
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: !unpaid.contains(s.shiftId),
+              onChanged: enabled ? (v) => onTombok(s.shiftId, v) : null,
+              title: Text('${s.shiftName.isEmpty ? 'Shift' : s.shiftName} · ${s.cashierName}: kurang ${formatRupiah(-s.difference)}'),
+              subtitle: Text(unpaid.contains(s.shiftId)
+                  ? 'Tidak ditombok: keluar dari setoran, dipotong dari gaji ${s.cashierName}.'
+                  : 'Sudah ditombok tunai ke amplop setoran.'),
+            )
+          else if (s.isOver)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                '${s.shiftName.isEmpty ? 'Shift' : s.shiftName} · ${s.cashierName}: lebih ${formatRupiah(s.difference)} — '
+                'ikut disetor, dan dipotong 100% dari gaji ${s.cashierName}.',
+                style: const TextStyle(fontSize: 13, color: Color(0xFFB45309)),
+              ),
+            ),
+      ],
     );
   }
 }

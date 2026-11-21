@@ -91,9 +91,10 @@ class LeaderDailyTotals {
   final num net;
   final num totalCash; // Σ cash_sales (tanpa modal awal)
   final num totalQris; // Σ qris_sales
-  final num openingCash; // Σ modal awal
-  final num closingCash; // Σ kas fisik — hanya shift yang sudah ditutup
-  final num expectedCash; // Σ kas seharusnya
+  // Revisi owner 21 Nov 2026: modal laci berputar, dihitung sekali per hari.
+  final num openingCash; // modal awal shift pertama tiap hari
+  final num closingCash; // kas fisik terkumpul — hanya shift yang sudah ditutup
+  final num expectedCash; // kas seharusnya, modal dihitung sekali
   final num difference; // Σ selisih — hanya shift yang sudah ditutup
 
   const LeaderDailyTotals({
@@ -139,6 +140,41 @@ class LeaderDailyTotals {
     expectedCash: 0,
     difference: 0,
   );
+}
+
+/// Rincian setoran (revisi owner 21 Nov 2026): pemisahan modal laci yang
+/// ditinggal dan setoran tunai wajib transfer.
+class LeaderDailyDeposit {
+  final bool allClosed;
+  final num physicalCollected; // kas fisik laci terkumpul
+  final num modalKept; // modal laci disimpan untuk besok
+  final num plus; // Σ selisih lebih: disetor + potong gaji
+  final num minus; // Σ selisih kurang: wajib tombok tunai
+  final num required; // setoran tunai wajib transfer (dengan tombok)
+  final num qris;
+
+  const LeaderDailyDeposit({
+    this.allClosed = false,
+    this.physicalCollected = 0,
+    this.modalKept = 0,
+    this.plus = 0,
+    this.minus = 0,
+    this.required = 0,
+    this.qris = 0,
+  });
+
+  /// Server lama tidak mengirim bagian ini.
+  bool get isEmpty => physicalCollected == 0 && required == 0 && modalKept == 0;
+
+  factory LeaderDailyDeposit.fromJson(Map<String, dynamic> json) => LeaderDailyDeposit(
+        allClosed: json['all_closed'] == true,
+        physicalCollected: _num(json['physical_collected']),
+        modalKept: _num(json['modal_kept']),
+        plus: _num(json['plus']),
+        minus: _num(json['minus']),
+        required: _num(json['required']),
+        qris: _num(json['qris']),
+      );
 }
 
 /// Satu titik grafik trafik penjualan per jam, ditandai shift-nya.
@@ -200,6 +236,7 @@ class LeaderDailyReport {
   final String branchName;
   final List<LeaderShiftReport> shifts;
   final LeaderDailyTotals totals;
+  final LeaderDailyDeposit deposit;
   final LeaderReportChart chart;
 
   const LeaderDailyReport({
@@ -211,6 +248,7 @@ class LeaderDailyReport {
     required this.shifts,
     required this.totals,
     required this.chart,
+    this.deposit = const LeaderDailyDeposit(),
   });
 
   /// Rentang mencakup lebih dari satu hari? Kalau ya, tanggal tiap shift
@@ -235,6 +273,9 @@ class LeaderDailyReport {
       totals: rawTotals is Map
           ? LeaderDailyTotals.fromJson(rawTotals.cast<String, dynamic>())
           : LeaderDailyTotals.empty,
+      deposit: json['deposit'] is Map
+          ? LeaderDailyDeposit.fromJson((json['deposit'] as Map).cast<String, dynamic>())
+          : const LeaderDailyDeposit(),
       chart: rawChart is Map
           ? LeaderReportChart.fromJson(rawChart.cast<String, dynamic>())
           : LeaderReportChart.empty,

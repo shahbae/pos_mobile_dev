@@ -31,6 +31,11 @@ final myDeepCleanProvider = FutureProvider.autoDispose<DeepCleanSet>((ref) {
   return ref.watch(kpiRepositoryProvider).myDeepClean();
 });
 
+/// Pratinjau Kirim Setoran per tanggal operasional (YYYY-MM-DD).
+final cashDepositPreviewProvider = FutureProvider.autoDispose.family<DepositPreview, String>((ref, date) {
+  return ref.watch(kpiRepositoryProvider).cashDepositPreview(date);
+});
+
 final cashDepositsProvider = FutureProvider.autoDispose<List<CashDeposit>>((ref) {
   return ref.watch(kpiRepositoryProvider).cashDeposits();
 });

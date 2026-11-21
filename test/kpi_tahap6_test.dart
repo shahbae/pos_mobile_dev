@@ -68,6 +68,15 @@ class _Repo implements KpiRepository {
   Future<List<CashDeposit>> cashDeposits({int page = 1, int limit = 50}) async => deposits;
 
   @override
+  Future<DepositPreview> cashDepositPreview(String operationalDate) async => DepositPreview.fromJson({
+        'operational_date': operationalDate,
+        'shifts': [
+          {'shift_id': 1, 'shift_name': 'Shift 1', 'cashier_name': 'Diyan', 'opening_cash': 400000, 'closing_cash': 1300000},
+        ],
+        'deposit': {'all_closed': true, 'physical_collected': 1300000, 'modal_kept': 400000, 'required': 900000},
+      });
+
+  @override
   Future<List<InspectionItem>> inspectionItems() async => items;
 
   @override
@@ -723,7 +732,7 @@ void main() {
       _expectTappable(tester, 'Kirim ulang');
     });
 
-    testWidgets('Kirim setoran: tombol mati tanpa nominal & bukti; kirim ulang mengisi nominal', (tester) async {
+    testWidgets('Kirim setoran: tombol mati tanpa bukti; nominal terkunci dari laporan leader', (tester) async {
       await _pump(tester, const CashDepositFormPage(), _Repo(), roles: const ['leader']);
       expect(tester.takeException(), isNull);
       expect(tester.widget<ButtonStyleButton>(_button('Kirim setoran')).onPressed, isNull);
@@ -736,7 +745,8 @@ void main() {
         'status': 'rejected',
       });
       await _pump(tester, CashDepositFormPage(key: UniqueKey(), retry: retry), _Repo(), roles: const ['leader']);
-      expect(find.text('900.000'), findsOneWidget);
+      await tester.pump();
+      expect(find.text('Rp 900.000'), findsOneWidget);
     });
 
     testWidgets('Form sidak: langkah tampil, Kirim mati, "Sisanya sesuai" menjawab sekelompok', (tester) async {

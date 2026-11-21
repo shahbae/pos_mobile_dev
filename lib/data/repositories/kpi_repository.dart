@@ -204,17 +204,31 @@ class KpiRepository {
 
   /// `POST /cash-deposits` (multipart, isian `photo` berulang). Jam transfer =
   /// jam unggah di server.
+  /// Nominal setoran terkunci + potret shift (revisi owner 21 Nov 2026).
+  Future<DepositPreview> cashDepositPreview(String operationalDate) async {
+    try {
+      final res = await api.dio.get('/cash-deposits/preview', queryParameters: {'operational_date': operationalDate});
+      return DepositPreview.fromJson(_data(res));
+    } on DioException catch (e) {
+      throw _error(e, 'Gagal memuat nominal setoran');
+    }
+  }
+
+  /// [amount] tetap dikirim untuk server lama; server baru menghitung sendiri
+  /// dari potret shift. [unpaidShiftIds]: shift kurang yang tidak ditombok.
   Future<CashDeposit> createCashDeposit({
     required String operationalDate,
     required int amount,
     required List<Uint8List> photos,
     String note = '',
+    List<int> unpaidShiftIds = const [],
   }) async {
     try {
       final form = FormData.fromMap({
         'operational_date': operationalDate,
         'amount': '$amount',
         'note': note,
+        if (unpaidShiftIds.isNotEmpty) 'unpaid_shift_ids': unpaidShiftIds.join(','),
       });
       for (var i = 0; i < photos.length; i++) {
         form.files.add(MapEntry(

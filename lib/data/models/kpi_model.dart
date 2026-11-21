@@ -639,6 +639,10 @@ class CashDeposit {
   final String? rejectedByName;
   final String rejectReason;
 
+  /// Potret shift saat dikirim (revisi owner 21 Nov 2026); kosong untuk
+  /// setoran lama.
+  final List<DepositShift> shifts;
+
   const CashDeposit({
     required this.id,
     required this.operationalDate,
@@ -656,6 +660,7 @@ class CashDeposit {
     this.verifiedAt,
     this.rejectedByName,
     this.rejectReason = '',
+    this.shifts = const [],
   });
 
   factory CashDeposit.fromJson(Map<String, dynamic> j) => CashDeposit(
@@ -675,7 +680,113 @@ class CashDeposit {
     verifiedAt: _time(j['verified_at']),
     rejectedByName: _str(j['rejected_by_name']),
     rejectReason: '${j['reject_reason'] ?? ''}',
+    shifts: [
+      for (final s in (j['shifts'] as List? ?? const []))
+        if (s is Map) DepositShift.fromJson(s.cast<String, dynamic>()),
+    ],
   );
+}
+
+/// Satu shift di potret setoran (revisi owner 21 Nov 2026).
+class DepositShift {
+  final int shiftId;
+  final String shiftName;
+  final String cashierName;
+  final double openingCash;
+  final double closingCash;
+  final double expectedCash;
+
+  /// Kas fisik − kas seharusnya: positif lebih, negatif kurang.
+  final double difference;
+  final bool tombokPaid;
+
+  /// Yang dipotong dari gaji kasir bila setoran Verified.
+  final double payrollDeduction;
+
+  const DepositShift({
+    required this.shiftId,
+    this.shiftName = '',
+    this.cashierName = '',
+    this.openingCash = 0,
+    this.closingCash = 0,
+    this.expectedCash = 0,
+    this.difference = 0,
+    this.tombokPaid = false,
+    this.payrollDeduction = 0,
+  });
+
+  bool get isShort => difference < 0;
+  bool get isOver => difference > 0;
+
+  factory DepositShift.fromJson(Map<String, dynamic> j) => DepositShift(
+    shiftId: _int(j['shift_id']),
+    shiftName: '${j['shift_name'] ?? ''}',
+    cashierName: '${j['cashier_name'] ?? ''}',
+    openingCash: _num(j['opening_cash']),
+    closingCash: _num(j['closing_cash']),
+    expectedCash: _num(j['expected_cash']),
+    difference: _num(j['difference']),
+    tombokPaid: _bool(j['tombok_paid']),
+    payrollDeduction: _num(j['payroll_deduction']),
+  );
+}
+
+/// Pratinjau Kirim Setoran (`GET /cash-deposits/preview`): nominal terkunci
+/// dan shift tanggal itu (revisi owner 21 Nov 2026).
+class DepositPreview {
+  final String operationalDate;
+  final List<DepositShift> shifts;
+
+  /// Semua shift tanggal itu sudah ditutup — syarat mengirim.
+  final bool allClosed;
+  final double physicalCollected;
+  final double modalKept;
+  final double plus;
+  final double minus;
+
+  /// Setoran bila semua kekurangan ditombok tunai.
+  final double required;
+  final double qris;
+
+  const DepositPreview({
+    required this.operationalDate,
+    this.shifts = const [],
+    this.allClosed = false,
+    this.physicalCollected = 0,
+    this.modalKept = 0,
+    this.plus = 0,
+    this.minus = 0,
+    this.required = 0,
+    this.qris = 0,
+  });
+
+  /// Nominal yang dikunci bila shift [unpaid] tidak ditombok: kekurangannya
+  /// keluar dari setoran (dipotong dari gaji kasirnya).
+  double nominalFor(Set<int> unpaid) {
+    var n = required;
+    for (final s in shifts) {
+      if (s.isShort && unpaid.contains(s.shiftId)) n += s.difference;
+    }
+    return n;
+  }
+
+  factory DepositPreview.fromJson(Map<String, dynamic> j) {
+    final d = j['deposit'] is Map ? (j['deposit'] as Map).cast<String, dynamic>() : const <String, dynamic>{};
+    return DepositPreview(
+      operationalDate: _ymd(j['operational_date']),
+      shifts: [
+        for (final s in (j['shifts'] as List? ?? const []))
+          if (s is Map) DepositShift.fromJson(s.cast<String, dynamic>()),
+      ],
+      allClosed: _bool(d['all_closed']),
+      physicalCollected: _num(d['physical_collected']),
+      modalKept: _num(d['modal_kept']),
+      plus: _num(d['plus']),
+      minus: _num(d['minus']),
+      required: _num(d['required']),
+      qris: _num(d['qris']),
+    );
+  }
 }
 
 /// Server lama hanya mengirim `photo_url`.
