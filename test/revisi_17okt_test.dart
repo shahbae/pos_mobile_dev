@@ -8,14 +8,11 @@ import 'package:intl/intl.dart';
 
 import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/data/models/attendance_model.dart';
-import 'package:pos_mobile/data/models/my_day_model.dart';
 import 'package:pos_mobile/data/models/shift_model.dart';
 import 'package:pos_mobile/data/models/shipment_model.dart';
 import 'package:pos_mobile/presentation/pages/shipments/shipment_detail_page.dart';
 import 'package:pos_mobile/presentation/providers/attendance_gate_provider.dart';
-import 'package:pos_mobile/presentation/providers/attendance_provider.dart';
 import 'package:pos_mobile/presentation/providers/shipment_provider.dart';
-import 'package:pos_mobile/presentation/widgets/attendance_gate.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
 AttendanceModel _att({bool checkedOut = false}) => AttendanceModel.fromJson({
@@ -27,18 +24,6 @@ AttendanceModel _att({bool checkedOut = false}) => AttendanceModel.fromJson({
       'check_in_at': '2026-10-17T07:00:00+07:00',
       if (checkedOut) 'check_out_at': '2026-10-17T15:05:00+07:00',
     });
-
-Widget _gate(AttendanceGateStatus s) => ProviderScope(
-      overrides: [
-        attendanceGateProvider.overrideWith((ref) async => s),
-        // Halaman Absensi membaca hari saya sendiri (Tahap 1 SDM).
-        myDayProvider.overrideWith((ref) async => MyDay.fromToday(null)),
-      ],
-      child: MaterialApp(
-        theme: AppTheme.lightTheme,
-        home: const AttendanceGate(child: Scaffold(body: Text('DASHBOARD'))),
-      ),
-    );
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -53,13 +38,14 @@ void main() {
     Intl.defaultLocale = 'id_ID';
   });
 
-  group('siapa yang terkunci', () {
-    // Hotfix 19 Okt 2026: hanya kasir. Kasus multi-role di
-    // test/absen_hanya_kasir_test.dart.
-    test('hanya kasir', () {
-      expect(requiresAttendanceGate({'kasir'}), isTrue);
+  group('status absen (kunci Buka Shift)', () {
+    // Revisi owner 21 Nov 2026: kunci layar absensi dibuang; status ini kini
+    // hanya mengunci Buka Shift. Aturan siapa yang terkunci di
+    // test/revisi_21nov_g1_test.dart.
+    test('karyawan murni', () {
+      expect(isCrewOnly({'kasir'}), isTrue);
       for (final r in ['owner', 'supervisor', 'leader', 'produksi', 'finance']) {
-        expect(requiresAttendanceGate({r}), isFalse, reason: r);
+        expect(isCrewOnly({r}), isFalse, reason: r);
       }
     });
 
@@ -77,31 +63,6 @@ void main() {
       await AttendanceGateCache.write('2026-10-17', AttendanceGateStatus.checkedOut);
       expect(await AttendanceGateCache.read('2026-10-17'), AttendanceGateStatus.checkedOut);
       expect(await AttendanceGateCache.read('2026-10-18'), isNull);
-    });
-  });
-
-  group('layar penguncian', () {
-    testWidgets('belum absen masuk → halaman Absensi dengan penjelasan', (tester) async {
-      await tester.pumpWidget(_gate(AttendanceGateStatus.notCheckedIn));
-      await tester.pumpAndSettle();
-      expect(find.text('DASHBOARD'), findsNothing);
-      expect(find.textContaining('Absen masuk dulu untuk mulai bekerja'), findsOneWidget);
-      expect(find.text('Absen Masuk'), findsWidgets);
-    });
-
-    testWidgets('sudah absen pulang → terkunci, ada jalan muat ulang', (tester) async {
-      await tester.pumpWidget(_gate(AttendanceGateStatus.checkedOut));
-      await tester.pumpAndSettle();
-      expect(find.text('DASHBOARD'), findsNothing);
-      expect(find.text('Kamu sudah absen pulang hari ini'), findsOneWidget);
-      expect(find.text('Muat ulang'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('sedang bekerja → aplikasi terbuka', (tester) async {
-      await tester.pumpWidget(_gate(AttendanceGateStatus.working));
-      await tester.pumpAndSettle();
-      expect(find.text('DASHBOARD'), findsOneWidget);
     });
   });
 

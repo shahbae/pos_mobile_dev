@@ -134,15 +134,18 @@ class _EntryRow extends StatelessWidget {
         ],
       );
     }
+    final sidak = entry.inspectionBranch;
     final title = [
-      code.name,
+      if (sidak != null) 'Sidak' else code.name,
+      if (sidak != null) code.name,
       if (entry.duty != null) ScheduleDuty.label(entry.duty),
       if (code.hours.isNotEmpty) code.hours,
     ].join(' · ');
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Icon(Icons.work_outline, size: 20, color: AppTheme.brandGreenDark),
+        Icon(sidak != null ? Icons.fact_check_outlined : Icons.work_outline,
+            size: 20, color: sidak != null ? const Color(0xFF6D28D9) : AppTheme.brandGreenDark),
         const SizedBox(width: 10),
         Expanded(
           child: Column(
@@ -151,7 +154,10 @@ class _EntryRow extends StatelessWidget {
               Text(title,
                   style: const TextStyle(
                       fontSize: 14, fontWeight: FontWeight.w800, color: AppTheme.textPrimary)),
-              if (entry.location.name.isNotEmpty)
+              if (sidak != null)
+                Text('Outlet ${sidak.name}',
+                    style: const TextStyle(fontSize: 12.5, color: AppTheme.textSecondary))
+              else if (entry.location.name.isNotEmpty)
                 Text(entry.location.name,
                     style: const TextStyle(fontSize: 12.5, color: AppTheme.textSecondary)),
             ],

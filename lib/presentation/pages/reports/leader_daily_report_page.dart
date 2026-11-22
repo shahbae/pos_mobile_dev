@@ -88,6 +88,10 @@ class LeaderDailyReportPage extends ConsumerWidget {
                     ],
                     const SizedBox(height: 4),
                     _TotalsCard(totals: data.totals, multiDay: multiDay),
+                    if (!multiDay && !data.deposit.isEmpty) ...[
+                      const SizedBox(height: 12),
+                      _DepositCard(deposit: data.deposit),
+                    ],
                   ],
                 );
               },
@@ -446,6 +450,73 @@ class _StatusChip extends StatelessWidget {
   }
 }
 
+/// Rincian setoran (revisi owner 21 Nov 2026): modal laci ditinggal di
+/// outlet, sisanya ditransfer; kas lebih ikut disetor dan dipotong gaji, kas
+/// kurang ditombok tunai.
+class _DepositCard extends StatelessWidget {
+  final LeaderDailyDeposit deposit;
+  const _DepositCard({required this.deposit});
+
+  @override
+  Widget build(BuildContext context) {
+    final d = deposit;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.borderLight),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("Rincian Setoran",
+              style: TextStyle(fontWeight: FontWeight.w900, color: AppTheme.textPrimary, fontSize: 15)),
+          const SizedBox(height: 10),
+          _row("Total Kas Fisik Laci", formatRupiah(d.physicalCollected)),
+          _row("Modal Laci Disimpan (untuk besok)", "- ${formatRupiah(d.modalKept)}"),
+          _row("Tombok Tunai Kasir", d.minus > 0 ? "+ ${formatRupiah(d.minus)}" : formatRupiah(0),
+              color: d.minus > 0 ? AppTheme.danger : null),
+          const Divider(height: 18, color: AppTheme.borderLight),
+          _row("Setoran Tunai Wajib Transfer", formatRupiah(d.required), bold: true),
+          _row("Total QRIS (masuk otomatis)", formatRupiah(d.qris)),
+          const SizedBox(height: 8),
+          Text(
+            !d.allClosed
+                ? "Masih ada shift yang belum ditutup; angka setoran belum final."
+                : d.plus > 0
+                    ? "Kas lebih ${formatRupiah(d.plus)} ikut disetor dan dipotong 100% dari gaji kasirnya."
+                    : d.minus > 0
+                        ? "Kas kurang ${formatRupiah(d.minus)} wajib ditombok tunai hari ini; yang tidak ditombok dipotong dari gaji."
+                        : "Tidak ada selisih kas.",
+            style: TextStyle(
+              fontSize: 12,
+              color: !d.allClosed || d.plus > 0 || d.minus > 0 ? const Color(0xFFB45309) : AppTheme.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _row(String label, String value, {Color? color, bool bold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary))),
+          const SizedBox(width: 8),
+          Text(value,
+              style: TextStyle(
+                  fontSize: bold ? 15 : 13,
+                  fontWeight: bold ? FontWeight.w900 : FontWeight.w700,
+                  color: color ?? (bold ? AppTheme.brandBlue : AppTheme.textPrimary))),
+        ],
+      ),
+    );
+  }
+}
+
 class _TotalsCard extends StatelessWidget {
   final LeaderDailyTotals totals;
   final bool multiDay;
@@ -495,10 +566,11 @@ class _TotalsCard extends StatelessWidget {
             multiDay ? "Total QRIS" : "Total QRIS (2 Shift)",
             formatRupiah(totals.totalQris),
           ),
-          _line("Total Modal Awal", formatRupiah(totals.openingCash)),
+          // Modal berputar: dihitung sekali per hari (revisi 21 Nov).
+          _line(multiDay ? "Modal Awal Laci" : "Modal Awal Laci (berputar)", formatRupiah(totals.openingCash)),
           _line("Total Kas Seharusnya", formatRupiah(totals.expectedCash)),
           // BE hanya menjumlahkan shift yang sudah ditutup untuk dua baris ini.
-          _line("Total Kas Fisik", formatRupiah(totals.closingCash)),
+          _line("Total Kas Fisik Laci Terkumpul", formatRupiah(totals.closingCash)),
           _line(
             "Total Selisih",
             _formatDifference(totals.difference),

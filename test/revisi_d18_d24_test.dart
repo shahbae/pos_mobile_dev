@@ -33,6 +33,18 @@ class _DepositRepo implements KpiRepository {
   String? date;
   int? amount;
   List<Uint8List>? photos;
+  List<int>? unpaid;
+
+  /// Contoh owner, kasus kurang: Shift 2 Patimah kurang Rp20.000.
+  @override
+  Future<DepositPreview> cashDepositPreview(String operationalDate) async => DepositPreview.fromJson({
+        'operational_date': operationalDate,
+        'shifts': [
+          {'shift_id': 1, 'shift_name': 'Shift 1', 'cashier_name': 'Diyan', 'opening_cash': 400000, 'closing_cash': 832000, 'difference': 0},
+          {'shift_id': 2, 'shift_name': 'Shift 2', 'cashier_name': 'Patimah', 'opening_cash': 400000, 'closing_cash': 1390000, 'difference': -20000},
+        ],
+        'deposit': {'all_closed': true, 'physical_collected': 1822000, 'modal_kept': 400000, 'minus': 20000, 'required': 1442000, 'qris': 130000},
+      });
 
   @override
   Future<CashDeposit> createCashDeposit({
@@ -40,10 +52,12 @@ class _DepositRepo implements KpiRepository {
     required int amount,
     required List<Uint8List> photos,
     String note = '',
+    List<int> unpaidShiftIds = const [],
   }) async {
     date = operationalDate;
     this.amount = amount;
     this.photos = photos;
+    unpaid = unpaidShiftIds;
     return CashDeposit.fromJson({'id': 1, 'operational_date': operationalDate, 'amount': amount, 'status': 'pending'});
   }
 
@@ -220,13 +234,16 @@ void main() {
     testWidgets('form: tanggal otomatis kemarin, boleh banyak foto sampai 5, terkirim semua', (tester) async {
       final repo = _DepositRepo();
       await _pumpForm(tester, repo);
+      await tester.pump();
       expect(tester.takeException(), isNull);
       final yesterday = DateUtils.addDaysToDate(DateUtils.dateOnly(DateTime.now()), -1);
       expect(find.text(DateFormat('EEE d MMM yyyy', 'id_ID').format(yesterday)), findsOneWidget);
       expect(find.textContaining(RegExp('batas kirim', caseSensitive: false)), findsOneWidget);
+      // Revisi 21 Nov: nominal terkunci dari laporan leader, tidak diketik.
+      expect(find.widgetWithText(TextField, 'Nominal'), findsNothing);
+      expect(find.text('Rp 1.442.000'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('Kirim setoran'), 300, scrollable: find.byType(Scrollable).first);
       expect(tester.widget<ButtonStyleButton>(find.widgetWithText(ElevatedButton, 'Kirim setoran')).onPressed, isNull);
-
-      await tester.enterText(find.widgetWithText(TextField, 'Nominal'), '1250000');
       for (var i = 0; i < kDepositMaxPhotos; i++) {
         final add = find.textContaining('Tambah bukti');
         await tester.ensureVisible(add);
@@ -247,8 +264,30 @@ void main() {
       await tester.tap(send);
       await tester.pump();
       expect(repo.date, _ymd(yesterday));
-      expect(repo.amount, 1250000);
+      expect(repo.amount, 1442000);
+      expect(repo.unpaid, isEmpty);
       expect(repo.photos, hasLength(4));
+    });
+
+    testWidgets('revisi 21 Nov: tombok tidak dibayar → keluar dari nominal, dikirim sebagai unpaid', (tester) async {
+      final repo = _DepositRepo();
+      await _pumpForm(tester, repo);
+      await tester.pump();
+      expect(find.textContaining('Patimah: kurang'), findsOneWidget);
+      final toggle = find.byType(Switch);
+      await tester.ensureVisible(toggle);
+      await tester.tap(toggle);
+      await tester.pump();
+      expect(find.text('Rp 1.422.000'), findsOneWidget);
+      expect(find.textContaining('dipotong dari gaji Patimah'), findsOneWidget);
+      await tester.scrollUntilVisible(find.textContaining('Tambah bukti'), 300, scrollable: find.byType(Scrollable).first);
+      await tester.tap(find.textContaining('Tambah bukti'));
+      await tester.pump();
+      await tester.scrollUntilVisible(find.text('Kirim setoran'), 300, scrollable: find.byType(Scrollable).first);
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Kirim setoran'));
+      await tester.pump();
+      expect(repo.amount, 1422000);
+      expect(repo.unpaid, [2]);
     });
 
     testWidgets('kirim ulang tanggal lama: tanggalnya tetap, ditandai lewat batas', (tester) async {
@@ -258,7 +297,6 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text(DateFormat('EEE d MMM yyyy', 'id_ID').format(old)), findsOneWidget);
       expect(find.textContaining('setoran tercatat terlambat'), findsOneWidget);
-      expect(find.text('900.000'), findsOneWidget);
     });
 
     testWidgets('kirim ulang bertanggal hari ini (data lama): pindah ke kemarin', (tester) async {

@@ -7,6 +7,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:pos_mobile/data/models/kitchen_order_model.dart';
 import 'package:pos_mobile/presentation/providers/duty_provider.dart';
 import 'package:pos_mobile/presentation/providers/kitchen_provider.dart';
+import 'package:pos_mobile/presentation/widgets/kitchen_queue_strip.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
 /// Layar monitoring pesanan (Kitchen Display System).
@@ -109,7 +110,9 @@ class _KitchenDisplayPageState extends ConsumerState<KitchenDisplayPage>
                     views: views,
                     view: view,
                     orders: state.orders,
+                    skippedCount: state.skipped.length,
                     onPick: (v) => setState(() => _picked = v),
+                    onShowSkipped: () => showSkippedOrdersSheet(context, ref),
                   ),
                   Expanded(
                     child: orders.isEmpty
@@ -139,6 +142,10 @@ class _KitchenDisplayPageState extends ConsumerState<KitchenDisplayPage>
                                       order: order,
                                       canAdvance: kitchenViewCanAdvance(view, order.status),
                                       onAdvance: () => notifier.advance(order),
+                                      // Ditinggal: tugas kasir (revisi 21 Nov).
+                                      onSkip: view == KitchenView.cashier
+                                          ? () => notifier.setStatus(order, kitchenStatusSkipped)
+                                          : null,
                                     );
                                   },
                                 );
@@ -161,11 +168,17 @@ class _ViewHeader extends StatelessWidget {
   final List<KitchenOrder> orders;
   final ValueChanged<KitchenView> onPick;
 
+  /// Pesanan Ditinggal (revisi 21 Nov); dibuka dari tampilan kasir.
+  final int skippedCount;
+  final VoidCallback onShowSkipped;
+
   const _ViewHeader({
     required this.views,
     required this.view,
     required this.orders,
     required this.onPick,
+    required this.skippedCount,
+    required this.onShowSkipped,
   });
 
   @override
@@ -198,6 +211,16 @@ class _ViewHeader extends StatelessWidget {
               style: const TextStyle(fontWeight: FontWeight.w900, color: AppTheme.textPrimary),
             ),
           Text(hint, style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+          if (view == KitchenView.cashier)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: onShowSkipped,
+                icon: const Icon(Icons.person_off_outlined, size: 18),
+                label: Text('Pesanan ditinggal ($skippedCount)'),
+                style: TextButton.styleFrom(padding: EdgeInsets.zero, foregroundColor: AppTheme.danger),
+              ),
+            ),
         ],
       ),
     );
@@ -242,7 +265,10 @@ class _OrderCard extends StatelessWidget {
   final bool canAdvance;
   final VoidCallback onAdvance;
 
-  const _OrderCard({required this.order, required this.canAdvance, required this.onAdvance});
+  /// Tandai Ditinggal (pelanggan pergi). Null = tidak ditawarkan.
+  final VoidCallback? onSkip;
+
+  const _OrderCard({required this.order, required this.canAdvance, required this.onAdvance, this.onSkip});
 
   @override
   Widget build(BuildContext context) {
@@ -352,6 +378,14 @@ class _OrderCard extends StatelessWidget {
                   ),
                 ],
                 const Spacer(),
+                if (onSkip != null) ...[
+                  TextButton(
+                    onPressed: onSkip,
+                    style: TextButton.styleFrom(foregroundColor: AppTheme.danger, padding: const EdgeInsets.symmetric(horizontal: 8)),
+                    child: const Text('Ditinggal', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
+                  ),
+                  const SizedBox(width: 4),
+                ],
                 if (actionLabel != null)
                   FilledButton(
                     onPressed: onAdvance,

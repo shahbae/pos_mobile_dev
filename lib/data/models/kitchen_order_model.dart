@@ -19,6 +19,11 @@ const kitchenStatusServed = 'served';
 /// seperti `served`: kartunya dihapus.
 const kitchenStatusClosed = 'closed';
 
+/// "Ditinggal" (revisi owner 21 Nov 2026): pelanggan pergi sebelum mengambil.
+/// Kasir mengeluarkannya dari pita antrean; pesanan tetap bisa dibuka dan
+/// Diserahkan bila pelanggannya kembali. Tutup shift menyapunya ke `closed`.
+const kitchenStatusSkipped = 'skipped';
+
 /// Status yang membuat kartu hilang dari layar.
 bool isKitchenTerminalStatus(String status) =>
     status == kitchenStatusServed || status == kitchenStatusClosed;
@@ -107,6 +112,8 @@ String kitchenStatusLabel(String status) {
       return 'Selesai';
     case kitchenStatusClosed:
       return 'Tutup Shift';
+    case kitchenStatusSkipped:
+      return 'Ditinggal';
     default:
       return status;
   }
@@ -268,6 +275,13 @@ class KitchenOrder {
   /// untuk pesanan lama yang belum punya nomor antrean.
   String get displayNumber {
     if (queueNo > 0) return 'Antrian $queueNo';
+    return invoiceNo.isNotEmpty ? invoiceNo : '#$id';
+  }
+
+  /// Label pendek untuk pita antrean: "#12", atau nomor invoice terakhir.
+  String get shortNumber {
+    if (queueNo > 0) return '#$queueNo';
+    if (invoiceNo.length > 4) return '#${invoiceNo.substring(invoiceNo.length - 4)}';
     return invoiceNo.isNotEmpty ? invoiceNo : '#$id';
   }
 }

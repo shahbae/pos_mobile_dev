@@ -72,12 +72,12 @@ class HomeTab extends ConsumerWidget {
 }
 
 /// Merangkai section dashboard sesuai data yang dikirim BE untuk role aktif.
-class _DashboardSections extends StatelessWidget {
+class _DashboardSections extends ConsumerWidget {
   final DashboardData data;
   const _DashboardSections({required this.data});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final sections = <Widget>[];
     final op = data.operational;
 
@@ -121,7 +121,10 @@ class _DashboardSections extends StatelessWidget {
 
     if (data.currentShift != null) {
       sections.add(const SizedBox(height: 12));
-      sections.add(_ShiftCard(shift: data.currentShift!));
+      sections.add(_ShiftCard(
+        shift: data.currentShift!,
+        showExpected: canSeeCashDifference(ref.watch(authProvider).held),
+      ));
     }
 
     // Rekap per-shift (kasir & leader). Hanya untuk rentang 1 hari (from == to);
@@ -1037,7 +1040,11 @@ class _HeadCell extends StatelessWidget {
 
 class _ShiftCard extends StatelessWidget {
   final DashboardShift shift;
-  const _ShiftCard({required this.shift});
+
+  /// Kas Seharusnya & Selisih hanya untuk leader ke atas dan finance (revisi
+  /// owner 21 Nov 2026, tutup shift buta).
+  final bool showExpected;
+  const _ShiftCard({required this.shift, required this.showExpected});
 
   @override
   Widget build(BuildContext context) {
@@ -1053,7 +1060,7 @@ class _ShiftCard extends StatelessWidget {
           _lineRow('Modal Awal', formatRupiah(shift.openingCash)),
           _lineRow('Cash', formatRupiah(shift.cashSales)),
           _lineRow('Pengeluaran', '- ${formatRupiah(shift.totalExpense)}'),
-          _lineRow('Kas Seharusnya', formatRupiah(shift.expectedCash)),
+          if (showExpected) _lineRow('Kas Seharusnya', formatRupiah(shift.expectedCash)),
           // Metode cash sudah ditampilkan sebagai baris "Cash" di atas
           // (cash_sales), jadi di rincian pembayaran cukup metode non-cash.
           ...shift.payments
@@ -1064,7 +1071,7 @@ class _ShiftCard extends StatelessWidget {
           // Terisi hanya setelah shift ditutup.
           if (shift.closingCash != null)
             _lineRow('Kas Akhir', formatRupiah(shift.closingCash!)),
-          if (shift.difference != null)
+          if (showExpected && shift.difference != null)
             _lineRow(
               'Selisih',
               formatRupiah(shift.difference!),

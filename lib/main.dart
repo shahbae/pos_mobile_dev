@@ -14,7 +14,6 @@ import 'package:pos_mobile/presentation/pages/attendance/attendance_page.dart';
 import 'package:pos_mobile/presentation/pages/dashboard/dashboard_page.dart';
 import 'package:pos_mobile/presentation/pages/login_page.dart';
 import 'package:pos_mobile/presentation/widgets/app_update_gate.dart';
-import 'package:pos_mobile/presentation/widgets/attendance_gate.dart';
 import 'package:pos_mobile/presentation/widgets/push_binder.dart';
 import 'package:pos_mobile/presentation/widgets/reminder_gate.dart';
 
@@ -55,9 +54,9 @@ class MyApp extends ConsumerWidget {
         // orang yang sedang berusaha masuk tidak perlu disodori dialog lebih
         // dulu. Pembaruan WAJIB muncul di keduanya (lihat AppUpdateGate).
         //
-        // Kasir terkunci mengikuti absensinya: belum absen masuk / sudah absen
-        // pulang → hanya Absensi. Owner, supervisor & leader bebas (hotfix
-        // 19 Okt 2026), dibaca dari seluruh role yang dipegang.
+        // Tidak ada lagi kunci layar absensi (revisi owner 21 Nov 2026): semua
+        // akun langsung masuk. Yang dikunci hanya Buka Shift sampai orangnya
+        // absen masuk (ShiftPage + POST /shifts).
         //
         // PushBinder mendaftarkan token notifikasi dan membuka tujuan
         // ketukannya; ia hidup selama sesi ini saja.
@@ -66,9 +65,7 @@ class MyApp extends ConsumerWidget {
             offerOptional: true,
             child: isAttendanceOnly(auth.role)
                 ? const AttendancePage(isRoot: true)
-                : requiresAttendanceGate(auth.held)
-                    ? const AttendanceGate(child: DashboardPage())
-                    : const DashboardPage(),
+                : const DashboardPage(),
           ),
         );
         break;

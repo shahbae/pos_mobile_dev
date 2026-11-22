@@ -54,6 +54,7 @@ class ScheduleLocation {
 
   bool get isBranch => type == 'branch';
   bool get isRoving => type == 'roving';
+  bool get isWarehouse => type == 'warehouse';
 
   factory ScheduleLocation.fromJson(Map<String, dynamic> json) {
     return ScheduleLocation(
@@ -72,13 +73,21 @@ class MyScheduleEntry {
   final ShiftCodeInfo shiftCode;
   final ScheduleLocation location;
 
+  /// Outlet yang disidak bila baris ini jadwal sidak SPV keliling (revisi owner
+  /// 21 Nov 2026). Baris sidak bukan jadwal kerja: absen SPV dari jadwal
+  /// gudangnya.
+  final ScheduleLocation? inspectionBranch;
+
   const MyScheduleEntry({
     required this.id,
     required this.date,
     required this.shiftCode,
     required this.location,
     this.duty,
+    this.inspectionBranch,
   });
+
+  bool get isSidak => inspectionBranch != null;
 
   factory MyScheduleEntry.fromJson(Map<String, dynamic> json) {
     return MyScheduleEntry(
@@ -87,6 +96,8 @@ class MyScheduleEntry {
       duty: json['duty']?.toString(),
       shiftCode: ShiftCodeInfo.fromJson(_map(json['shift_code'])),
       location: ScheduleLocation.fromJson(_map(json['location'])),
+      inspectionBranch:
+          json['inspection_branch'] is Map ? ScheduleLocation.fromJson(_map(json['inspection_branch'])) : null,
     );
   }
 }

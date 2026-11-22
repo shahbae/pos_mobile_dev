@@ -41,6 +41,9 @@ class _Answer {
 /// Sidak satu outlet: pilih outlet → cek lokasi → foto SPV → checklist →
 /// kirim. Jarak dicek di HP dulu supaya SPV tidak mengisi checklist lalu
 /// ditolak; server tetap menghitung ulang dari koordinat cabang.
+///
+/// Sejak revisi owner 21 Nov 2026 SPV hanya bisa sidak di outlet Jadwal SPV
+/// Keliling hari ini (server menolak yang lain); owner bebas.
 class InspectionFormPage extends ConsumerStatefulWidget {
   const InspectionFormPage({super.key});
 
@@ -59,6 +62,7 @@ class _InspectionFormPageState extends ConsumerState<InspectionFormPage> {
   final _notes = TextEditingController();
   final _followUp = TextEditingController();
   List<Inspection>? _thisWeek;
+  bool _autoPicked = false;
   bool _busy = false;
   String _busyText = '';
 
@@ -225,14 +229,83 @@ class _InspectionFormPageState extends ConsumerState<InspectionFormPage> {
     ));
   }
 
+  /// Kalimat di atas tombol Kirim: langkah pertama yang belum beres.
+  String _readyHint(InspectionToday? today, List<InspectionItem> items, int answered, int incomplete) {
+    if (today != null && !today.unlocked && today.items.isEmpty) return 'Tidak ada jadwal sidak hari ini.';
+    if (_branch == null) return 'Pilih outlet dulu.';
+    if (!_branch!.hasGeo) return 'Koordinat outlet belum diatur.';
+    if (_pos == null) return 'Cek lokasi dulu.';
+    if (!_inRadius) return 'Lokasi di luar radius outlet.';
+    if (_selfie == null) return 'Ambil foto SPV dulu.';
+    if (answered < items.length) return 'Jawab semua butir checklist (${items.length - answered} lagi).';
+    if (incomplete > 0) return '$incomplete butir belum lengkap: isi alasan dan foto di tiap butir.';
+    return 'Isi tindak lanjut dulu.';
+  }
+
+  /// Langkah 1 untuk SPV: outlet dari jadwal sidak hari ini, tanpa pilihan lain.
+  Widget _scheduledOutlets(InspectionToday today, List<BranchModel> branches) {
+    if (today.items.isEmpty) {
+      return const SdmNote(
+        icon: Icons.event_busy_outlined,
+        warning: true,
+        text: 'Tidak ada jadwal sidak hari ini. Jadwal sidak diisi finance di Jadwal SPV Keliling (web) '
+            'dan disetujui owner.',
+      );
+    }
+    // Satu jadwal: langsung dipilih.
+    if (!_autoPicked && today.items.length == 1 && _branch == null) {
+      _autoPicked = true;
+      final b = branches.where((x) => x.id == today.items.first.branchId).firstOrNull;
+      if (b != null) WidgetsBinding.instance.addPostFrameCallback((_) => _selectBranch(b));
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final p in today.items)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: ChoiceChip(
+              selected: _branch?.id == p.branchId,
+              onSelected: _busy
+                  ? null
+                  : (_) {
+                      final b = branches.where((x) => x.id == p.branchId).firstOrNull;
+                      if (b == null) {
+                        _snack('Outlet ${p.branchName} tidak ada di daftar cabang. Muat ulang aplikasi.', error: true);
+                        return;
+                      }
+                      _selectBranch(b);
+                    },
+              label: Text(
+                [
+                  p.branchName,
+                  if (p.shiftName.isNotEmpty) p.shiftName,
+                  if (p.hours.isNotEmpty) p.hours,
+                  if (p.done) 'sudah dikirim',
+                ].join(' · '),
+              ),
+            ),
+          ),
+        const Text('Outlet sidak dikunci sesuai Jadwal SPV Keliling hari ini.',
+            style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final branches = ref.watch(branchListProvider);
+    final todayAsync = ref.watch(inspectionTodayProvider);
+    final today = todayAsync.valueOrNull;
     final itemsAsync = ref.watch(inspectionItemsProvider);
     final bottomInset = MediaQuery.of(context).padding.bottom;
     final items = itemsAsync.valueOrNull ?? const <InspectionItem>[];
     final answered = items.where((i) => _answers[i.id]?.passed != null).length;
-    final geoOk = _branch != null && _branch!.hasGeo && _pos != null && _inRadius;
+    // SPV: outlet harus salah satu jadwal sidak hari ini. Owner bebas.
+    final allowed = _branch != null &&
+        today != null &&
+        (today.unlocked || today.items.any((p) => p.branchId == _branch!.id));
+    final geoOk = allowed && _branch!.hasGeo && _pos != null && _inRadius;
     final incomplete = _incomplete(items);
     final ready = geoOk &&
         _selfie != null &&
@@ -259,18 +332,35 @@ class _InspectionFormPageState extends ConsumerState<InspectionFormPage> {
                     error: (e, _) => Text('$e', style: const TextStyle(color: AppTheme.danger)),
                     data: (list) {
                       final active = [for (final b in list) if (b.status != 'disabled') b];
+                      if (todayAsync.isLoading && today == null) return const LinearProgressIndicator();
+                      if (todayAsync.hasError && today == null) {
+                        return Row(
+                          children: [
+                            Expanded(
+                              child: Text('${todayAsync.error}', style: const TextStyle(color: AppTheme.danger)),
+                            ),
+                            TextButton(
+                              onPressed: () => ref.invalidate(inspectionTodayProvider),
+                              child: const Text('Coba lagi'),
+                            ),
+                          ],
+                        );
+                      }
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          DropdownButtonFormField<int>(
-                            initialValue: _branch?.id,
-                            isExpanded: true,
-                            decoration: const InputDecoration(labelText: 'Pilih outlet'),
-                            items: [for (final b in active) DropdownMenuItem(value: b.id, child: Text(b.name))],
-                            onChanged: _busy
-                                ? null
-                                : (id) => _selectBranch(active.where((b) => b.id == id).firstOrNull),
-                          ),
+                          if (today != null && !today.unlocked)
+                            _scheduledOutlets(today, active)
+                          else
+                            DropdownButtonFormField<int>(
+                              initialValue: _branch?.id,
+                              isExpanded: true,
+                              decoration: const InputDecoration(labelText: 'Pilih outlet'),
+                              items: [for (final b in active) DropdownMenuItem(value: b.id, child: Text(b.name))],
+                              onChanged: _busy
+                                  ? null
+                                  : (id) => _selectBranch(active.where((b) => b.id == id).firstOrNull),
+                            ),
                           if (_branch != null && !_branch!.hasGeo) ...[
                             const SizedBox(height: 8),
                             const SdmNote(
@@ -397,21 +487,7 @@ class _InspectionFormPageState extends ConsumerState<InspectionFormPage> {
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Text(
-                      _branch == null
-                          ? 'Pilih outlet dulu.'
-                          : !_branch!.hasGeo
-                              ? 'Koordinat outlet belum diatur.'
-                              : _pos == null
-                                  ? 'Cek lokasi dulu.'
-                                  : !_inRadius
-                                      ? 'Lokasi di luar radius outlet.'
-                                      : _selfie == null
-                                          ? 'Ambil foto SPV dulu.'
-                                          : answered < items.length
-                                              ? 'Jawab semua butir checklist (${items.length - answered} lagi).'
-                                              : incomplete > 0
-                                                  ? '$incomplete butir belum lengkap: isi alasan dan foto di tiap butir.'
-                                                  : 'Isi tindak lanjut dulu.',
+                      _readyHint(today, items, answered, incomplete),
                       textAlign: TextAlign.center,
                       style: const TextStyle(color: AppTheme.textSecondary),
                     ),

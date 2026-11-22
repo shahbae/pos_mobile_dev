@@ -253,8 +253,8 @@ class SettingTab extends ConsumerWidget {
         if (canMarkOvertime(auth.held)) ...[
           const SizedBox(height: 16),
           _SettingMenuCard(
-            title: "Yang Bertugas & Lembur",
-            subtitle: "Siapa yang sudah absen masuk, tandai lembur",
+            title: "Yang Bertugas",
+            subtitle: "Siapa yang sudah absen masuk dan yang sedang izin keluar",
             icon: Icons.groups_outlined,
             color: accent,
             onTap: () => Navigator.push(

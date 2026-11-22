@@ -18,6 +18,9 @@ const _eventOrderVoided = 'order.voided';
 class KitchenDisplayState {
   final List<KitchenOrder> orders;
 
+  /// Pesanan Ditinggal (revisi owner 21 Nov 2026), terpisah dari [orders].
+  final List<KitchenOrder> skipped;
+
   /// Stream SSE sedang tersambung.
   final bool connected;
 
@@ -29,6 +32,7 @@ class KitchenDisplayState {
 
   const KitchenDisplayState({
     this.orders = const [],
+    this.skipped = const [],
     this.connected = false,
     this.loading = true,
     this.error,
@@ -36,6 +40,7 @@ class KitchenDisplayState {
 
   KitchenDisplayState copyWith({
     List<KitchenOrder>? orders,
+    List<KitchenOrder>? skipped,
     bool? connected,
     bool? loading,
     String? error,
@@ -43,6 +48,7 @@ class KitchenDisplayState {
   }) {
     return KitchenDisplayState(
       orders: orders ?? this.orders,
+      skipped: skipped ?? this.skipped,
       connected: connected ?? this.connected,
       loading: loading ?? this.loading,
       error: clearError ? null : (error ?? this.error),
@@ -93,10 +99,11 @@ class KitchenDisplayNotifier extends StateNotifier<KitchenDisplayState> {
 
   Future<void> _loadSnapshot() async {
     try {
-      final orders = await _repo.listActive(branchId: _branchId);
+      final orders = await _repo.listActive(branchId: _branchId, withSkipped: true);
       if (_disposed) return;
       state = state.copyWith(
-        orders: _sorted(orders),
+        orders: _sorted([for (final o in orders) if (o.status != kitchenStatusSkipped) o]),
+        skipped: _sorted([for (final o in orders) if (o.status == kitchenStatusSkipped) o]),
         loading: false,
         clearError: true,
       );
@@ -121,27 +128,32 @@ class KitchenDisplayNotifier extends StateNotifier<KitchenDisplayState> {
     }
 
     final next = [...state.orders];
+    final skipped = [...state.skipped];
     switch (event.name) {
       case _eventOrderPaid:
         _upsert(next, order);
         break;
       case _eventOrderStatusChanged:
         // `closed` datang saat kasir menutup shift (penyapuan sistem) —
-        // perlakukan sama seperti `served`: kartunya hilang.
-        if (isKitchenTerminalStatus(order.status)) {
-          next.removeWhere((o) => o.id == order.id);
-        } else {
-          _upsert(next, order);
+        // perlakukan sama seperti `served`: kartunya hilang. `skipped`
+        // (Ditinggal) pindah ke daftar terpisah.
+        next.removeWhere((o) => o.id == order.id);
+        skipped.removeWhere((o) => o.id == order.id);
+        if (order.status == kitchenStatusSkipped) {
+          skipped.add(order);
+        } else if (!isKitchenTerminalStatus(order.status)) {
+          next.add(order);
         }
         break;
       case _eventOrderVoided:
         next.removeWhere((o) => o.id == order.id);
+        skipped.removeWhere((o) => o.id == order.id);
         break;
       default:
         return; // event tak dikenal — abaikan, snapshot tetap benar
     }
 
-    state = state.copyWith(orders: _sorted(next));
+    state = state.copyWith(orders: _sorted(next), skipped: _sorted(skipped));
   }
 
   /// Pindahkan pesanan ke status berikutnya. Optimistic: layar berubah dulu,
@@ -157,21 +169,22 @@ class KitchenDisplayNotifier extends StateNotifier<KitchenDisplayState> {
     if (status == kitchenStatusClosed) return;
 
     final before = state.orders;
+    final beforeSkipped = state.skipped;
 
-    final optimistic = [...before];
-    if (status == kitchenStatusServed) {
-      optimistic.removeWhere((o) => o.id == order.id);
-    } else {
-      final i = optimistic.indexWhere((o) => o.id == order.id);
-      if (i >= 0) optimistic[i] = optimistic[i].copyWith(status: status);
+    final optimistic = [for (final o in before) if (o.id != order.id) o];
+    final skipped = [for (final o in beforeSkipped) if (o.id != order.id) o];
+    if (status == kitchenStatusSkipped) {
+      skipped.add(order.copyWith(status: status));
+    } else if (status != kitchenStatusServed) {
+      optimistic.add(order.copyWith(status: status));
     }
-    state = state.copyWith(orders: _sorted(optimistic), clearError: true);
+    state = state.copyWith(orders: _sorted(optimistic), skipped: _sorted(skipped), clearError: true);
 
     try {
       await _repo.updateStatus(order.id, status);
     } catch (e) {
       if (_disposed) return;
-      state = state.copyWith(orders: before, error: e.toString());
+      state = state.copyWith(orders: before, skipped: beforeSkipped, error: e.toString());
     }
   }
 

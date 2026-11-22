@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import 'package:pos_mobile/core/auth/role_access.dart';
+import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/shift_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/utils/currency.dart';
@@ -13,6 +15,9 @@ class ShiftListPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final listAsync = ref.watch(shiftListProvider);
     final dateFmt = DateFormat('dd MMM yyyy, HH:mm');
+    // Tutup shift buta (revisi owner 21 Nov 2026): kasir tidak melihat Kas
+    // Seharusnya dan Selisih.
+    final showExpected = canSeeCashDifference(ref.watch(authProvider).held);
 
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
@@ -74,10 +79,10 @@ class ShiftListPage extends ConsumerWidget {
                       const Divider(height: 18),
                       _row('Penjualan', formatRupiah(s.totalSales)),
                       if (s.totalExpense > 0) _row('Pengeluaran', '- ${formatRupiah(s.totalExpense)}'),
-                      if (!isOpen) _row('Kas Seharusnya', formatRupiah(s.expectedCashResolved)),
+                      if (!isOpen && showExpected) _row('Kas Seharusnya', formatRupiah(s.expectedCashResolved)),
                       if (!isOpen && s.closingCash != null)
                         _row('Kas Akhir', formatRupiah(s.closingCash!)),
-                      if (!isOpen && s.differenceResolved != null)
+                      if (!isOpen && showExpected && s.differenceResolved != null)
                         _selisihRow(s.differenceResolved!),
                     ],
                   ),
@@ -109,7 +114,9 @@ class ShiftListPage extends ConsumerWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: AppTheme.textSecondary)),
+          // Label boleh turun baris di HP sempit; nominal tidak terpotong.
+          Flexible(child: Text(label, style: const TextStyle(color: AppTheme.textSecondary))),
+          const SizedBox(width: 8),
           Text(value, style: TextStyle(fontWeight: FontWeight.w800, color: color ?? AppTheme.textPrimary)),
         ],
       ),

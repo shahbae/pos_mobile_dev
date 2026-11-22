@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
+import 'package:pos_mobile/presentation/pages/attendance/overtime_page.dart';
 import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/core/utils/location_helper.dart';
 import 'package:pos_mobile/data/models/attendance_model.dart';
@@ -193,7 +194,15 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     // Owner/supervisor wajib mengirim cabang. Kalau absennya menempel ke
     // jadwal di cabang tertentu, server memakai cabang jadwal itu.
     final int? branchId;
-    if (canChooseBranch) {
+    // SPV kerja harian di gudang (revisi owner 21 Nov 2026): kalau shift yang
+    // sedang atau akan diabsen ada di gudang, absen lewat jalur gudang tanpa
+    // memilih cabang.
+    final atWarehouse = canChooseBranch ? (current ?? day.nextShift) : null;
+    final int? warehouseId =
+        atWarehouse != null && atWarehouse.location.isWarehouse ? atWarehouse.location.id : null;
+    if (warehouseId != null) {
+      branchId = null;
+    } else if (canChooseBranch) {
       branchId = current != null && current.location.isBranch
           ? current.location.id
           : _selectedBranchId ?? auth.branchId;
@@ -203,7 +212,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       }
     } else {
       if (auth.branchId == null) {
-        _snack(requiresAttendanceGate(auth.held) ? kNoScheduleTodayMsg : kNoBranchAssignedMsg,
+        _snack(isCrewOnly(auth.held) ? kNoScheduleTodayMsg : kNoBranchAssignedMsg,
             error: true);
         return;
       }
@@ -233,6 +242,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       return ref.read(attendanceRepositoryProvider).checkIn(
             photoPath: photo.path,
             branchId: branchId,
+            warehouseId: warehouseId,
             // Shift hanya untuk absen tanpa jadwal.
             shift: current == null ? _selectedShift : null,
             latitude: pos.latitude,
@@ -296,18 +306,10 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       return;
     }
 
-    final gated = requiresAttendanceGate(ref.read(authProvider).held);
-    final next = day.hasNextShift;
     final yakin = await confirmAction(
       context,
       title: 'Absen pulang sekarang?',
-      message: !gated
-          ? 'Jam pulang dicatat saat ini juga dan hanya bisa diubah oleh owner.'
-          : next
-              ? 'Jam pulang dicatat saat ini juga. Aplikasi terbuka lagi setelah '
-                  'kamu absen masuk shift berikutnya.'
-              : 'Jam pulang dicatat saat ini juga. Sesudah itu aplikasi terkunci '
-                  'sampai besok.',
+      message: 'Jam pulang dicatat saat ini juga dan hanya bisa diubah oleh owner.',
       confirmLabel: 'Ya, absen pulang',
     );
     if (!yakin || !mounted) return;
@@ -326,13 +328,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
             latitude: pos.latitude,
             longitude: pos.longitude,
           );
-    }, successMsg: 'Absen pulang berhasil.', afterSuccess: (_) async {
-      // Dibuka dari menu: kembali ke layar paling bawah, yang kini sudah
-      // berganti jadi layar terkunci (atau Absensi, bila masih ada shift).
-      if (gated && !widget.isRoot && mounted) {
-        Navigator.of(context).popUntil((r) => r.isFirst);
-      }
-    });
+    }, successMsg: 'Absen pulang berhasil.');
   }
 
   Future<void> _startLeaveOut(List<OnDutyModel> colleagues) async {
@@ -399,7 +395,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       if (att != null) {
         await afterSuccess?.call(att);
         if (!mounted) return;
-        // Penguncian aplikasi dan tugas hari ini ikut membaca ulang.
+        // Kunci Buka Shift dan tugas hari ini ikut membaca ulang.
         refreshMyDay(ref);
         ref.invalidate(attendanceTodayProvider);
         ref.invalidate(attendanceGateProvider);
@@ -487,7 +483,7 @@ class _Content extends ConsumerWidget {
       if (noBranch) ...[
         _InfoBanner(
           icon: Icons.event_busy_outlined,
-          text: requiresAttendanceGate(auth.held) ? kNoScheduleTodayMsg : kNoBranchAssignedMsg,
+          text: isCrewOnly(auth.held) ? kNoScheduleTodayMsg : kNoBranchAssignedMsg,
           warning: true,
         ),
         const SizedBox(height: 8),
@@ -511,6 +507,8 @@ class _Content extends ConsumerWidget {
         _AttendanceCard(att: a),
         const SizedBox(height: 12),
       ],
+      // Lembur terjadwal (revisi owner 21 Nov 2026): masuk ulang & pulang lembur.
+      const OvertimeEntryCard(),
     ];
 
     if (open != null) {

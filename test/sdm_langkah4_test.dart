@@ -256,9 +256,9 @@ void main() {
     });
 
     test('karyawan ikut terkunci; leader yang juga karyawan tidak', () {
-      expect(requiresAttendanceGate({'karyawan'}), isTrue);
-      expect(requiresAttendanceGate({'karyawan', 'leader'}), isFalse);
-      expect(requiresAttendanceGate({'kasir'}), isTrue);
+      expect(isCrewOnly({'karyawan'}), isTrue);
+      expect(isCrewOnly({'karyawan', 'leader'}), isFalse);
+      expect(isCrewOnly({'kasir'}), isTrue);
     });
   });
 
@@ -486,7 +486,7 @@ void main() {
       expect(find.text('Libur'), findsOneWidget);
     });
 
-    testWidgets('Yang Bertugas: leader menandai lembur', (tester) async {
+    testWidgets('Yang Bertugas: daftar tanpa tombol tandai lembur (revisi 21 Nov)', (tester) async {
       await tester.pumpWidget(host(const OnDutyPage(), extra: [
         onDutyProvider.overrideWith((ref, _) async => const [
               OnDutyModel(attendanceId: 40, userId: 6, userName: 'Citra', lateMinutes: 5, shiftName: 'Shift 1', duty: 'cashier'),
@@ -497,8 +497,10 @@ void main() {
       expect(find.text('Citra'), findsOneWidget);
       expect(find.text('Telat 5 menit'), findsOneWidget);
       expect(find.text('Sedang izin keluar'), findsOneWidget);
-      expect(find.text('Tandai lembur'), findsOneWidget);
-      expect(find.text('Cabut lembur'), findsOneWidget);
+      // Tanda lembur manual dicabut: lembur dijadwalkan dan diabsen sendiri.
+      expect(find.text('Tandai lembur'), findsNothing);
+      expect(find.text('Cabut lembur'), findsNothing);
+      expect(find.text('Lembur'), findsOneWidget); // tanda lama tetap terbaca
     });
 
     testWidgets('Yang Bertugas: SPV tanpa cabang aktif diminta memilih cabang', (tester) async {

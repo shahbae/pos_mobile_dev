@@ -31,6 +31,15 @@ class AuditPending implements Exception {
   String toString() => message;
 }
 
+/// Server menolak buka shift karena pembukanya belum absen masuk (revisi
+/// owner 21 Nov 2026 — 403 check_in_required).
+class CheckInRequired implements Exception {
+  final String message;
+  CheckInRequired(this.message);
+  @override
+  String toString() => message;
+}
+
 class ShiftRepository {
   final ApiService api;
   ShiftRepository(this.api);
@@ -57,6 +66,9 @@ class ShiftRepository {
       return ShiftModel.fromJson(res.data as Map<String, dynamic>);
     } on DioException catch (e) {
       final data = e.response?.data;
+      if (data is Map && data['code'] == 'check_in_required') {
+        throw CheckInRequired('${data['message'] ?? 'Absen masuk dulu sebelum buka shift.'}');
+      }
       if (data is Map && data['code'] == 'audit_pending') {
         final detail = data['data'];
         throw AuditPending(

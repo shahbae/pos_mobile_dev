@@ -13,6 +13,7 @@ import 'package:pos_mobile/data/repositories/pos_catalog_repository.dart';
 import 'package:pos_mobile/data/repositories/product_transaction_repository.dart';
 import 'package:pos_mobile/presentation/pages/product_transactions/checkout_page.dart';
 import 'package:pos_mobile/presentation/pages/product_transactions/product_transaction_page.dart';
+import 'package:pos_mobile/presentation/providers/duty_provider.dart';
 import 'package:pos_mobile/presentation/providers/pos_catalog_provider.dart';
 import 'package:pos_mobile/presentation/providers/product_transaction_provider.dart';
 
@@ -62,6 +63,8 @@ ProviderContainer _container({_Repo? repo, _Store? store}) {
     catalogStoreProvider.overrideWithValue(store ?? _Store()),
     activeBranchIdProvider.overrideWithValue(7),
     productTransactionRepositoryProvider.overrideWithValue(_NoSales()),
+    // Pita monitoring kasir (revisi 21 Nov) diuji di revisi_21nov_g4_test.
+    showKitchenStripProvider.overrideWithValue(false),
   ]);
 }
 
