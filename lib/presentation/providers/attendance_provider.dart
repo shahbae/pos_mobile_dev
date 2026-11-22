@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/data/models/attendance_model.dart';
 import 'package:pos_mobile/data/models/leave_out_model.dart';
 import 'package:pos_mobile/data/models/my_day_model.dart';
+import 'package:pos_mobile/data/models/overtime_model.dart';
 import 'package:pos_mobile/data/models/profile_model.dart';
 import 'package:pos_mobile/data/models/schedule_model.dart';
 import 'package:pos_mobile/data/repositories/attendance_repository.dart';
@@ -56,6 +57,11 @@ final scheduleRepositoryProvider = Provider<ScheduleRepository>((ref) {
 /// Jadwal saya: awal bulan ini sampai akhir bulan depan (bawaan server).
 final mySchedulesProvider = FutureProvider.autoDispose<List<MyScheduleEntry>>((ref) {
   return ref.watch(scheduleRepositoryProvider).getMine();
+});
+
+/// Lembur terjadwal saya (Absen Lembur, revisi owner 21 Nov 2026).
+final myOvertimesProvider = FutureProvider.autoDispose<List<ScheduledOvertime>>((ref) {
+  return ref.watch(attendanceRepositoryProvider).myOvertimes();
 });
 
 final profileRepositoryProvider = Provider<ProfileRepository>((ref) {

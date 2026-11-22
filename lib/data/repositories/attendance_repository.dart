@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import '../models/attendance_model.dart';
 import '../models/leave_out_model.dart';
 import '../models/my_day_model.dart';
+import '../models/overtime_model.dart';
 import '../services/api_services.dart';
 
 /// Pesan untuk `403 no branch assigned` — user belum ditugaskan ke cabang.
@@ -111,14 +112,62 @@ class AttendanceRepository {
     }
   }
 
-  /// Tandai lembur (leader outletnya, SPV, owner). Satu kali per absen.
-  Future<AttendanceModel> markOvertime(int attendanceId) =>
-      _attendanceCall(() => api.dio.post('/attendance/$attendanceId/overtime'),
-          'Gagal menandai lembur');
+  /// Lembur terjadwal saya (revisi owner 21 Nov 2026): kemarin yang belum
+  /// selesai, hari ini, dan seminggu ke depan. Server lama (404) → kosong.
+  /// Tanda lembur manual dicabut: lembur kini diatur di sel jadwal.
+  Future<List<ScheduledOvertime>> myOvertimes() async {
+    try {
+      final res = await api.dio.get('/me/overtimes');
+      final data = res.data['data'];
+      if (data is! List) return const [];
+      return [
+        for (final e in data)
+          if (e is Map) ScheduledOvertime.fromJson(Map<String, dynamic>.from(e)),
+      ];
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return const [];
+      throw _mapError(e, 'Gagal memuat lembur');
+    }
+  }
 
-  Future<AttendanceModel> unmarkOvertime(int attendanceId) =>
-      _attendanceCall(() => api.dio.delete('/attendance/$attendanceId/overtime'),
-          'Gagal mencabut lembur');
+  /// Masuk ulang lembur: selfie + GPS, wajib dalam radius lokasi lembur.
+  Future<ScheduledOvertime> overtimeCheckIn({
+    required int id,
+    required String photoPath,
+    required double latitude,
+    required double longitude,
+  }) async {
+    final form = FormData.fromMap({
+      'photo': await _photoPart(photoPath),
+      'latitude': latitude,
+      'longitude': longitude,
+    });
+    return _overtimeCall(
+      () => api.dio.post('/me/overtimes/$id/check-in', data: form, options: Options(contentType: 'multipart/form-data')),
+      'Gagal absen masuk lembur',
+    );
+  }
+
+  /// Pulang lembur: GPS dicatat, tidak dinilai.
+  Future<ScheduledOvertime> overtimeCheckOut({required int id, double? latitude, double? longitude}) =>
+      _overtimeCall(
+        () => api.dio.post('/me/overtimes/$id/check-out', data: {
+          if (latitude != null) 'latitude': latitude,
+          if (longitude != null) 'longitude': longitude,
+        }),
+        'Gagal absen pulang lembur',
+      );
+
+  Future<ScheduledOvertime> _overtimeCall(Future<Response<dynamic>> Function() send, String fallback) async {
+    try {
+      final res = await send();
+      final data = res.data['data'];
+      if (data is! Map) throw res.data['message']?.toString() ?? fallback;
+      return ScheduledOvertime.fromJson(Map<String, dynamic>.from(data));
+    } on DioException catch (e) {
+      throw _mapError(e, fallback);
+    }
+  }
 
   /// Izin keluar sebentar dari outlet. [handoverUserId] = rekan yang sedang
   /// bertugas di outlet yang sama, boleh kosong.
@@ -150,18 +199,6 @@ class AttendanceRepository {
       ];
     } on DioException catch (e) {
       throw _mapError(e, 'Gagal memuat izin keluar');
-    }
-  }
-
-  Future<AttendanceModel> _attendanceCall(
-      Future<Response<dynamic>> Function() send, String fallback) async {
-    try {
-      final res = await send();
-      final data = res.data['data'];
-      if (data is! Map) throw res.data['message']?.toString() ?? fallback;
-      return AttendanceModel.fromJson(Map<String, dynamic>.from(data));
-    } on DioException catch (e) {
-      throw _mapError(e, fallback);
     }
   }
 

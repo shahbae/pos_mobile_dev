@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
+import 'package:pos_mobile/presentation/pages/attendance/overtime_page.dart';
 import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/core/utils/location_helper.dart';
 import 'package:pos_mobile/data/models/attendance_model.dart';
@@ -506,6 +507,8 @@ class _Content extends ConsumerWidget {
         _AttendanceCard(att: a),
         const SizedBox(height: 12),
       ],
+      // Lembur terjadwal (revisi owner 21 Nov 2026): masuk ulang & pulang lembur.
+      const OvertimeEntryCard(),
     ];
 
     if (open != null) {
