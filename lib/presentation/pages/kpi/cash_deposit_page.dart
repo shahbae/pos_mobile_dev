@@ -186,7 +186,8 @@ class _DepositCard extends StatelessWidget {
 /// Nominal tidak diketik (revisi owner 21 Nov 2026): dikunci dari laporan
 /// leader = Σ (kas fisik − modal awal) tiap shift + tombok tunai kasir yang
 /// kurang. Shift kurang yang kasirnya tidak menombok dimatikan sakelarnya;
-/// kekurangannya keluar dari setoran dan dipotong dari gaji.
+/// kekurangannya keluar dari setoran dan hanya tercatat (sejak revisi owner
+/// 24 Nov 2026 tidak ada potongan gaji).
 class CashDepositFormPage extends ConsumerStatefulWidget {
   final CashDeposit? retry;
   final Future<Uint8List?> Function(BuildContext context)? pickPhoto;
@@ -389,7 +390,7 @@ class _CashDepositFormPageState extends ConsumerState<CashDepositFormPage> {
 
 /// Nominal terkunci + rincian shift (revisi owner 21 Nov 2026). Shift kurang
 /// punya sakelar "Sudah ditombok tunai"; shift lebih hanya diberi tahu bahwa
-/// kelebihannya ikut disetor dan dipotong dari gaji kasirnya.
+/// kelebihannya ikut disetor dan tercatat (tidak memotong gaji kasirnya).
 class _LockedNominal extends StatelessWidget {
   final DepositPreview preview;
   final Set<int> unpaid;
@@ -451,7 +452,7 @@ class _LockedNominal extends StatelessWidget {
               onChanged: enabled ? (v) => onTombok(s.shiftId, v) : null,
               title: Text('${s.shiftName.isEmpty ? 'Shift' : s.shiftName} · ${s.cashierName}: kurang ${formatRupiah(-s.difference)}'),
               subtitle: Text(unpaid.contains(s.shiftId)
-                  ? 'Tidak ditombok: keluar dari setoran, dipotong dari gaji ${s.cashierName}.'
+                  ? 'Tidak ditombok: keluar dari setoran dan tercatat sebagai selisih ${s.cashierName}.'
                   : 'Sudah ditombok tunai ke amplop setoran.'),
             )
           else if (s.isOver)
@@ -459,7 +460,7 @@ class _LockedNominal extends StatelessWidget {
               padding: const EdgeInsets.only(top: 8),
               child: Text(
                 '${s.shiftName.isEmpty ? 'Shift' : s.shiftName} · ${s.cashierName}: lebih ${formatRupiah(s.difference)} — '
-                'ikut disetor, dan dipotong 100% dari gaji ${s.cashierName}.',
+                'ikut disetor dan tercatat sebagai selisih ${s.cashierName}.',
                 style: const TextStyle(fontSize: 13, color: Color(0xFFB45309)),
               ),
             ),
