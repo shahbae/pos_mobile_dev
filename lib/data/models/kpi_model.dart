@@ -700,7 +700,8 @@ class DepositShift {
   final double difference;
   final bool tombokPaid;
 
-  /// Yang dipotong dari gaji kasir bila setoran Verified.
+  /// Selalu 0 sejak revisi owner 24 Nov 2026 (selisih setoran tak memotong
+  /// gaji); tidak ditampilkan.
   final double payrollDeduction;
 
   const DepositShift({
@@ -761,7 +762,7 @@ class DepositPreview {
   });
 
   /// Nominal yang dikunci bila shift [unpaid] tidak ditombok: kekurangannya
-  /// keluar dari setoran (dipotong dari gaji kasirnya).
+  /// keluar dari setoran (tercatat sebagai selisih, tanpa potongan gaji).
   double nominalFor(Set<int> unpaid) {
     var n = required;
     for (final s in shifts) {

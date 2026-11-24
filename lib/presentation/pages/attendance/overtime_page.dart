@@ -256,8 +256,8 @@ class OvertimeCard extends StatelessWidget {
   }
 }
 
-/// Kartu di layar Absensi: muncul hanya bila ada lembur terjadwal, membuka
-/// layar Absen Lembur.
+/// Kartu di layar Jadwal Saya (dan Absensi untuk role absensi-saja): muncul
+/// hanya bila ada lembur terjadwal, membuka layar Absen Lembur.
 class OvertimeEntryCard extends ConsumerWidget {
   const OvertimeEntryCard({super.key});
 

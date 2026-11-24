@@ -78,6 +78,12 @@ class MyScheduleEntry {
   /// gudangnya.
   final ScheduleLocation? inspectionBranch;
 
+  /// Dijadwalkan Live TikTok di shift ini, dan jam live "HH:MM" yang diatur SPV
+  /// (revisi owner 24 Nov 2026). Jam null = seluruh shift.
+  final bool live;
+  final String? liveStart;
+  final String? liveEnd;
+
   const MyScheduleEntry({
     required this.id,
     required this.date,
@@ -85,9 +91,21 @@ class MyScheduleEntry {
     required this.location,
     this.duty,
     this.inspectionBranch,
+    this.live = false,
+    this.liveStart,
+    this.liveEnd,
   });
 
   bool get isSidak => inspectionBranch != null;
+
+  /// "Live TikTok 19.00–21.00" atau "Live TikTok" (seluruh shift); null bila
+  /// tidak dijadwalkan Live.
+  String? get liveLabel {
+    if (!live) return null;
+    final s = liveStart, e = liveEnd;
+    if (s == null || s.isEmpty || e == null || e.isEmpty) return 'Live TikTok';
+    return 'Live TikTok ${s.replaceAll(':', '.')}–${e.replaceAll(':', '.')}';
+  }
 
   factory MyScheduleEntry.fromJson(Map<String, dynamic> json) {
     return MyScheduleEntry(
@@ -98,6 +116,9 @@ class MyScheduleEntry {
       location: ScheduleLocation.fromJson(_map(json['location'])),
       inspectionBranch:
           json['inspection_branch'] is Map ? ScheduleLocation.fromJson(_map(json['inspection_branch'])) : null,
+      live: json['live'] == true,
+      liveStart: json['live_start']?.toString(),
+      liveEnd: json['live_end']?.toString(),
     );
   }
 }

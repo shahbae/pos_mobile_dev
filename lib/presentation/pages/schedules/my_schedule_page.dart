@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import 'package:pos_mobile/data/models/attendance_model.dart';
 import 'package:pos_mobile/data/models/schedule_model.dart';
+import 'package:pos_mobile/presentation/pages/attendance/overtime_page.dart';
 import 'package:pos_mobile/presentation/providers/attendance_provider.dart';
 import 'package:pos_mobile/presentation/widgets/sdm_widgets.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
@@ -22,7 +23,10 @@ class MySchedulePage extends ConsumerWidget {
       backgroundColor: AppTheme.bgLight,
       appBar: AppBar(title: const Text('Jadwal Saya'), centerTitle: true),
       body: RefreshIndicator(
-        onRefresh: () async => ref.invalidate(mySchedulesProvider),
+        onRefresh: () async {
+          ref.invalidate(mySchedulesProvider);
+          ref.invalidate(myOvertimesProvider);
+        },
         child: async.when(
           loading: SdmStateView.loading,
           error: (e, _) => SdmStateView(
@@ -62,6 +66,8 @@ class _ScheduleList extends StatelessWidget {
     return ListView(
       padding: EdgeInsets.fromLTRB(20, 20, 20, 24 + bottomInset),
       children: [
+        // Lembur terjadwal: pindah dari halaman Absensi (revisi owner 24 Nov 2026).
+        const OvertimeEntryCard(),
         const SdmNote(
           icon: Icons.info_outline,
           text: 'Yang tampil hanya jadwal bulan yang sudah disetujui SPV. Perubahan '
@@ -160,6 +166,19 @@ class _EntryRow extends StatelessWidget {
               else if (entry.location.name.isNotEmpty)
                 Text(entry.location.name,
                     style: const TextStyle(fontSize: 12.5, color: AppTheme.textSecondary)),
+              if (entry.liveLabel != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.live_tv_rounded, size: 14, color: Color(0xFFBE185D)),
+                      const SizedBox(width: 4),
+                      Text(entry.liveLabel!,
+                          style: const TextStyle(
+                              fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFFBE185D))),
+                    ],
+                  ),
+                ),
             ],
           ),
         ),

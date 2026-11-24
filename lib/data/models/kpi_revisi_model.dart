@@ -124,6 +124,11 @@ class LiveSlot {
   final String shiftName;
   final DateTime? shiftStart;
   final DateTime? shiftEnd;
+
+  /// Jam live "HH:MM" yang diatur SPV di jadwal (revisi owner 24 Nov 2026);
+  /// null = seluruh shift. Hanya informasi: penilaian tetap memakai jam shift.
+  final String? liveStart;
+  final String? liveEnd;
   final LiveSession? session;
   final bool canStart;
   final bool canFinish;
@@ -135,6 +140,8 @@ class LiveSlot {
     this.shiftName = '',
     this.shiftStart,
     this.shiftEnd,
+    this.liveStart,
+    this.liveEnd,
     this.session,
     this.canStart = false,
     this.canFinish = false,
@@ -147,11 +154,20 @@ class LiveSlot {
     shiftName: _str(j['shift_name']),
     shiftStart: _time(j['shift_start']),
     shiftEnd: _time(j['shift_end']),
+    liveStart: j['live_start']?.toString(),
+    liveEnd: j['live_end']?.toString(),
     session: j['session'] is Map ? LiveSession.fromJson(Map<String, dynamic>.from(j['session'] as Map)) : null,
     canStart: j['can_start'] == true,
     canFinish: j['can_finish'] == true,
     canAddScreenshot: j['can_add_screenshot'] == true,
   );
+
+  /// "19.00–21.00" bila SPV mengatur jam live; null = seluruh shift.
+  String? get liveWindowLabel {
+    final s = liveStart, e = liveEnd;
+    if (s == null || s.isEmpty || e == null || e.isEmpty) return null;
+    return '${s.replaceAll(':', '.')}–${e.replaceAll(':', '.')}';
+  }
 
   /// Perlu tindakan karyawan sekarang.
   bool get actionable => canStart || canFinish || canAddScreenshot;

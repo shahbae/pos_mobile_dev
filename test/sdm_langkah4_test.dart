@@ -393,7 +393,7 @@ void main() {
       expect(btn.onPressed, isNull);
     });
 
-    testWidgets('sedang bekerja: telat terlihat, ada izin keluar dan absen pulang', (tester) async {
+    testWidgets('sedang bekerja: telat terlihat, ada absen pulang; izin keluar pindah ke Pengaturan', (tester) async {
       await tester.pumpWidget(_page(
         _day(shifts: [_shift(status: 'checked_in', attendanceId: 40)], atts: [_att()], open: 40),
         onDuty: const [
@@ -403,25 +403,9 @@ void main() {
       ));
       await tester.pumpAndSettle();
       expect(find.text('Telat 5 menit'), findsOneWidget);
-      expect(find.text('Izin keluar sebentar'), findsOneWidget);
       expect(find.text('Absen Pulang'), findsOneWidget);
-
-      await tester.tap(find.text('Izin keluar sebentar'));
-      await tester.pumpAndSettle();
-      // Rekan serah tugas: yang bertugas di outlet ini, tanpa dirinya.
-      await tester.tap(find.text('Tanpa serah tugas'));
-      await tester.pumpAndSettle();
-      expect(find.text('Dewi'), findsWidgets);
-      expect(find.text('Citra'), findsNothing);
-    });
-
-    testWidgets('sedang izin keluar: tombol kembali', (tester) async {
-      await tester.pumpWidget(_page(
-        _day(shifts: [_shift(status: 'checked_in', attendanceId: 40)], atts: [_att()], open: 40),
-        onDuty: const [OnDutyModel(attendanceId: 40, userId: 6, userName: 'Citra', leaveOutId: 9)],
-      ));
-      await tester.pumpAndSettle();
-      expect(find.text('Saya sudah kembali'), findsOneWidget);
+      // Revisi owner 24 Nov 2026: Izin keluar sebentar ada di Pengaturan, di atas
+      // Logout (lihat revisi_24nov_g1_test.dart).
       expect(find.text('Izin keluar sebentar'), findsNothing);
     });
 
