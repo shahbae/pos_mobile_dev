@@ -451,8 +451,8 @@ class _StatusChip extends StatelessWidget {
 }
 
 /// Rincian setoran (revisi owner 21 Nov 2026): modal laci ditinggal di
-/// outlet, sisanya ditransfer; kas lebih ikut disetor dan dipotong gaji, kas
-/// kurang ditombok tunai.
+/// outlet, sisanya ditransfer; kas lebih ikut disetor, kas kurang ditombok
+/// tunai. Selisih hanya tercatat, tidak memotong gaji (revisi owner 24 Nov 2026).
 class _DepositCard extends StatelessWidget {
   final LeaderDailyDeposit deposit;
   const _DepositCard({required this.deposit});
@@ -485,9 +485,9 @@ class _DepositCard extends StatelessWidget {
             !d.allClosed
                 ? "Masih ada shift yang belum ditutup; angka setoran belum final."
                 : d.plus > 0
-                    ? "Kas lebih ${formatRupiah(d.plus)} ikut disetor dan dipotong 100% dari gaji kasirnya."
+                    ? "Kas lebih ${formatRupiah(d.plus)} ikut disetor dan tercatat sebagai selisih."
                     : d.minus > 0
-                        ? "Kas kurang ${formatRupiah(d.minus)} wajib ditombok tunai hari ini; yang tidak ditombok dipotong dari gaji."
+                        ? "Kas kurang ${formatRupiah(d.minus)} wajib ditombok tunai hari ini; yang tidak ditombok tercatat sebagai selisih."
                         : "Tidak ada selisih kas.",
             style: TextStyle(
               fontSize: 12,

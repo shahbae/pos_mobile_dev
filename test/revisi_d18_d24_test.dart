@@ -279,7 +279,9 @@ void main() {
       await tester.tap(toggle);
       await tester.pump();
       expect(find.text('Rp 1.422.000'), findsOneWidget);
-      expect(find.textContaining('dipotong dari gaji Patimah'), findsOneWidget);
+      // Revisi 24 Nov: selisih hanya tercatat, tidak memotong gaji.
+      expect(find.textContaining('tercatat sebagai selisih Patimah'), findsOneWidget);
+      expect(find.textContaining('dipotong dari gaji'), findsNothing);
       await tester.scrollUntilVisible(find.textContaining('Tambah bukti'), 300, scrollable: find.byType(Scrollable).first);
       await tester.tap(find.textContaining('Tambah bukti'));
       await tester.pump();

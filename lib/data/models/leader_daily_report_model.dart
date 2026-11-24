@@ -148,7 +148,7 @@ class LeaderDailyDeposit {
   final bool allClosed;
   final num physicalCollected; // kas fisik laci terkumpul
   final num modalKept; // modal laci disimpan untuk besok
-  final num plus; // Σ selisih lebih: disetor + potong gaji
+  final num plus; // Σ selisih lebih: ikut disetor, tercatat (tanpa potong gaji)
   final num minus; // Σ selisih kurang: wajib tombok tunai
   final num required; // setoran tunai wajib transfer (dengan tombok)
   final num qris;
