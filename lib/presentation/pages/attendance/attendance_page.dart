@@ -10,7 +10,6 @@ import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/core/utils/location_helper.dart';
 import 'package:pos_mobile/data/models/attendance_model.dart';
 import 'package:pos_mobile/data/models/branch_model.dart';
-import 'package:pos_mobile/data/models/leave_out_model.dart';
 import 'package:pos_mobile/data/models/my_day_model.dart';
 import 'package:pos_mobile/data/repositories/attendance_repository.dart';
 import 'package:pos_mobile/data/repositories/shift_repository.dart';
@@ -124,8 +123,7 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
                   onCheckIn: _submitting ? null : () => _checkIn(day),
                   onCheckOut: _submitting ? null : () => _checkOut(day),
                   onReloadSession: _submitting ? null : () => _reloadSession(),
-                  onStartLeaveOut: _submitting ? null : (colleagues) => _startLeaveOut(colleagues),
-                  onEndLeaveOut: _submitting ? null : (id) => _endLeaveOut(id),
+                  showOvertimeCard: widget.isRoot,
                 );
               },
             ),
@@ -331,58 +329,6 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
     }, successMsg: 'Absen pulang berhasil.');
   }
 
-  Future<void> _startLeaveOut(List<OnDutyModel> colleagues) async {
-    final input = await showModalBottomSheet<_LeaveOutInput>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => _LeaveOutSheet(colleagues: colleagues),
-    );
-    if (input == null || !mounted) return;
-    setState(() {
-      _submitting = true;
-      _progress = 'Mencatat izin keluar…';
-    });
-    try {
-      await ref
-          .read(attendanceRepositoryProvider)
-          .startLeaveOut(reason: input.reason, handoverUserId: input.handoverUserId);
-      if (!mounted) return;
-      ref.invalidate(onDutyProvider);
-      _snack('Izin keluar tercatat. Tekan "Saya sudah kembali" begitu kembali.');
-    } catch (e) {
-      if (mounted) _snack('$e', error: true);
-    } finally {
-      if (mounted) {
-        setState(() {
-          _submitting = false;
-          _progress = '';
-        });
-      }
-    }
-  }
-
-  Future<void> _endLeaveOut(int id) async {
-    setState(() {
-      _submitting = true;
-      _progress = 'Mencatat kembali…';
-    });
-    try {
-      await ref.read(attendanceRepositoryProvider).endLeaveOut(id);
-      if (!mounted) return;
-      ref.invalidate(onDutyProvider);
-      _snack('Selamat bekerja lagi. Jam kembali tercatat.');
-    } catch (e) {
-      if (mounted) _snack('$e', error: true);
-    } finally {
-      if (mounted) {
-        setState(() {
-          _submitting = false;
-          _progress = '';
-        });
-      }
-    }
-  }
-
   /// Menjalankan aksi absensi dengan overlay & error handling seragam.
   /// [action] mengembalikan absen yang tersimpan, atau null bila dibatalkan.
   Future<void> _run(Future<AttendanceModel?> Function() action,
@@ -442,8 +388,10 @@ class _Content extends ConsumerWidget {
   final VoidCallback? onCheckIn;
   final VoidCallback? onCheckOut;
   final VoidCallback? onReloadSession;
-  final ValueChanged<List<OnDutyModel>>? onStartLeaveOut;
-  final ValueChanged<int>? onEndLeaveOut;
+
+  /// Kartu lembur terjadwal tampil di sini hanya untuk role absensi-saja (tanpa
+  /// menu Pengaturan); role lain membukanya di Jadwal Saya (revisi owner 24 Nov).
+  final bool showOvertimeCard;
 
   const _Content({
     required this.day,
@@ -455,8 +403,7 @@ class _Content extends ConsumerWidget {
     required this.onCheckIn,
     required this.onCheckOut,
     required this.onReloadSession,
-    required this.onStartLeaveOut,
-    required this.onEndLeaveOut,
+    required this.showOvertimeCard,
   });
 
   @override
@@ -508,7 +455,9 @@ class _Content extends ConsumerWidget {
         const SizedBox(height: 12),
       ],
       // Lembur terjadwal (revisi owner 21 Nov 2026): masuk ulang & pulang lembur.
-      const OvertimeEntryCard(),
+      // Sejak 24 Nov 2026 kartunya ada di Jadwal Saya; di sini hanya untuk role
+      // absensi-saja yang tak punya menu itu.
+      if (showOvertimeCard) const OvertimeEntryCard(),
     ];
 
     if (open != null) {
@@ -519,15 +468,6 @@ class _Content extends ConsumerWidget {
               'saat selesai bekerja.',
         ),
         const SizedBox(height: 16),
-        if (open.branchId != null && canLeaveOut(auth.held)) ...[
-          _LeaveOutBox(
-            attendance: open,
-            branchId: isOwnerLevel(auth.held) ? open.branchId : null,
-            onStart: onStartLeaveOut,
-            onEnd: onEndLeaveOut,
-          ),
-          const SizedBox(height: 16),
-        ],
         _ActionButton(label: 'Absen Pulang', icon: Icons.logout, onPressed: onCheckOut),
       ]);
     } else if (current != null) {
@@ -748,150 +688,6 @@ class _Stamp extends StatelessWidget {
             style: const TextStyle(
                 fontSize: 24, fontWeight: FontWeight.w900, color: AppTheme.textPrimary)),
       ],
-    );
-  }
-}
-
-/// Izin keluar sebentar dari outlet selama bertugas. Status "sedang keluar"
-/// dibaca dari daftar yang sedang bertugas di outlet ini.
-class _LeaveOutBox extends ConsumerWidget {
-  final AttendanceModel attendance;
-
-  /// Cabang yang dibaca; null = cabang token.
-  final int? branchId;
-  final ValueChanged<List<OnDutyModel>>? onStart;
-  final ValueChanged<int>? onEnd;
-
-  const _LeaveOutBox({
-    required this.attendance,
-    required this.branchId,
-    required this.onStart,
-    required this.onEnd,
-  });
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final duty = ref.watch(onDutyProvider(branchId));
-    return duty.when(
-      loading: () => const LinearProgressIndicator(),
-      // Gagal membaca: tombolnya tetap ada; server yang menolak bila perlu.
-      error: (_, _) => OutlinedButton.icon(
-        onPressed: onStart == null ? null : () => onStart!(const []),
-        icon: const Icon(Icons.directions_walk),
-        label: const Text('Izin keluar sebentar'),
-      ),
-      data: (rows) {
-        OnDutyModel? me;
-        for (final r in rows) {
-          if (r.attendanceId == attendance.id) me = r;
-        }
-        final leaveId = me?.leaveOutId;
-        if (leaveId != null) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const _InfoBanner(
-                icon: Icons.directions_walk,
-                text: 'Kamu sedang izin keluar. Tekan tombol di bawah begitu kembali '
-                    'ke outlet.',
-                warning: true,
-              ),
-              const SizedBox(height: 8),
-              FilledButton.icon(
-                onPressed: onEnd == null ? null : () => onEnd!(leaveId),
-                icon: const Icon(Icons.keyboard_return),
-                label: const Text('Saya sudah kembali'),
-              ),
-            ],
-          );
-        }
-        final colleagues = [
-          for (final r in rows)
-            if (r.attendanceId != attendance.id && r.userId != attendance.userId) r,
-        ];
-        return OutlinedButton.icon(
-          onPressed: onStart == null ? null : () => onStart!(colleagues),
-          icon: const Icon(Icons.directions_walk),
-          label: const Text('Izin keluar sebentar'),
-        );
-      },
-    );
-  }
-}
-
-class _LeaveOutInput {
-  final String reason;
-  final int? handoverUserId;
-  const _LeaveOutInput(this.reason, this.handoverUserId);
-}
-
-class _LeaveOutSheet extends StatefulWidget {
-  final List<OnDutyModel> colleagues;
-  const _LeaveOutSheet({required this.colleagues});
-
-  @override
-  State<_LeaveOutSheet> createState() => _LeaveOutSheetState();
-}
-
-class _LeaveOutSheetState extends State<_LeaveOutSheet> {
-  final _reason = TextEditingController();
-  int? _handover;
-
-  @override
-  void dispose() {
-    _reason.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final inset = MediaQuery.of(context).viewInsets.bottom;
-    final ready = _reason.text.trim().isNotEmpty;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + inset),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text('Izin keluar sebentar',
-              style: TextStyle(
-                  fontSize: 17, fontWeight: FontWeight.w800, color: AppTheme.textPrimary)),
-          const SizedBox(height: 4),
-          const Text('Jam keluar dicatat sekarang. Leader bisa melihat catatannya.',
-              style: TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _reason,
-            autofocus: true,
-            maxLength: 255,
-            textCapitalization: TextCapitalization.sentences,
-            decoration: const InputDecoration(
-              labelText: 'Alasan',
-              hintText: 'mis. beli es batu',
-            ),
-            onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<int?>(
-            initialValue: _handover,
-            isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Serah tugas ke (boleh kosong)'),
-            items: [
-              const DropdownMenuItem<int?>(value: null, child: Text('Tanpa serah tugas')),
-              for (final c in widget.colleagues)
-                DropdownMenuItem<int?>(value: c.userId, child: Text(c.userName)),
-            ],
-            onChanged: (v) => setState(() => _handover = v),
-          ),
-          const SizedBox(height: 20),
-          FilledButton(
-            onPressed: ready
-                ? () => Navigator.pop(context, _LeaveOutInput(_reason.text.trim(), _handover))
-                : null,
-            child: const Text('Catat keluar'),
-          ),
-        ],
-      ),
     );
   }
 }

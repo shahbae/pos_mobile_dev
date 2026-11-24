@@ -68,9 +68,18 @@ class HelpRepository {
       );
 
   /// `POST /help-tickets/:id/resolve` (multipart) — leader pengaju menandai
-  /// masalahnya sudah beres. Keterangan opsional.
-  Future<HelpTicket> resolve(int id, {String note = ''}) => _one(
-    () => api.dio.post('/help-tickets/$id/resolve', data: FormData.fromMap({'note': note})),
+  /// masalahnya sudah beres. Foto bukti WAJIB (revisi owner 24 Nov 2026;
+  /// tanpa foto server menjawab 400); keterangan opsional. Isi foto dikirim dari
+  /// memori, bukan dari alamat berkas cache yang bisa hilang sebelum terkirim.
+  Future<HelpTicket> resolve(int id, {String note = '', required Uint8List photo}) => _one(
+    () => api.dio.post(
+      '/help-tickets/$id/resolve',
+      data: FormData.fromMap({
+        'note': note,
+        'photo': MultipartFile.fromBytes(photo, filename: 'selesai.jpg'),
+      }),
+      options: Options(contentType: 'multipart/form-data'),
+    ),
     'Gagal menandai selesai',
   );
 

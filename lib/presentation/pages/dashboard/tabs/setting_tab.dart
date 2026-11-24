@@ -9,11 +9,13 @@ import 'package:pos_mobile/presentation/providers/duty_provider.dart';
 import 'package:pos_mobile/presentation/providers/payroll_provider.dart';
 import 'package:pos_mobile/presentation/widgets/branch_switch_sheet.dart';
 import 'package:pos_mobile/presentation/widgets/app_version_card.dart';
+import 'package:pos_mobile/presentation/widgets/setting_menu_card.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import '../../../pages/shifts/shift_page.dart';
 import '../../../pages/settings/printer_settings_page.dart';
 import '../../../pages/settings/qris_settings_page.dart';
 import '../../../pages/attendance/attendance_page.dart';
+import '../../../pages/attendance/leave_out_card.dart';
 import '../../../pages/attendance/leave_out_list_page.dart';
 import '../../../pages/attendance/on_duty_page.dart';
 import '../../../pages/profile/profile_page.dart';
@@ -91,7 +93,7 @@ class SettingTab extends ConsumerWidget {
         ),
         if (canSwitch) ...[
           const SizedBox(height: 16),
-          _SettingMenuCard(
+          SettingMenuCard(
             title: "Ganti Cabang",
             subtitle: currentBranch?.name ?? "Pilih cabang aktif",
             icon: Icons.store_outlined,
@@ -101,7 +103,7 @@ class SettingTab extends ConsumerWidget {
         ],
         if (canMonitorKitchen) ...[
           const SizedBox(height: 16),
-          _SettingMenuCard(
+          SettingMenuCard(
             title: "Monitoring Pesanan",
             subtitle: auth.branchId == null
                 ? (canSwitch ? "Pilih cabang aktif dulu" : "Belum ada jadwal di outlet hari ini")
@@ -130,7 +132,7 @@ class SettingTab extends ConsumerWidget {
         ],
         if (canAttend) ...[
           const SizedBox(height: 16),
-          _SettingMenuCard(
+          SettingMenuCard(
             title: "Absensi",
             subtitle: "Absen masuk & pulang pakai foto dan lokasi",
             icon: Icons.fingerprint,
@@ -145,7 +147,7 @@ class SettingTab extends ConsumerWidget {
         ],
         if (canReceiveReminders(auth.held)) ...[
           const SizedBox(height: 16),
-          _SettingMenuCard(
+          SettingMenuCard(
             title: "Reminder",
             subtitle: "Catatan & permintaan foto dari SPV atau leader",
             icon: Icons.campaign_outlined,
@@ -158,7 +160,7 @@ class SettingTab extends ConsumerWidget {
         ],
         if (canUseHelpTickets(auth.held)) ...[
           const SizedBox(height: 16),
-          _SettingMenuCard(
+          SettingMenuCard(
             title: "Bantuan",
             subtitle: "Tiket ke SPV atau finance",
             icon: Icons.support_agent,
@@ -172,7 +174,7 @@ class SettingTab extends ConsumerWidget {
         // KPI tahap A (Tahap 6).
         if (canUsePhotoChecklist(auth.held)) ...[
           const SizedBox(height: 16),
-          _SettingMenuCard(
+          SettingMenuCard(
             title: "Ceklis Foto",
             subtitle: "Foto opening & closing shift",
             icon: Icons.add_a_photo_outlined,
@@ -185,7 +187,7 @@ class SettingTab extends ConsumerWidget {
         ],
         if (canSeeOwnKpi(auth.held)) ...[
           const SizedBox(height: 16),
-          _SettingMenuCard(
+          SettingMenuCard(
             title: "Skor KPI",
             subtitle: canSeeTeamKpi(auth.held)
                 ? "Skor saya & tim, kejadian, sanggahan"
@@ -200,7 +202,7 @@ class SettingTab extends ConsumerWidget {
         ],
         if (canSeeDirectives(auth.held)) ...[
           const SizedBox(height: 16),
-          _SettingMenuCard(
+          SettingMenuCard(
             title: "Arahan SPV",
             subtitle: "Arahan bertenggat dan evaluasi bulanan dari SPV",
             icon: Icons.assignment_outlined,
@@ -213,7 +215,7 @@ class SettingTab extends ConsumerWidget {
         ],
         if (canSendCashDeposit(auth.held)) ...[
           const SizedBox(height: 16),
-          _SettingMenuCard(
+          SettingMenuCard(
             title: "Setoran",
             subtitle: "Bukti transfer setoran tunai outlet",
             icon: Icons.account_balance_outlined,
@@ -226,7 +228,7 @@ class SettingTab extends ConsumerWidget {
         ],
         if (canInspect(auth.held)) ...[
           const SizedBox(height: 16),
-          _SettingMenuCard(
+          SettingMenuCard(
             title: "Sidak",
             subtitle: "Sidak outlet di lokasi",
             icon: Icons.fact_check_outlined,
@@ -239,7 +241,7 @@ class SettingTab extends ConsumerWidget {
         ],
         if (canAttend) ...[
           const SizedBox(height: 16),
-          _SettingMenuCard(
+          SettingMenuCard(
             title: "Jadwal Saya",
             subtitle: "Shift, tugas, dan lokasi kerja",
             icon: Icons.calendar_month_outlined,
@@ -252,7 +254,7 @@ class SettingTab extends ConsumerWidget {
         ],
         if (canMarkOvertime(auth.held)) ...[
           const SizedBox(height: 16),
-          _SettingMenuCard(
+          SettingMenuCard(
             title: "Yang Bertugas",
             subtitle: "Siapa yang sudah absen masuk dan yang sedang izin keluar",
             icon: Icons.groups_outlined,
@@ -265,7 +267,7 @@ class SettingTab extends ConsumerWidget {
         ],
         if (canSeeLeaveOuts(auth.held)) ...[
           const SizedBox(height: 16),
-          _SettingMenuCard(
+          SettingMenuCard(
             title: "Izin Keluar",
             subtitle: "Riwayat keluar sebentar dari outlet",
             icon: Icons.directions_walk,
@@ -278,7 +280,7 @@ class SettingTab extends ConsumerWidget {
         ],
         if (canShift) ...[
           const SizedBox(height: 16),
-          _SettingMenuCard(
+          SettingMenuCard(
             title: "Shift Kasir",
             subtitle: "Buka / tutup shift & rekap kas",
             icon: Icons.point_of_sale_outlined,
@@ -296,7 +298,7 @@ class SettingTab extends ConsumerWidget {
         // belum buka shift).
         if (canShift && canHandOutLoan(auth.held) && auth.branchId != null) ...[
           const SizedBox(height: 16),
-          _SettingMenuCard(
+          SettingMenuCard(
             title: "Pinjaman Tunai",
             subtitle: switch (ref.watch(cashPendingLoansProvider).valueOrNull?.length) {
               null || 0 => "Serahkan pinjaman karyawan dari laci",
@@ -312,7 +314,7 @@ class SettingTab extends ConsumerWidget {
         ],
         if (canManageBranchQris(role) && auth.branchId != null) ...[
           const SizedBox(height: 16),
-          _SettingMenuCard(
+          SettingMenuCard(
             title: "QRIS Cabang",
             subtitle: "Mode pembayaran & QR statis cabang",
             icon: Icons.qr_code_2,
@@ -331,7 +333,7 @@ class SettingTab extends ConsumerWidget {
           ),
         ],
         const SizedBox(height: 16),
-        _SettingMenuCard(
+        SettingMenuCard(
           title: "Perangkat Cetak",
           subtitle: "Printer default & cetak otomatis",
           icon: Icons.print_outlined,
@@ -345,7 +347,7 @@ class SettingTab extends ConsumerWidget {
         ),
         if (hasFeature(auth.role, AppFeature.pos)) ...[
           const SizedBox(height: 16),
-          _SettingMenuCard(
+          SettingMenuCard(
             title: "Penjualan Offline",
             subtitle: "Penjualan yang dibuat saat jaringan putus",
             icon: Icons.cloud_off_outlined,
@@ -360,7 +362,7 @@ class SettingTab extends ConsumerWidget {
         ],
         if (canUsePayroll(auth.held)) ...[
           const SizedBox(height: 16),
-          _SettingMenuCard(
+          SettingMenuCard(
             title: "Slip Gaji",
             subtitle: "Rincian gaji tiap bulan, PDF, komplain",
             icon: Icons.receipt_long_outlined,
@@ -371,7 +373,7 @@ class SettingTab extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 16),
-          _SettingMenuCard(
+          SettingMenuCard(
             title: "Pinjaman",
             subtitle: "Ajukan pinjaman dan lihat statusnya",
             icon: Icons.request_quote_outlined,
@@ -383,7 +385,7 @@ class SettingTab extends ConsumerWidget {
           ),
         ],
         const SizedBox(height: 16),
-        _SettingMenuCard(
+        SettingMenuCard(
           title: "Profil",
           subtitle: "Data diri, foto, ganti password",
           icon: Icons.person_outline,
@@ -395,8 +397,13 @@ class SettingTab extends ConsumerWidget {
         ),
         const SizedBox(height: 16),
         const AppVersionCard(),
+        // Izin keluar sebentar tepat di atas Logout (revisi owner 24 Nov 2026).
+        if (canLeaveOut(auth.held)) ...[
+          const SizedBox(height: 16),
+          const LeaveOutMenuCard(),
+        ],
         const SizedBox(height: 16),
-        _SettingMenuCard(
+        SettingMenuCard(
           title: "Logout",
           subtitle: "Keluar dari akun saat ini",
           icon: Icons.logout,
@@ -407,92 +414,6 @@ class SettingTab extends ConsumerWidget {
           },
         ),
       ],
-    );
-  }
-}
-
-class _SettingMenuCard extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _SettingMenuCard({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppTheme.borderLight),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(icon, color: color, size: 22),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w900,
-                      color: AppTheme.textPrimary,
-                      fontSize: 13,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: AppTheme.bgLight,
-                border: Border.all(color: AppTheme.borderLight),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(
-                Icons.chevron_right,
-                color: AppTheme.textPrimary,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

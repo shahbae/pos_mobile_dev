@@ -1,5 +1,8 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import 'package:pos_mobile/data/models/help_ticket_model.dart';
@@ -67,9 +70,13 @@ class _HelpTicketDetailPageState extends ConsumerState<HelpTicketDetailPage> {
   }
 
   Future<void> _resolve() async {
-    final note = await showDialog<String>(context: context, builder: (_) => const _ResolveDialog());
-    if (note == null) return;
-    await _act(() => ref.read(helpRepositoryProvider).resolve(widget.ticketId, note: note), 'Tiket ditandai selesai.');
+    final pick = ref.read(helpPhotoPickerProvider);
+    final result = await showDialog<_ResolveResult>(context: context, builder: (_) => _ResolveDialog(pick: pick));
+    if (result == null) return;
+    await _act(
+      () => ref.read(helpRepositoryProvider).resolve(widget.ticketId, note: result.note, photo: result.photo),
+      'Tiket ditandai selesai.',
+    );
   }
 
   void _snack(String msg, {bool error = false}) {
@@ -191,17 +198,32 @@ class _HelpTicketDetailPageState extends ConsumerState<HelpTicketDetailPage> {
   }
 }
 
-/// Konfirmasi tanda selesai. Memegang kontrolernya sendiri, karena kolomnya masih
-/// tergambar selama animasi dialog menutup. Hasilnya keterangan; null = batal.
+/// Hasil dialog tanda selesai: keterangan (boleh kosong) dan foto bukti.
+class _ResolveResult {
+  final String note;
+  final Uint8List photo;
+  const _ResolveResult(this.note, this.photo);
+}
+
+/// Konfirmasi tanda selesai. Foto bukti wajib (revisi owner 24 Nov 2026): tiket
+/// yang selesai tidak bisa dibuka lagi, jadi buktinya harus ada. Isi foto dibaca
+/// ke memori begitu kamera kembali. Memegang kontrolernya sendiri, karena
+/// kolomnya masih tergambar selama animasi dialog menutup. Hasilnya
+/// [_ResolveResult]; null = batal.
 class _ResolveDialog extends StatefulWidget {
-  const _ResolveDialog();
+  final HelpPhotoPicker pick;
+  const _ResolveDialog({required this.pick});
 
   @override
   State<_ResolveDialog> createState() => _ResolveDialogState();
 }
 
 class _ResolveDialogState extends State<_ResolveDialog> {
+  static const _maxBytes = 5 * 1024 * 1024;
+
   final _note = TextEditingController();
+  Uint8List? _photo;
+  String? _photoError;
 
   @override
   void dispose() {
@@ -209,27 +231,86 @@ class _ResolveDialogState extends State<_ResolveDialog> {
     super.dispose();
   }
 
+  Future<void> _pick(ImageSource source) async {
+    final bytes = await widget.pick(source);
+    if (bytes == null || !mounted) return;
+    setState(() {
+      if (bytes.length > _maxBytes) {
+        _photo = null;
+        _photoError = 'Foto maksimal 5 MB.';
+      } else {
+        _photo = bytes;
+        _photoError = null;
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Tandai selesai?'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('Tandai kalau masalahnya sudah beres. Tiket yang selesai tidak bisa dibuka lagi.'),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _note,
-            maxLines: 3,
-            maxLength: 1000,
-            textCapitalization: TextCapitalization.sentences,
-            decoration: const InputDecoration(labelText: 'Keterangan (opsional)', hintText: 'mis. Blender sudah diganti'),
-          ),
-        ],
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Tandai kalau masalahnya sudah beres. Tiket yang selesai tidak bisa dibuka lagi.'),
+            const SizedBox(height: 12),
+            const Text('Foto bukti (wajib)',
+                style: TextStyle(fontWeight: FontWeight.w800, color: AppTheme.textPrimary)),
+            const SizedBox(height: 8),
+            if (_photo != null) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.memory(_photo!, height: 140, width: double.infinity, fit: BoxFit.cover),
+              ),
+              TextButton.icon(
+                onPressed: () => setState(() => _photo = null),
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('Ganti foto'),
+              ),
+            ] else ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _pick(ImageSource.camera),
+                      icon: const Icon(Icons.photo_camera_outlined),
+                      label: const Text('Kamera'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _pick(ImageSource.gallery),
+                      icon: const Icon(Icons.photo_library_outlined),
+                      label: const Text('Galeri'),
+                    ),
+                  ),
+                ],
+              ),
+              if (_photoError != null) ...[
+                const SizedBox(height: 6),
+                Text(_photoError!, style: const TextStyle(fontSize: 12, color: AppTheme.danger)),
+              ],
+            ],
+            const SizedBox(height: 12),
+            TextField(
+              controller: _note,
+              maxLines: 3,
+              maxLength: 1000,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(labelText: 'Keterangan (opsional)', hintText: 'mis. Blender sudah diganti'),
+            ),
+          ],
+        ),
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
-        TextButton(onPressed: () => Navigator.pop(context, _note.text.trim()), child: const Text('Tandai selesai')),
+        TextButton(
+          onPressed: _photo == null ? null : () => Navigator.pop(context, _ResolveResult(_note.text.trim(), _photo!)),
+          child: const Text('Tandai selesai'),
+        ),
       ],
     );
   }
