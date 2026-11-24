@@ -166,6 +166,19 @@ class _EntryRow extends StatelessWidget {
               else if (entry.location.name.isNotEmpty)
                 Text(entry.location.name,
                     style: const TextStyle(fontSize: 12.5, color: AppTheme.textSecondary)),
+              if (entry.liveLabel != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.live_tv_rounded, size: 14, color: Color(0xFFBE185D)),
+                      const SizedBox(width: 4),
+                      Text(entry.liveLabel!,
+                          style: const TextStyle(
+                              fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFFBE185D))),
+                    ],
+                  ),
+                ),
             ],
           ),
         ),
