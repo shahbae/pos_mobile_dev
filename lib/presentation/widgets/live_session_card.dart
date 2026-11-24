@@ -142,6 +142,7 @@ class LiveSlotTile extends StatelessWidget {
       if (slot.shiftStart != null && slot.shiftEnd != null) '${_clock.format(slot.shiftStart!)}–${_clock.format(slot.shiftEnd!)}',
     ].join(' ');
     final lines = <String>[
+      if (slot.liveWindowLabel != null) 'Jadwal live: ${slot.liveWindowLabel} (diatur SPV).',
       if (s == null && slot.canStart) 'Tekan Mulai saat Live dimulai, Selesai saat berakhir (minimal 60 menit, di dalam jam shift).',
       if (s != null && s.running) 'Live berjalan sejak ${_clock.format(s.startedAt!)}. Tekan Selesai saat Live berakhir.',
       if (s != null && !s.running && s.startedAt != null)
