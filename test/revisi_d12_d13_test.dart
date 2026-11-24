@@ -1,8 +1,12 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
 
@@ -57,14 +61,16 @@ Map<String, dynamic> _ticket({String status = 'approved', List<String> actions =
 class _HelpRepo implements HelpRepository {
   HelpTicket ticket;
   final notes = <String>[];
+  final photos = <int>[];
   _HelpRepo(this.ticket);
 
   @override
   Future<HelpTicket> one(int id) async => ticket;
 
   @override
-  Future<HelpTicket> resolve(int id, {String note = ''}) async {
+  Future<HelpTicket> resolve(int id, {String note = '', required Uint8List photo}) async {
     notes.add(note);
+    photos.add(photo.length);
     ticket = HelpTicket.fromJson(_ticket(status: 'resolved', actions: const [], note: note.isEmpty ? null : note));
     return ticket;
   }
@@ -87,6 +93,12 @@ class _AllowanceRepo implements AllowanceRepository {
   @override
   dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();
 }
+
+/// PNG 1×1 yang valid, supaya Image.memory tidak melempar galat.
+final _png = base64Decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==');
+
+/// Pengambil foto palsu: tanpa kamera; null = pengguna membatalkan.
+Override _picker(Uint8List? bytes) => helpPhotoPickerProvider.overrideWithValue((ImageSource source) async => bytes);
 
 Future<void> _pump(WidgetTester tester, Widget page, List<Override> overrides) async {
   tester.view.physicalSize = const Size(720, 1600); // HP 360 × 800 dp
@@ -154,6 +166,7 @@ void main() {
       final repo = _HelpRepo(HelpTicket.fromJson(_ticket()));
       await _pump(tester, const HelpTicketDetailPage(ticketId: 9), [
         helpRepositoryProvider.overrideWithValue(repo),
+        _picker(_png),
       ]);
       expect(tester.takeException(), isNull);
       expect(find.text('Konfirmasi selesai'), findsNothing);
@@ -166,12 +179,55 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Tandai selesai?'), findsOneWidget);
       await tester.enterText(find.widgetWithText(TextField, 'Keterangan (opsional)'), 'Blender diganti');
-      await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('Tandai selesai')));
+      // Foto bukti wajib (revisi owner 24 Nov 2026): sebelum foto ada, tombol mati.
+      final confirm = find.descendant(of: find.byType(AlertDialog), matching: find.widgetWithText(TextButton, 'Tandai selesai'));
+      expect(tester.widget<TextButton>(confirm).onPressed, isNull);
+      await tester.tap(find.text('Kamera'));
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextButton>(confirm).onPressed, isNotNull);
+      await tester.tap(confirm);
       await tester.pumpAndSettle();
       expect(repo.notes, ['Blender diganti']);
+      expect(repo.photos, [_png.length]);
       expect(find.text('Tandai selesai'), findsNothing);
       expect(find.textContaining('Ditandai selesai oleh Khaerudien'), findsOneWidget);
       expect(find.text('Blender diganti'), findsOneWidget);
+    });
+
+    testWidgets('kamera dibatalkan: tanpa foto tombol tetap mati, tiket tidak berubah', (tester) async {
+      final repo = _HelpRepo(HelpTicket.fromJson(_ticket()));
+      await _pump(tester, const HelpTicketDetailPage(ticketId: 9), [
+        helpRepositoryProvider.overrideWithValue(repo),
+        _picker(null),
+      ]);
+      final button = find.text('Tandai selesai');
+      await tester.ensureVisible(button);
+      await tester.pumpAndSettle();
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Galeri'));
+      await tester.pumpAndSettle();
+      final confirm = find.descendant(of: find.byType(AlertDialog), matching: find.widgetWithText(TextButton, 'Tandai selesai'));
+      expect(tester.widget<TextButton>(confirm).onPressed, isNull);
+      expect(repo.photos, isEmpty);
+    });
+
+    testWidgets('foto lebih dari 5 MB ditolak dengan pesan', (tester) async {
+      final repo = _HelpRepo(HelpTicket.fromJson(_ticket()));
+      await _pump(tester, const HelpTicketDetailPage(ticketId: 9), [
+        helpRepositoryProvider.overrideWithValue(repo),
+        _picker(Uint8List(5 * 1024 * 1024 + 1)),
+      ]);
+      final button = find.text('Tandai selesai');
+      await tester.ensureVisible(button);
+      await tester.pumpAndSettle();
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Kamera'));
+      await tester.pumpAndSettle();
+      expect(find.text('Foto maksimal 5 MB.'), findsOneWidget);
+      final confirm = find.descendant(of: find.byType(AlertDialog), matching: find.widgetWithText(TextButton, 'Tandai selesai'));
+      expect(tester.widget<TextButton>(confirm).onPressed, isNull);
     });
 
     testWidgets('batal di dialog: tiket tidak berubah', (tester) async {

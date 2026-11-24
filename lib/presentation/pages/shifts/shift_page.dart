@@ -531,7 +531,9 @@ class _ActiveShiftCard extends StatelessWidget {
               _row('Penjualan Tunai', formatRupiah(shift.cashSalesResolved)),
               _row('Pengeluaran', '- ${formatRupiah(shift.totalExpense)}'),
               if (shift.pendingExpense > 0) _pendingRow(shift.pendingExpense),
-              _row('Kas Seharusnya', formatRupiah(shift.expectedCashResolved)),
+              // Kas Seharusnya sengaja tak tampil di kartu shift aktif untuk siapa pun
+              // (revisi owner 24 Nov 2026): kasir menghitung uang tanpa tahu targetnya.
+              // Sesudah tutup shift, leader ke atas dan finance membacanya di ringkasan.
               const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
