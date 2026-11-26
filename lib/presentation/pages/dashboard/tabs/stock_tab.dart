@@ -19,6 +19,7 @@ import 'package:pos_mobile/presentation/providers/duty_provider.dart';
 import 'package:pos_mobile/presentation/providers/shipment_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 import 'package:pos_mobile/presentation/pages/attendance/work_gate.dart';
+import 'package:pos_mobile/presentation/pages/returns/branch_return_page.dart';
 
 class StockTab extends ConsumerWidget {
   const StockTab({super.key});
@@ -272,6 +273,21 @@ class StockTab extends ConsumerWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const WasteFormPage()),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+            _menuItem(
+              context,
+              icon: Icons.assignment_return_outlined,
+              title: "Retur Stok",
+              subtitle: "Kirim barang balik ke gudang tanpa hitung fisik",
+              onTap: () async {
+                // Revisi owner 26 Nov 2026: menu kerja, wajib sudah absen masuk.
+                if (!await ensureOnDuty(context, ref) || !context.mounted) return;
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const BranchReturnPage()),
                 );
               },
             ),
