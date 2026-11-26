@@ -21,7 +21,6 @@ import 'package:pos_mobile/presentation/providers/branch_provider.dart';
 import 'package:pos_mobile/presentation/providers/branch_scope.dart';
 import 'package:pos_mobile/presentation/widgets/confirm_dialog.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
-import 'package:pos_mobile/data/repositories/shift_repository.dart' show DailyAuditRequired;
 import 'package:pos_mobile/presentation/pages/stock_audits/daily_audit_gate.dart';
 
 final _clock = DateFormat('HH.mm', 'id_ID');
