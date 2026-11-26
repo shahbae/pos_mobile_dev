@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:pos_mobile/core/utils/location_helper.dart';
 import 'package:pos_mobile/data/models/overtime_model.dart';
 import 'package:pos_mobile/presentation/providers/attendance_provider.dart';
+import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/widgets/confirm_dialog.dart';
 import 'package:pos_mobile/presentation/widgets/sdm_widgets.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
@@ -52,6 +53,15 @@ class _OvertimePageState extends ConsumerState<OvertimePage> {
     }
   }
 
+  /// Minta token baru supaya cabang di token dihitung ulang (lembur aktif =
+  /// cabang lembur), lalu baca ulang hari saya. Gagal tidak menggagalkan absen.
+  Future<void> _reloadBranch() async {
+    try {
+      await ref.read(authProvider.notifier).refreshSession();
+    } catch (_) {}
+    refreshMyDay(ref);
+  }
+
   Future<void> _checkIn(ScheduledOvertime ot) async {
     final yakin = await confirmAction(
       context,
@@ -80,6 +90,9 @@ class _OvertimePageState extends ConsumerState<OvertimePage> {
             longitude: pos.longitude,
           );
       ref.invalidate(myOvertimesProvider);
+      // Lembur di outlet lain (revisi owner 26 Nov 2026): token baru membawa
+      // cabang lembur, jadi app pindah ke outlet itu selama lembur.
+      await _reloadBranch();
       _snack('Masuk ulang lembur tercatat. Jangan lupa pulang lembur.');
     });
   }
@@ -119,6 +132,8 @@ class _OvertimePageState extends ConsumerState<OvertimePage> {
           .read(attendanceRepositoryProvider)
           .overtimeCheckOut(id: ot.id, photo: photo, latitude: lat, longitude: lng);
       ref.invalidate(myOvertimesProvider);
+      // Selesai lembur: cabang kembali mengikuti jadwal biasa.
+      await _reloadBranch();
       _snack('Lembur selesai: ${done.hours} jam dibayar.');
     });
   }
