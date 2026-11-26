@@ -32,6 +32,7 @@ import '../../../pages/kpi/my_kpi_page.dart';
 import '../../kpi/directives_page.dart';
 import '../../../pages/kpi/photo_checklist_page.dart';
 import 'package:pos_mobile/presentation/pages/attendance/work_gate.dart';
+import 'package:pos_mobile/presentation/pages/sop/sop_page.dart';
 
 class SettingTab extends ConsumerWidget {
   const SettingTab({super.key});
@@ -257,6 +258,18 @@ class SettingTab extends ConsumerWidget {
             ),
           ),
         ],
+        // SOP (revisi owner 26 Nov 2026): semua akun membaca.
+        const SizedBox(height: 16),
+        SettingMenuCard(
+          title: "SOP",
+          subtitle: "Standar kerja: foto & PDF dari owner",
+          icon: Icons.menu_book_outlined,
+          color: accent,
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const SopPage()),
+          ),
+        ),
         if (canMarkOvertime(auth.held)) ...[
           const SizedBox(height: 16),
           SettingMenuCard(
