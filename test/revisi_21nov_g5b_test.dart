@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -87,12 +86,15 @@ void main() {
       expect(ot.isActive, isTrue);
     });
 
-    test('pulang lembur: JSON ke /me/overtimes/:id/check-out', () async {
+    test('pulang lembur: multipart + selfie ke /me/overtimes/:id/check-out (revisi 26 Nov)', () async {
       final adapter = _Adapter();
       final api = ApiService()..dio.httpClientAdapter = adapter;
-      await AttendanceRepository(api).overtimeCheckOut(id: 5, latitude: -6.46, longitude: 108.45);
+      await AttendanceRepository(api)
+          .overtimeCheckOut(id: 5, photo: Uint8List.fromList(List.filled(64, 1)), latitude: -6.46, longitude: 108.45);
       expect(adapter.last!.path, '/me/overtimes/5/check-out');
       expect(adapter.last!.method, 'POST');
+      expect(adapter.lastBody, contains('name="photo"'));
+      expect(adapter.lastBody, contains('name="latitude"'));
     });
 
     test('model: lintas cabang, jam, status', () {

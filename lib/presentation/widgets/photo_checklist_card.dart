@@ -8,6 +8,7 @@ import 'package:pos_mobile/data/models/kpi_model.dart';
 import 'package:pos_mobile/presentation/pages/kpi/photo_checklist_page.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/kpi_provider.dart';
+import 'package:pos_mobile/presentation/pages/attendance/work_gate.dart';
 
 /// Kartu Beranda "ceklis foto perlu dikirim" (Tahap 6). Tampil hanya bila
 /// ada butir yang fasenya sedang terbuka dan belum terkirim (atau ditolak).
@@ -66,6 +67,7 @@ class _PhotoChecklistCardState extends ConsumerState<PhotoChecklistCard> with Wi
         child: InkWell(
           borderRadius: BorderRadius.circular(18),
           onTap: () async {
+            if (!await ensureOnDuty(context, ref) || !context.mounted) return;
             await Navigator.push(context, MaterialPageRoute(builder: (_) => const PhotoChecklistPage()));
             _refresh();
           },

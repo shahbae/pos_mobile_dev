@@ -46,9 +46,11 @@ Future<bool> ensureDailyAudit(BuildContext context, WidgetRef ref) async {
   return block == DailyAuditBlock.none;
 }
 
-/// Server menolak menutup Shift 2 (`daily_audit_required`): tawarkan
-/// membuka opname harian. Kasir lalu menekan Tutup Shift lagi.
-Future<void> showDailyAuditRequired(BuildContext context, WidgetRef ref) async {
+/// Server menolak menutup Shift 2 (`daily_audit_required`) atau absen pulang
+/// Shift 2 (`shift2_audit_required`): tawarkan membuka opname yang kurang.
+/// [missing] dari server: `daily` dan/atau `weekly` (revisi owner 26 Nov 2026,
+/// opname mingguan di hari jadwalnya). Kasir lalu mengulang tindakannya.
+Future<void> showDailyAuditRequired(BuildContext context, WidgetRef ref, {List<String> missing = const ['daily']}) async {
   AuditPeriods? periods;
   try {
     periods = await ref.read(stockAuditRepositoryProvider).getPeriods();
@@ -56,11 +58,49 @@ Future<void> showDailyAuditRequired(BuildContext context, WidgetRef ref) async {
   if (!context.mounted) return;
   final daily = periods?.of(AuditTypes.daily);
   final block = periods == null ? DailyAuditBlock.missing : dailyAuditBlock(periods);
-  final go = await _askDailyAudit(context, block == DailyAuditBlock.none ? DailyAuditBlock.missing : block);
+  final dailyMissing = missing.contains(AuditTypes.daily) || block != DailyAuditBlock.none;
+  if (!dailyMissing && missing.contains(AuditTypes.weekly)) {
+    final go = await _askWeeklyAudit(context);
+    final weekly = periods?.of(AuditTypes.weekly);
+    if (go == true && context.mounted) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => weekly?.auditId != null
+              ? StockAuditDetailPage(auditId: weekly!.auditId!)
+              : const StockAuditFormPage(auditType: AuditTypes.weekly),
+        ),
+      );
+      ref.invalidate(auditPeriodsProvider);
+    }
+    return;
+  }
+  final go = await _askDailyAudit(context, block == DailyAuditBlock.none ? DailyAuditBlock.missing : block,
+      alsoWeekly: missing.contains(AuditTypes.weekly));
   if (go == true && context.mounted && daily != null) {
     await _openDailyAudit(context, daily);
     ref.invalidate(auditPeriodsProvider);
   }
+}
+
+Future<bool?> _askWeeklyAudit(BuildContext context) {
+  return showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: const Text('Opname mingguan dulu'),
+      content: const Text('Hari ini jadwal opname mingguan outlet ini. Shift 2 baru bisa ditutup dan absen pulang '
+          'sesudah opname mingguan minggu ini disimpan.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Nanti')),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(minimumSize: const Size(0, 40)),
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text('Buka opname mingguan'),
+        ),
+      ],
+    ),
+  );
 }
 
 /// Buka shift ditolak karena opname belum di-ACC (revisi 19 Nov). Kasir tidak
@@ -89,18 +129,19 @@ Future<void> showAuditPending(BuildContext context, String message, int? auditId
   }
 }
 
-Future<bool?> _askDailyAudit(BuildContext context, DailyAuditBlock block) {
+Future<bool?> _askDailyAudit(BuildContext context, DailyAuditBlock block, {bool alsoWeekly = false}) {
   final missing = block == DailyAuditBlock.missing;
   return showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       title: Text(missing ? 'Opname harian dulu' : 'Lengkapi alasan opname harian'),
-      content: Text(missing
-          ? 'Shift 2 baru bisa ditutup sesudah opname harian hari ini disimpan. '
-              'Timbang barangnya sekarang.'
-          : 'Ada barang tidak wajar di opname harian hari ini yang belum diberi alasan. '
-              'Lengkapi dulu sebelum menutup Shift 2.'),
+      content: Text((missing
+              ? 'Shift 2 baru bisa ditutup sesudah opname harian hari ini disimpan. '
+                  'Timbang barangnya sekarang.'
+              : 'Ada barang tidak wajar di opname harian hari ini yang belum diberi alasan. '
+                  'Lengkapi dulu sebelum menutup Shift 2.') +
+          (alsoWeekly ? ' Hari ini juga jadwal opname mingguan: kerjakan sesudahnya.' : '')),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Nanti')),
         ElevatedButton(

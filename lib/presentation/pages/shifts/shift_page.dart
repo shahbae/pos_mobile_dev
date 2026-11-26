@@ -156,6 +156,7 @@ class ShiftPage extends ConsumerWidget {
 
     ShiftModel? result;
     var dailyAuditRequired = false;
+    var missingAudits = const <String>['daily'];
     await _runWithLoading(context, () async {
       result = await ref.read(shiftRepositoryProvider).closeCurrent(amount);
       ref.invalidate(currentShiftProvider);
@@ -165,11 +166,12 @@ class ShiftPage extends ConsumerWidget {
       // Server tetap penentunya: nama shift di HP bisa saja basi.
       if (e is! DailyAuditRequired) return false;
       dailyAuditRequired = true;
+      missingAudits = e.missing;
       return true;
     });
 
     if (dailyAuditRequired && context.mounted) {
-      await showDailyAuditRequired(context, ref);
+      await showDailyAuditRequired(context, ref, missing: missingAudits);
       return;
     }
 
@@ -420,7 +422,7 @@ class _NoShiftCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             needsCheckIn
-                ? 'Absen masuk dulu sebelum buka shift. Menu lain tetap bisa dipakai.'
+                ? 'Absen masuk dulu sebelum memakai menu Kasir.'
                 : 'Buka shift terlebih dahulu sebelum mulai transaksi.',
             textAlign: TextAlign.center,
             style: const TextStyle(color: AppTheme.textSecondary, height: 1.4),

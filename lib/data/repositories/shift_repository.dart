@@ -16,7 +16,12 @@ final shiftRepositoryProvider = Provider<ShiftRepository>((ref) {
 /// (Tahap 5 — 422 daily_audit_required).
 class DailyAuditRequired implements Exception {
   final String message;
-  DailyAuditRequired(this.message);
+
+  /// Opname yang masih kurang menurut server: `daily` dan/atau `weekly`
+  /// (revisi owner 26 Nov 2026: opname mingguan di hari jadwalnya). Server
+  /// lama tidak mengirimnya → dianggap harian.
+  final List<String> missing;
+  DailyAuditRequired(this.message, {this.missing = const ['daily']});
   @override
   String toString() => message;
 }
@@ -87,7 +92,14 @@ class ShiftRepository {
     } on DioException catch (e) {
       final data = e.response?.data;
       if (data is Map && data['code'] == 'daily_audit_required') {
-        throw DailyAuditRequired('${data['message'] ?? 'Buat opname harian dulu sebelum menutup Shift 2.'}');
+        final detail = data['data'];
+        final missing = detail is Map && detail['missing'] is List
+            ? [for (final m in detail['missing'] as List) '$m']
+            : const ['daily'];
+        throw DailyAuditRequired(
+          '${data['message'] ?? 'Buat opname harian dulu sebelum menutup Shift 2.'}',
+          missing: missing.isEmpty ? const ['daily'] : missing,
+        );
       }
       throw e.response?.data?['message'] ?? 'Gagal menutup shift';
     }

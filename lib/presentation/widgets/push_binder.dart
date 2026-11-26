@@ -163,7 +163,7 @@ Future<void> openPushTarget(BuildContext context, String target) async {
     'schedule' => const MySchedulePage(),
     // Revisi KPI 11 Nov (SPV-A2): arahan baru dari SPV untuk leader.
     'directives' => const DirectivesPage(),
-    'evaluations' => const DirectivesPage(initialTab: 1),
+    'evaluations' => const DirectivesPage(initialTab: 2),
     // Revisi 19 Nov: opname di-ACC, pengeluaran diputus SPV, kiriman berangkat.
     'stock-audits' when id != null => StockAuditDetailPage(auditId: id),
     'expenses' => const ExpenseListPage(),

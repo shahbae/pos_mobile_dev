@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/attendance_model.dart';
+import 'shift_repository.dart' show DailyAuditRequired;
 import '../models/leave_out_model.dart';
 import '../models/my_day_model.dart';
 import '../models/overtime_model.dart';
@@ -148,13 +149,25 @@ class AttendanceRepository {
     );
   }
 
-  /// Pulang lembur: GPS dicatat, tidak dinilai.
-  Future<ScheduledOvertime> overtimeCheckOut({required int id, double? latitude, double? longitude}) =>
+  /// Pulang lembur: selfie wajib (revisi owner 26 Nov 2026, supaya lembur
+  /// tidak selesai karena tombol kepencet). GPS dicatat, tidak dinilai. Foto
+  /// dikirim dari memori: berkas cache kamera bisa hilang sebelum diunggah.
+  Future<ScheduledOvertime> overtimeCheckOut({
+    required int id,
+    required Uint8List photo,
+    double? latitude,
+    double? longitude,
+  }) =>
       _overtimeCall(
-        () => api.dio.post('/me/overtimes/$id/check-out', data: {
-          if (latitude != null) 'latitude': latitude,
-          if (longitude != null) 'longitude': longitude,
-        }),
+        () => api.dio.post(
+          '/me/overtimes/$id/check-out',
+          data: FormData.fromMap({
+            'photo': MultipartFile.fromBytes(photo, filename: 'pulang-lembur-$id.jpg'),
+            if (latitude != null) 'latitude': latitude,
+            if (longitude != null) 'longitude': longitude,
+          }),
+          options: Options(contentType: 'multipart/form-data'),
+        ),
         'Gagal absen pulang lembur',
       );
 
@@ -236,6 +249,17 @@ class AttendanceRepository {
       }
       return AttendanceModel.fromJson(Map<String, dynamic>.from(data));
     } on DioException catch (e) {
+      // Absen pulang Shift 2 ditahan sampai opname Shift 2 lengkap (revisi
+      // owner 26 Nov 2026): halaman Absensi menawarkan membuka opnamenya.
+      final body = e.response?.data;
+      if (body is Map && body['code'] == 'shift2_audit_required') {
+        final detail = body['data'];
+        final missing = detail is Map && detail['missing'] is List
+            ? [for (final m in detail['missing'] as List) '$m']
+            : const ['daily'];
+        throw DailyAuditRequired('${body['message'] ?? 'Kirim opname Shift 2 dulu.'}',
+            missing: missing.isEmpty ? const ['daily'] : missing);
+      }
       throw _mapError(e, fallback);
     }
   }

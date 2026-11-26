@@ -110,7 +110,7 @@ void main() {
       await _phone(tester);
       await tester.pumpWidget(_host(const ShiftPage(), ['karyawan'], noShift(AttendanceGateStatus.notCheckedIn)));
       await tester.pumpAndSettle();
-      expect(find.textContaining('Absen masuk dulu sebelum buka shift'), findsOneWidget);
+      expect(find.textContaining('Absen masuk dulu sebelum memakai menu Kasir'), findsOneWidget);
       expect(_btn('Absen Masuk'), findsOneWidget);
       expect(_btn('Buka Shift'), findsNothing);
       expect(tester.takeException(), isNull);

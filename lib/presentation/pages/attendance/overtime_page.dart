@@ -88,11 +88,23 @@ class _OvertimePageState extends ConsumerState<OvertimePage> {
     final yakin = await confirmAction(
       context,
       title: 'Pulang lembur sekarang?',
-      message: 'Jam yang dibayar dihitung sampai sekarang, paling lambat ${ot.endTime.replaceAll(':', '.')}.',
-      confirmLabel: 'Ya, pulang lembur',
+      message: 'Ambil selfie dulu. Jam yang dibayar dihitung sampai sekarang, paling lambat '
+          '${ot.endTime.replaceAll(':', '.')}.',
+      confirmLabel: 'Ya, ambil selfie',
     );
     if (!yakin || !mounted) return;
     await _run(() async {
+      // Selfie wajib (revisi owner 26 Nov 2026). Dibaca ke memori begitu kamera
+      // kembali, sebelum berkas cache-nya sempat dibersihkan sistem.
+      setState(() => _progress = 'Mengambil foto…');
+      final shot = await ImagePicker().pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: CameraDevice.front,
+        imageQuality: 70,
+        maxWidth: 1280,
+      );
+      if (shot == null) return;
+      final photo = await shot.readAsBytes();
       setState(() => _progress = 'Mendeteksi lokasi…');
       double? lat, lng;
       try {
@@ -103,7 +115,9 @@ class _OvertimePageState extends ConsumerState<OvertimePage> {
         // Lokasi pulang lembur hanya dicatat; tanpa GPS tetap boleh pulang.
       }
       setState(() => _progress = 'Menyimpan pulang lembur…');
-      final done = await ref.read(attendanceRepositoryProvider).overtimeCheckOut(id: ot.id, latitude: lat, longitude: lng);
+      final done = await ref
+          .read(attendanceRepositoryProvider)
+          .overtimeCheckOut(id: ot.id, photo: photo, latitude: lat, longitude: lng);
       ref.invalidate(myOvertimesProvider);
       _snack('Lembur selesai: ${done.hours} jam dibayar.');
     });
@@ -135,7 +149,8 @@ class _OvertimePageState extends ConsumerState<OvertimePage> {
                     const SdmNote(
                       icon: Icons.info_outline,
                       text: 'Lembur dijadwalkan leader/SPV di jadwal. Absen pulang shift dulu, lalu masuk '
-                          'ulang di lokasi lembur dengan selfie. Jam yang dibayar dibatasi jam jadwal lembur.',
+                          'ulang di lokasi lembur dengan selfie. Pulang lembur juga dengan selfie. Jam yang '
+                          'dibayar dibatasi jam jadwal lembur.',
                     ),
                     const SizedBox(height: 16),
                     if (rows.isEmpty)

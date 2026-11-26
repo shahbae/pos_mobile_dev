@@ -271,3 +271,42 @@ class LeaderEvaluation {
     );
   }
 }
+
+
+/// Satu hari laporan harian leader beserta tanggapan SPV — tab "Evaluasi
+/// harian" di Arahan SPV (revisi owner 26 Nov 2026). [note] kosong = SPV belum
+/// menanggapi laporan hari itu.
+class LeaderReportReview {
+  final String date;
+  final String branchName;
+  final int closedShifts;
+  final String note;
+  final String reviewerName;
+  final DateTime? reviewedAt;
+  final DateTime? dueAt;
+  final bool? onTime;
+
+  const LeaderReportReview({
+    required this.date,
+    this.branchName = '',
+    this.closedShifts = 0,
+    this.note = '',
+    this.reviewerName = '',
+    this.reviewedAt,
+    this.dueAt,
+    this.onTime,
+  });
+
+  bool get reviewed => note.trim().isNotEmpty;
+
+  factory LeaderReportReview.fromJson(Map<String, dynamic> j) => LeaderReportReview(
+        date: _str(j['date']),
+        branchName: _str(j['branch_name']),
+        closedShifts: _int(j['closed_shifts']),
+        note: _str(j['note']),
+        reviewerName: _str(j['reviewer_name']),
+        reviewedAt: _time(j['reviewed_at']),
+        dueAt: _time(j['due_at']),
+        onTime: j['on_time'] is bool ? j['on_time'] as bool : null,
+      );
+}

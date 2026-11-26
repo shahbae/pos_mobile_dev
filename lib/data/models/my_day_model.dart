@@ -110,6 +110,26 @@ class MyDayShift {
   }
 }
 
+/// Lembur yang sudah masuk dan belum pulang (revisi owner 26 Nov 2026).
+/// Selama ini ada, orangnya dihitung bertugas di lokasi lembur dengan [duty].
+class MyDayOvertime {
+  final int id;
+
+  /// `cashier` | `server` | `both`.
+  final String duty;
+  final ScheduleLocation location;
+
+  const MyDayOvertime({required this.id, this.duty = 'both', required this.location});
+
+  factory MyDayOvertime.fromJson(Map<String, dynamic> json) => MyDayOvertime(
+        id: _toInt(json['id']) ?? 0,
+        duty: json['duty']?.toString() ?? 'both',
+        location: json['location'] is Map
+            ? ScheduleLocation.fromJson(Map<String, dynamic>.from(json['location'] as Map))
+            : const ScheduleLocation(type: ''),
+      );
+}
+
 /// Hari saya: shift hari ini, absen hari ini, dan apakah masih ada shift lagi.
 class MyDay {
   final String date;
@@ -128,6 +148,12 @@ class MyDay {
   /// terkunci sesudah absen pulang HANYA bila ini false.
   final bool hasNextShift;
 
+  /// Lembur yang sedang berjalan (revisi owner 26 Nov 2026), atau null.
+  final MyDayOvertime? activeOvertime;
+
+  /// Absen terakhir hari ini ditutup sistem di batas absen pulang.
+  final bool autoCheckout;
+
   MyDay({
     required this.date,
     required this.shifts,
@@ -137,6 +163,8 @@ class MyDay {
     this.checkinOpenMinutes = 20,
     this.openAttendanceId,
     this.hasNextShift = false,
+    this.activeOvertime,
+    this.autoCheckout = false,
   }) : receivedAt = receivedAt ?? DateTime.now();
 
   /// Server lama (tanpa `/attendance/me/day`): satu absen per hari, tanpa jadwal.
@@ -163,6 +191,10 @@ class MyDay {
       attendances: list(json['attendances']).map(AttendanceModel.fromJson).toList(),
       openAttendanceId: _toInt(json['open_attendance_id']),
       hasNextShift: json['has_next_shift'] == true,
+      activeOvertime: json['active_overtime'] is Map
+          ? MyDayOvertime.fromJson(Map<String, dynamic>.from(json['active_overtime'] as Map))
+          : null,
+      autoCheckout: json['auto_checkout'] == true,
     );
   }
 
@@ -186,6 +218,21 @@ class MyDay {
   }
 
   bool get hasAttendance => attendances.any((a) => a.hasCheckedIn);
+
+  /// Sedang bertugas (revisi owner 26 Nov 2026): absen masuk belum pulang, atau
+  /// lembur yang sudah masuk.
+  bool get onDuty => openAttendance != null || activeOvertime != null;
+
+  /// Posisi yang berlaku sekarang: posisi lembur bila sedang lembur, selain itu
+  /// posisi shift yang sedang diabsen. null = tidak diketahui (tanpa jadwal).
+  String? get currentDuty {
+    final ot = activeOvertime;
+    if (ot != null) return ot.duty;
+    for (final s in shifts) {
+      if (s.status == MyDayShiftStatus.checkedIn) return s.duty;
+    }
+    return null;
+  }
 
   /// Shift yang bisa diabsen masuk sekarang. Yang paling awal didahulukan,
   /// sama seperti server memilihnya.

@@ -286,11 +286,11 @@ bool isDutyGated(Iterable<String> held) {
 }
 
 /// Menu kasir: ditutup untuk karyawan yang hari ini hanya bertugas penyaji.
-/// Monitoring pesanan tetap terbuka untuk semua tugas.
+/// Monitoring pesanan tetap terbuka untuk semua tugas. Audit Stok tidak lagi
+/// di sini: sejak revisi owner 26 Nov 2026 penyaji ikut audit.
 const cashierDutyFeatures = {
   AppFeature.pos,
   AppFeature.shift,
-  AppFeature.stockAudit,
   AppFeature.transactions,
 };
 
