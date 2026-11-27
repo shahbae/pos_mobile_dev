@@ -21,6 +21,7 @@ import 'package:pos_mobile/presentation/providers/branch_provider.dart';
 import 'package:pos_mobile/presentation/providers/branch_scope.dart';
 import 'package:pos_mobile/presentation/widgets/confirm_dialog.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
+import 'package:pos_mobile/presentation/pages/stock_audits/daily_audit_gate.dart';
 
 final _clock = DateFormat('HH.mm', 'id_ID');
 
@@ -349,6 +350,9 @@ class _AttendancePageState extends ConsumerState<AttendancePage> {
       }
     } catch (e) {
       if (mounted) _snack('$e', error: true);
+      if (e is DailyAuditRequired && mounted) {
+        await showDailyAuditRequired(context, ref, missing: e.missing);
+      }
     } finally {
       if (mounted) {
         setState(() {

@@ -269,27 +269,31 @@ void main() {
       expect(repo.photos, hasLength(4));
     });
 
-    testWidgets('revisi 21 Nov: tombok tidak dibayar → keluar dari nominal, dikirim sebagai unpaid', (tester) async {
+    testWidgets('revisi 26 Nov: kurang wajib ditombok — tanpa sakelar, masuk nominal, tidak ada unpaid', (tester) async {
       final repo = _DepositRepo();
       await _pumpForm(tester, repo);
       await tester.pump();
       expect(find.textContaining('Patimah: kurang'), findsOneWidget);
-      final toggle = find.byType(Switch);
-      await tester.ensureVisible(toggle);
-      await tester.tap(toggle);
-      await tester.pump();
-      expect(find.text('Rp 1.422.000'), findsOneWidget);
-      // Revisi 24 Nov: selisih hanya tercatat, tidak memotong gaji.
-      expect(find.textContaining('tercatat sebagai selisih Patimah'), findsOneWidget);
+      expect(find.byType(Switch), findsNothing);
+      expect(find.textContaining('Wajib ditombok tunai ke amplop setoran'), findsOneWidget);
+      expect(find.text('Rp 1.442.000'), findsOneWidget);
       expect(find.textContaining('dipotong dari gaji'), findsNothing);
-      await tester.scrollUntilVisible(find.textContaining('Tambah bukti'), 300, scrollable: find.byType(Scrollable).first);
-      await tester.tap(find.textContaining('Tambah bukti'));
+      // Layar dipanjangkan supaya seluruh form muat: "Tambah bukti" jatuh tepat
+      // di tepi bawah 800 dp sehingga ketukannya meleset.
+      tester.view.physicalSize = const Size(1080, 4200);
       await tester.pump();
-      await tester.scrollUntilVisible(find.text('Kirim setoran'), 300, scrollable: find.byType(Scrollable).first);
-      await tester.tap(find.widgetWithText(ElevatedButton, 'Kirim setoran'));
+      final add = find.textContaining('Tambah bukti');
+      await tester.ensureVisible(add);
+      await tester.tap(add);
       await tester.pump();
-      expect(repo.amount, 1422000);
-      expect(repo.unpaid, [2]);
+      await tester.pump();
+      expect(find.byTooltip('Hapus foto'), findsOneWidget);
+      final send = find.widgetWithText(ElevatedButton, 'Kirim setoran');
+      await tester.ensureVisible(send);
+      await tester.tap(send);
+      await tester.pump();
+      expect(repo.amount, 1442000);
+      expect(repo.unpaid, isEmpty);
     });
 
     testWidgets('kirim ulang tanggal lama: tanggalnya tetap, ditandai lewat batas', (tester) async {

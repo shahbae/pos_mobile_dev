@@ -65,3 +65,9 @@ final myDirectivesProvider = FutureProvider.autoDispose<List<LeaderDirective>>((
 final myEvaluationsProvider = FutureProvider.autoDispose<List<LeaderEvaluation>>((ref) {
   return ref.watch(kpiRepositoryProvider).myEvaluations();
 });
+
+/// Evaluasi harian (revisi owner 26 Nov 2026): tanggapan SPV atas laporan
+/// harian leader, per bulan "yyyy-MM".
+final myLeaderReportReviewsProvider = FutureProvider.autoDispose.family<List<LeaderReportReview>, String>((ref, month) {
+  return ref.watch(kpiRepositoryProvider).myLeaderReportReviews(month: month);
+});

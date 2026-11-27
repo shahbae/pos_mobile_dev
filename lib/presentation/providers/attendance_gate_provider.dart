@@ -27,7 +27,8 @@ AttendanceGateStatus gateStatusOf(AttendanceModel? att) {
 
 /// Tahap 1 SDM: terkunci sesudah absen pulang hanya bila tidak ada shift lagi.
 AttendanceGateStatus gateStatusOfDay(MyDay day) {
-  if (day.openAttendance != null) return AttendanceGateStatus.working;
+  // Lembur yang sudah masuk = sedang bertugas (revisi owner 26 Nov 2026).
+  if (day.onDuty) return AttendanceGateStatus.working;
   if (day.hasAttendance && !day.hasNextShift) return AttendanceGateStatus.checkedOut;
   return AttendanceGateStatus.notCheckedIn;
 }

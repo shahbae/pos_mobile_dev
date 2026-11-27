@@ -201,7 +201,6 @@ class _CashDepositFormPageState extends ConsumerState<CashDepositFormPage> {
   late DateTime _date = _initialDate();
   final _note = TextEditingController();
   // Shift kurang yang kasirnya TIDAK menombok tunai.
-  final Set<int> _unpaid = {};
   final List<Uint8List> _photos = [];
   bool _busy = false;
 
@@ -246,10 +245,7 @@ class _CashDepositFormPageState extends ConsumerState<CashDepositFormPage> {
       helpText: 'Tanggal operasional',
     );
     if (d != null && mounted) {
-      setState(() {
-        _date = d;
-        _unpaid.clear();
-      });
+      setState(() => _date = d);
     }
   }
 
@@ -258,10 +254,10 @@ class _CashDepositFormPageState extends ConsumerState<CashDepositFormPage> {
     try {
       final d = await ref.read(kpiRepositoryProvider).createCashDeposit(
             operationalDate: _dateKey,
-            amount: preview.nominalFor(_unpaid).round(),
+            // Revisi owner 26 Nov 2026: semua kekurangan wajib ditombok.
+            amount: preview.nominalFor(const {}).round(),
             photos: _photos,
             note: _note.text.trim(),
-            unpaidShiftIds: _unpaid.toList()..sort(),
           );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -281,7 +277,7 @@ class _CashDepositFormPageState extends ConsumerState<CashDepositFormPage> {
     final bottomInset = MediaQuery.of(context).padding.bottom;
     final previewAsync = ref.watch(cashDepositPreviewProvider(_dateKey));
     final preview = previewAsync.valueOrNull;
-    final nominal = preview?.nominalFor(_unpaid) ?? 0;
+    final nominal = preview?.nominalFor(const {}) ?? 0;
     final ready = preview != null && preview.allClosed && nominal > 0 && _photos.isNotEmpty;
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
@@ -321,12 +317,7 @@ class _CashDepositFormPageState extends ConsumerState<CashDepositFormPage> {
                       ),
                     ],
                   ),
-                  data: (p) => _LockedNominal(
-                    preview: p,
-                    unpaid: _unpaid,
-                    enabled: !_busy,
-                    onTombok: (shiftId, paid) => setState(() => paid ? _unpaid.remove(shiftId) : _unpaid.add(shiftId)),
-                  ),
+                  data: (p) => _LockedNominal(preview: p),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -388,15 +379,13 @@ class _CashDepositFormPageState extends ConsumerState<CashDepositFormPage> {
   }
 }
 
-/// Nominal terkunci + rincian shift (revisi owner 21 Nov 2026). Shift kurang
-/// punya sakelar "Sudah ditombok tunai"; shift lebih hanya diberi tahu bahwa
+/// Nominal terkunci + rincian shift (revisi owner 21 Nov 2026). Sejak revisi
+/// owner 26 Nov 2026 shift kurang WAJIB ditombok (sakelar dibuang) dan
+/// kekurangannya selalu masuk nominal; shift lebih diberi tahu bahwa
 /// kelebihannya ikut disetor dan tercatat (tidak memotong gaji kasirnya).
 class _LockedNominal extends StatelessWidget {
   final DepositPreview preview;
-  final Set<int> unpaid;
-  final bool enabled;
-  final void Function(int shiftId, bool paid) onTombok;
-  const _LockedNominal({required this.preview, required this.unpaid, required this.enabled, required this.onTombok});
+  const _LockedNominal({required this.preview});
 
   @override
   Widget build(BuildContext context) {
@@ -404,7 +393,7 @@ class _LockedNominal extends StatelessWidget {
       return const Text('Belum ada shift di tanggal ini, jadi belum ada yang perlu disetor.',
           style: TextStyle(color: AppTheme.textSecondary));
     }
-    final nominal = preview.nominalFor(unpaid);
+    final nominal = preview.nominalFor(const {});
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -446,14 +435,33 @@ class _LockedNominal extends StatelessWidget {
         ],
         for (final s in preview.shifts)
           if (s.isShort)
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              value: !unpaid.contains(s.shiftId),
-              onChanged: enabled ? (v) => onTombok(s.shiftId, v) : null,
-              title: Text('${s.shiftName.isEmpty ? 'Shift' : s.shiftName} · ${s.cashierName}: kurang ${formatRupiah(-s.difference)}'),
-              subtitle: Text(unpaid.contains(s.shiftId)
-                  ? 'Tidak ditombok: keluar dari setoran dan tercatat sebagai selisih ${s.cashierName}.'
-                  : 'Sudah ditombok tunai ke amplop setoran.'),
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.only(top: 2),
+                    child: Icon(Icons.payments_outlined, size: 18, color: AppTheme.danger),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${s.shiftName.isEmpty ? 'Shift' : s.shiftName} · ${s.cashierName}: kurang ${formatRupiah(-s.difference)}',
+                          style: const TextStyle(fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
+                        ),
+                        const Text(
+                          'Wajib ditombok tunai ke amplop setoran; sudah masuk nominal di atas.',
+                          style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             )
           else if (s.isOver)
             Padding(

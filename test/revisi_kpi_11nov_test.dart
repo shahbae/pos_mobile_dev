@@ -75,6 +75,19 @@ class _FakeKpi implements KpiRepository {
   ];
 
   @override
+  Future<List<LeaderReportReview>> myLeaderReportReviews({String? month}) async => [
+        LeaderReportReview.fromJson({
+          'date': '2026-11-25',
+          'branch_name': 'JUNTIKEBON',
+          'closed_shifts': 2,
+          'note': 'Laporan rapi, stok teh cukup.',
+          'reviewer_name': 'Alena',
+          'reviewed_at': '2026-11-26T08:00:00+07:00',
+        }),
+        LeaderReportReview.fromJson({'date': '2026-11-24', 'branch_name': 'JUNTIKEBON', 'closed_shifts': 2, 'note': ''}),
+      ];
+
+  @override
   Future<LeaderDirective> markDirectiveDone(int id, {String note = '', Uint8List? photo}) async {
     calls.add('done:$id:$note:${photo?.length ?? 0}');
     return directives.first;
@@ -381,10 +394,20 @@ void main() {
       await tester.pumpAndSettle();
       expect(kpi.calls, ['done:5:rak sudah rapi:${_png.length}']);
 
-      await tester.tap(find.text('Evaluasi'));
+      await tester.tap(find.text('Evaluasi bulanan'));
       await tester.pumpAndSettle();
       expect(find.text('Evaluasi Oktober 2026'), findsOneWidget);
       expect(find.text('Kas rapi, opname tepat waktu.'), findsOneWidget);
+
+      // Revisi owner 26 Nov 2026: tab Evaluasi harian = tanggapan SPV atas
+      // laporan harian leader; hari yang belum ditanggapi tetap tampil.
+      await tester.ensureVisible(find.text('Evaluasi harian'));
+      await tester.tap(find.text('Evaluasi harian'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Laporan rapi, stok teh cukup.'), findsOneWidget);
+      expect(find.text('Ditanggapi'), findsOneWidget);
+      expect(find.text('Belum ditanggapi'), findsOneWidget);
     });
 
     testWidgets('Notifikasi arahan membuka halaman Arahan SPV', (tester) async {

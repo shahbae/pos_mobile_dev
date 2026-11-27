@@ -14,6 +14,7 @@ import 'package:pos_mobile/presentation/pages/attendance/attendance_page.dart';
 import 'package:pos_mobile/presentation/pages/dashboard/dashboard_page.dart';
 import 'package:pos_mobile/presentation/pages/login_page.dart';
 import 'package:pos_mobile/presentation/widgets/app_update_gate.dart';
+import 'package:pos_mobile/presentation/widgets/auto_checkout_watcher.dart';
 import 'package:pos_mobile/presentation/widgets/push_binder.dart';
 import 'package:pos_mobile/presentation/widgets/reminder_gate.dart';
 
@@ -63,9 +64,12 @@ class MyApp extends ConsumerWidget {
         page = PushBinder(
           child: AppUpdateGate(
             offerOptional: true,
-            child: isAttendanceOnly(auth.role)
-                ? const AttendancePage(isRoot: true)
-                : const DashboardPage(),
+            // Absen pulang otomatis → app keluar sendiri (revisi owner 26 Nov 2026).
+            child: AutoCheckoutWatcher(
+              child: isAttendanceOnly(auth.role)
+                  ? const AttendancePage(isRoot: true)
+                  : const DashboardPage(),
+            ),
           ),
         );
         break;

@@ -195,6 +195,14 @@ void main() {
       final save = _button('Simpan Audit');
       expect(save, findsOneWidget);
       expect(tester.getRect(save).width, greaterThan(300));
+      // Revisi owner 26 Nov 2026: retur teh/gula tetap lewat opname harian.
+      expect(find.byTooltip('Barang dikembalikan ke gudang'), findsWidgets);
+    });
+
+    testWidgets('opname bulanan: tanpa ikon retur (retur lewat menu Retur Stok)', (tester) async {
+      await _pump(tester, const StockAuditFormPage(auditType: AuditTypes.monthly), _Repo());
+      expect(tester.takeException(), isNull);
+      expect(find.byTooltip('Barang dikembalikan ke gudang'), findsNothing);
     });
   });
 

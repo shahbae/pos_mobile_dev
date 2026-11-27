@@ -23,11 +23,12 @@ String _period(String p) {
 /// Arahan dan evaluasi dari SPV untuk leader (revisi KPI 11 Nov, SPV-A2).
 /// SPV memberi arahan bertenggat lewat web; leader menandainya sudah
 /// dikerjakan (catatan/foto opsional) sebelum SPV mengeceknya. Evaluasi
-/// bulanan hanya dibaca.
+/// bulanan hanya dibaca. Sejak revisi owner 26 Nov 2026 ada tab Evaluasi
+/// harian: tanggapan SPV atas laporan harian leader.
 class DirectivesPage extends ConsumerStatefulWidget {
-  /// 0 = Arahan, 1 = Evaluasi.
+  /// 0 = Evaluasi harian, 1 = Arahan, 2 = Evaluasi bulanan.
   final int initialTab;
-  const DirectivesPage({super.key, this.initialTab = 0});
+  const DirectivesPage({super.key, this.initialTab = 1});
 
   @override
   ConsumerState<DirectivesPage> createState() => _DirectivesPageState();
@@ -37,16 +38,20 @@ class _DirectivesPageState extends ConsumerState<DirectivesPage> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2,
+      length: 3,
       initialIndex: widget.initialTab,
       child: Scaffold(
         backgroundColor: AppTheme.bgLight,
         appBar: AppBar(
           title: const Text('Arahan SPV'),
           centerTitle: true,
-          bottom: const TabBar(tabs: [Tab(text: 'Arahan'), Tab(text: 'Evaluasi')]),
+          bottom: const TabBar(
+            isScrollable: true,
+            tabAlignment: TabAlignment.center,
+            tabs: [Tab(text: 'Evaluasi harian'), Tab(text: 'Arahan'), Tab(text: 'Evaluasi bulanan')],
+          ),
         ),
-        body: const TabBarView(children: [_DirectiveList(), _EvaluationList()]),
+        body: const TabBarView(children: [_DailyReviewList(), _DirectiveList(), _EvaluationList()]),
       ),
     );
   }
@@ -233,6 +238,144 @@ class _MarkDoneSheetState extends ConsumerState<_MarkDoneSheet> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+final _dayLabel = DateFormat('EEEE, d MMM', 'id_ID');
+
+String _monthKey(DateTime d) => DateFormat('yyyy-MM').format(d);
+
+/// Evaluasi harian: tanggapan SPV atas laporan harian outlet leader, satu
+/// bulan, terbaru dulu. Hari yang belum ditanggapi tetap tampil.
+class _DailyReviewList extends ConsumerStatefulWidget {
+  const _DailyReviewList();
+
+  @override
+  ConsumerState<_DailyReviewList> createState() => _DailyReviewListState();
+}
+
+class _DailyReviewListState extends ConsumerState<_DailyReviewList> {
+  DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
+
+  @override
+  Widget build(BuildContext context) {
+    final key = _monthKey(_month);
+    final async = ref.watch(myLeaderReportReviewsProvider(key));
+    final now = DateTime.now();
+    final isCurrent = _month.year == now.year && _month.month == now.month;
+    return RefreshIndicator(
+      onRefresh: () async => ref.invalidate(myLeaderReportReviewsProvider(key)),
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Row(
+            children: [
+              IconButton(
+                tooltip: 'Bulan sebelumnya',
+                onPressed: () => setState(() => _month = DateTime(_month.year, _month.month - 1)),
+                icon: const Icon(Icons.chevron_left),
+              ),
+              Expanded(
+                child: Text(
+                  _period(key),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Bulan berikutnya',
+                onPressed: isCurrent ? null : () => setState(() => _month = DateTime(_month.year, _month.month + 1)),
+                icon: const Icon(Icons.chevron_right),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ...async.when(
+            loading: () => [const Padding(padding: EdgeInsets.all(32), child: Center(child: CircularProgressIndicator()))],
+            error: (e, _) => [
+              SdmStateView(
+                icon: Icons.cloud_off,
+                message: '$e',
+                onRetry: () => ref.invalidate(myLeaderReportReviewsProvider(key)),
+              ),
+            ],
+            data: (rows) => rows.isEmpty
+                ? [
+                    const SdmStateView(
+                      icon: Icons.fact_check_outlined,
+                      message: 'Belum ada laporan harian di bulan ini.',
+                    ),
+                  ]
+                : [
+                    for (final r in rows) ...[
+                      _DailyReviewTile(review: r),
+                      const SizedBox(height: 12),
+                    ],
+                  ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DailyReviewTile extends StatelessWidget {
+  final LeaderReportReview review;
+  const _DailyReviewTile({required this.review});
+
+  @override
+  Widget build(BuildContext context) {
+    final day = DateTime.tryParse(review.date);
+    return SdmCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  day == null ? review.date : _dayLabel.format(day),
+                  style: const TextStyle(fontWeight: FontWeight.w900, color: AppTheme.textPrimary),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: review.reviewed ? Colors.green.shade50 : Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  review.reviewed ? 'Ditanggapi' : 'Belum ditanggapi',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: review.reviewed ? Colors.green.shade800 : Colors.orange.shade800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (review.branchName.isNotEmpty)
+            Text(review.branchName, style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+          const SizedBox(height: 10),
+          if (review.reviewed) ...[
+            Text(review.note, style: const TextStyle(color: AppTheme.textPrimary, height: 1.4)),
+            const SizedBox(height: 6),
+            Text(
+              [
+                if (review.reviewerName.isNotEmpty) 'Dari ${review.reviewerName}',
+                if (review.reviewedAt != null) _when.format(review.reviewedAt!.toLocal()),
+              ].join(' · '),
+              style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+            ),
+          ] else
+            const Text(
+              'SPV belum menanggapi laporan harian hari ini.',
+              style: TextStyle(color: AppTheme.textSecondary),
+            ),
+        ],
       ),
     );
   }

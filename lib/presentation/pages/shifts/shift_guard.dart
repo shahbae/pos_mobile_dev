@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/data/models/shift_model.dart';
 import 'package:pos_mobile/data/repositories/shift_repository.dart';
+import 'package:pos_mobile/presentation/pages/attendance/work_gate.dart';
 import 'package:pos_mobile/presentation/pages/shifts/shift_page.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/offline_provider.dart';
@@ -18,6 +19,10 @@ import 'package:pos_mobile/theme/app_theme.dart';
 Future<bool> ensureActiveShift(BuildContext context, WidgetRef ref) async {
   // Role tanpa fitur shift (mis. Produksi) tidak perlu—dan tidak boleh—cek shift.
   if (!hasFeature(ref.read(authProvider).role, AppFeature.shift)) return true;
+  // Revisi owner 26 Nov 2026: Kasir hanya untuk yang sudah absen masuk dengan
+  // posisi kasir/penyaji kasir — juga saat shift akun lain sedang terbuka.
+  if (!await ensureOnDuty(context, ref, cashier: true)) return false;
+  if (!context.mounted) return false;
 
   final shift = await _fetchCurrentShift(context, ref);
   if (shift != null && shift.isOpen) return true;

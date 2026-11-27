@@ -452,6 +452,26 @@ class KpiRepository {
     }
   }
 
+  /// `GET /me/leader-report-reviews?month=` — tanggapan SPV atas laporan
+  /// harian outlet leader (Evaluasi harian, revisi owner 26 Nov 2026), terbaru
+  /// dulu. Server lama (404) → kosong.
+  Future<List<LeaderReportReview>> myLeaderReportReviews({String? month}) async {
+    try {
+      final res = await api.dio.get('/me/leader-report-reviews', queryParameters: {
+        if (month != null && month.isNotEmpty) 'month': month,
+      });
+      final data = res.data['data'];
+      if (data is! List) return const [];
+      return [
+        for (final e in data)
+          if (e is Map) LeaderReportReview.fromJson(Map<String, dynamic>.from(e)),
+      ];
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return const [];
+      throw _error(e, 'Gagal memuat evaluasi harian');
+    }
+  }
+
   /// `GET /me/evaluations` — evaluasi bulanan milik leader, terbaru dulu.
   Future<List<LeaderEvaluation>> myEvaluations() async {
     try {

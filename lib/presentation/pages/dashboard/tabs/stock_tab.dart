@@ -18,6 +18,8 @@ import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/presentation/providers/duty_provider.dart';
 import 'package:pos_mobile/presentation/providers/shipment_provider.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
+import 'package:pos_mobile/presentation/pages/attendance/work_gate.dart';
+import 'package:pos_mobile/presentation/pages/returns/branch_return_page.dart';
 
 class StockTab extends ConsumerWidget {
   const StockTab({super.key});
@@ -236,10 +238,14 @@ class StockTab extends ConsumerWidget {
               icon: Icons.fact_check_outlined,
               title: "Audit Stok",
               subtitle: "Hitung fisik & sesuaikan stok material",
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const StockAuditListPage()),
-              ),
+              onTap: () async {
+                // Menu kerja: wajib sudah absen masuk (revisi owner 26 Nov 2026).
+                if (!await ensureOnDuty(context, ref) || !context.mounted) return;
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const StockAuditListPage()),
+                );
+              },
             ),
           ],
           if (features.contains(AppFeature.expenses)) ...[
@@ -262,10 +268,28 @@ class StockTab extends ConsumerWidget {
               icon: Icons.delete_sweep_outlined,
               title: "Catat Waste",
               subtitle: "Barang yang dibuang (tumpah, basi, rusak) + foto",
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const WasteFormPage()),
-              ),
+              onTap: () async {
+                if (!await ensureOnDuty(context, ref) || !context.mounted) return;
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const WasteFormPage()),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+            _menuItem(
+              context,
+              icon: Icons.assignment_return_outlined,
+              title: "Retur Stok",
+              subtitle: "Kirim barang balik ke gudang tanpa hitung fisik",
+              onTap: () async {
+                // Revisi owner 26 Nov 2026: menu kerja, wajib sudah absen masuk.
+                if (!await ensureOnDuty(context, ref) || !context.mounted) return;
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const BranchReturnPage()),
+                );
+              },
             ),
           ],
         ],

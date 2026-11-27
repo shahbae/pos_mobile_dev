@@ -79,7 +79,7 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
     for (final it in auditable) {
       final v = _physical[it.key]?.trim() ?? '';
       if (v.isEmpty) continue;
-      final ret = _returned[it.key]?.trim() ?? '';
+      final ret = _allowReturn ? (_returned[it.key]?.trim() ?? '') : '';
       items.add({
         ...it.idPayload,
         'physical_qty': v, // string desimal sesuai BE
@@ -388,9 +388,13 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
         ),
       );
 
+  /// Revisi owner 26 Nov 2026: retur lewat opname hanya di harian dan mingguan
+  /// (teh, gula); barang lain diretur lewat menu Retur Stok.
+  bool get _allowReturn => widget.type == AuditTypes.daily || widget.type == AuditTypes.weekly;
+
   Widget _qtyRow(AuditableItem item) {
     final key = item.key;
-    final open = _returnedOpen.contains(key);
+    final open = _allowReturn && _returnedOpen.contains(key);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Column(
@@ -417,6 +421,7 @@ class _StockAuditFormPageState extends ConsumerState<StockAuditFormPage> {
               SizedBox(
                   width: 120,
                   child: _numField(key, _physical, 'qty fisik', unit: item.unit)),
+              if (_allowReturn)
               IconButton(
                 tooltip: open ? 'Batalkan dikembalikan' : 'Barang dikembalikan ke gudang',
                 visualDensity: VisualDensity.compact,
