@@ -4,14 +4,12 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import 'package:pos_mobile/data/models/profile_model.dart';
-import 'package:pos_mobile/presentation/pages/allowance/my_allowance_page.dart';
-import 'package:pos_mobile/presentation/pages/kpi/my_kpi_page.dart';
-import 'package:pos_mobile/presentation/providers/allowance_provider.dart';
+import 'package:pos_mobile/presentation/pages/dashboard/menu_layout.dart';
+import 'package:pos_mobile/presentation/pages/profile/profile_summary.dart';
 import 'package:pos_mobile/presentation/providers/attendance_provider.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/kpi_provider.dart';
 import 'package:pos_mobile/presentation/widgets/confirm_dialog.dart';
-import 'package:pos_mobile/presentation/widgets/notification_readiness_card.dart';
 import 'package:pos_mobile/presentation/widgets/offline_hold.dart';
 import 'package:pos_mobile/presentation/widgets/sdm_widgets.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
@@ -24,8 +22,10 @@ String _date(String? ymd) {
   return d == null ? ymd : _dateLabel.format(d);
 }
 
-/// Profil sendiri (Tahap 1 SDM). Nomor HP, alamat, dan kontak darurat diubah
-/// sendiri; NIK, rekening, dan tanggal kerja diubah owner atau SPV.
+/// Data diri (Tahap 1 SDM; tata letak baru revisi owner 26 Nov 2026), dibuka
+/// dari kartu profil di tab Profil. Nomor HP, alamat, dan kontak darurat diubah
+/// sendiri; NIK, rekening, dan tanggal kerja diubah owner atau SPV. Jatah
+/// minum & Skor KPI kini kartu di tab Profil; Ganti password di Setting.
 class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});
 
@@ -34,11 +34,10 @@ class ProfilePage extends ConsumerWidget {
     final async = ref.watch(myProfileProvider);
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
-      appBar: AppBar(title: const Text('Profil'), centerTitle: true),
+      appBar: AppBar(title: const Text('Data diri'), centerTitle: true),
       body: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(myProfileProvider);
-          ref.invalidate(myAllowanceProvider);
           ref.invalidate(myKpiProvider);
         },
         child: async.when(
@@ -167,62 +166,38 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
         ListView(
           padding: EdgeInsets.fromLTRB(20, 20, 20, 32 + bottomInset),
           children: [
+            Center(child: ProfileAvatar(photoUrl: p.photoUrl, radius: 48, onTap: _busy ? null : _changePhoto)),
+            const SizedBox(height: 10),
+            Text(p.name,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: AppTheme.textPrimary)),
+            if (p.roles.isNotEmpty)
+              Text(jobTitle(p.roles),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppTheme.textSecondary)),
+            const SizedBox(height: 4),
+            const KpiScoreLine(center: true),
+            const SizedBox(height: 2),
+            Text(p.email, textAlign: TextAlign.center, style: const TextStyle(color: AppTheme.textSecondary)),
+            const SizedBox(height: 20),
+            const _Heading('Data kerja'),
+            const SizedBox(height: 8),
             SdmCard(
-              child: Row(
+              child: Column(
                 children: [
-                  GestureDetector(
-                    onTap: _busy ? null : _changePhoto,
-                    child: Stack(
-                      children: [
-                        CircleAvatar(
-                          radius: 34,
-                          backgroundColor: AppTheme.bgLight,
-                          foregroundImage: p.photoUrl == null ? null : NetworkImage(p.photoUrl!),
-                          child: const Icon(Icons.person, size: 34, color: AppTheme.textSecondary),
-                        ),
-                        Positioned(
-                          right: 0,
-                          bottom: 0,
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(
-                                color: AppTheme.brandBlue, shape: BoxShape.circle),
-                            child: const Icon(Icons.photo_camera, size: 14, color: Colors.white),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(p.name,
-                            style: const TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w900,
-                                color: AppTheme.textPrimary)),
-                        const SizedBox(height: 2),
-                        Text(p.email, style: const TextStyle(color: AppTheme.textSecondary)),
-                        if (p.roles.isNotEmpty) ...[
-                          const SizedBox(height: 6),
-                          Text(p.roles.join(', '),
-                              style: const TextStyle(
-                                  fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.textSecondary)),
-                        ],
-                      ],
-                    ),
-                  ),
+                  _Row('Nama', p.name),
+                  _Row('NIK', p.nik ?? '-'),
+                  _Row('Tanggal lahir', _date(p.birthDate)),
+                  _Row('Mulai kerja', _date(p.joinedAt)),
+                  if (p.leadBranchName != null) _Row('Cabang yang dipimpin', p.leadBranchName!),
+                  _Row('Bank', p.bankName ?? '-'),
+                  _Row('No. rekening', p.bankAccount ?? '-'),
+                  const SizedBox(height: 8),
+                  const Text('Salah? Minta owner atau SPV mengubahnya.',
+                      style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
                 ],
               ),
             ),
-            const SizedBox(height: 12),
-            const MyAllowanceCard(),
-            const SizedBox(height: 12),
-            const MyKpiCard(),
-            const SizedBox(height: 12),
-            const NotificationReadinessCard(),
             const SizedBox(height: 20),
             const _Heading('Kontak'),
             const SizedBox(height: 8),
@@ -267,35 +242,6 @@ class _ProfileFormState extends ConsumerState<_ProfileForm> {
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 20),
-            const _Heading('Data kerja'),
-            const SizedBox(height: 8),
-            SdmCard(
-              child: Column(
-                children: [
-                  _Row('NIK', p.nik ?? '-'),
-                  _Row('Tanggal lahir', _date(p.birthDate)),
-                  _Row('Mulai kerja', _date(p.joinedAt)),
-                  if (p.leadBranchName != null) _Row('Cabang yang dipimpin', p.leadBranchName!),
-                  _Row('Bank', p.bankName ?? '-'),
-                  _Row('No. rekening', p.bankAccount ?? '-'),
-                  const SizedBox(height: 8),
-                  const Text('Salah? Minta owner atau SPV mengubahnya.',
-                      style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            OutlinedButton.icon(
-              onPressed: _busy
-                  ? null
-                  : () => Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const ChangePasswordPage()),
-                      ),
-              icon: const Icon(Icons.lock_outline),
-              label: const Text('Ganti password'),
             ),
           ],
         ),

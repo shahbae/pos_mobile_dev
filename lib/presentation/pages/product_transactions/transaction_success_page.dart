@@ -259,7 +259,7 @@ class _TransactionSuccessPageState extends ConsumerState<TransactionSuccessPage>
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      "Atur printer default di Pengaturan untuk cetak otomatis.",
+                      "Atur printer default di Setting → Perangkat Cetak untuk cetak otomatis.",
                       textAlign: TextAlign.center,
                       style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                     ),

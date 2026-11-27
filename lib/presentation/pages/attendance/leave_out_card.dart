@@ -9,7 +9,7 @@ import 'package:pos_mobile/presentation/widgets/setting_menu_card.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
 /// Izin keluar sebentar dari outlet selama bertugas, sebagai kartu di tab
-/// Pengaturan tepat di atas Logout (revisi owner 24 Nov 2026; tadinya tombol di
+/// Profil (layout baru revisi owner 26 Nov 2026; 24 Nov di atas Logout, tadinya tombol di
 /// halaman Absensi). Status "sedang keluar" dibaca dari daftar yang sedang
 /// bertugas di outlet ini. Bagi yang berhak ([canLeaveOut]) kartunya selalu
 /// ada, tetapi redup dan tak bisa diketuk selama belum absen masuk.
@@ -28,7 +28,6 @@ class _LeaveOutMenuCardState extends ConsumerState<LeaveOutMenuCard> {
     final auth = ref.watch(authProvider);
     final open = ref.watch(myDayProvider).valueOrNull?.openAttendance;
     const icon = Icons.directions_walk;
-    final accent = Theme.of(context).colorScheme.primary;
 
     // Belum absen masuk (atau absen tanpa cabang): tak ada outlet untuk ditinggal.
     if (open == null || open.branchId == null) {
@@ -36,7 +35,6 @@ class _LeaveOutMenuCardState extends ConsumerState<LeaveOutMenuCard> {
         title: 'Izin keluar sebentar',
         subtitle: 'Hanya saat sedang bertugas (sudah absen masuk)',
         icon: icon,
-        color: accent,
       );
     }
 
@@ -48,14 +46,12 @@ class _LeaveOutMenuCardState extends ConsumerState<LeaveOutMenuCard> {
         title: 'Izin keluar sebentar',
         subtitle: 'Memuat status…',
         icon: icon,
-        color: accent,
       ),
       // Gagal membaca: tombolnya tetap ada; server yang menolak bila perlu.
       error: (_, _) => SettingMenuCard(
         title: 'Izin keluar sebentar',
         subtitle: 'Catat keluar dari outlet, bisa serah tugas ke rekan',
         icon: icon,
-        color: accent,
         onTap: _busy ? null : () => _start(const []),
       ),
       data: (rows) {
@@ -81,7 +77,6 @@ class _LeaveOutMenuCardState extends ConsumerState<LeaveOutMenuCard> {
           title: 'Izin keluar sebentar',
           subtitle: 'Catat keluar dari outlet, bisa serah tugas ke rekan',
           icon: icon,
-          color: accent,
           onTap: _busy ? null : () => _start(colleagues),
         );
       },

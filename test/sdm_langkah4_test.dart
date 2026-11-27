@@ -513,7 +513,7 @@ void main() {
       expect(find.textContaining('ditutup saat absen pulang'), findsOneWidget);
     });
 
-    testWidgets('Profil: data kerja hanya dibaca, Simpan menyala setelah diubah', (tester) async {
+    testWidgets('Data diri: data kerja hanya dibaca, Simpan menyala setelah diubah', (tester) async {
       await tester.pumpWidget(host(const ProfilePage(), extra: [
         myProfileProvider.overrideWith((ref) async => ProfileModel.fromJson({
               'id': 6, 'name': 'Citra', 'email': 'citra@t.local', 'roles': ['karyawan'],
@@ -522,16 +522,22 @@ void main() {
             })),
       ]));
       await tester.pumpAndSettle();
-      expect(_button(tester, 'Simpan').onPressed, isNull);
-      await tester.enterText(find.widgetWithText(TextField, 'Nomor HP'), '0812-3456-7890');
-      await tester.pump();
-      expect(_button(tester, 'Simpan').onPressed, isNotNull);
-      await tester.scrollUntilVisible(find.text('3201010101010001'), 200, scrollable: find.byType(Scrollable).first);
+      // Layout baru 26 Nov: judul Data diri, jabatan di bawah nama, Data kerja
+      // dulu baru Kontak.
+      expect(find.text('Data diri'), findsOneWidget);
+      expect(find.text('Karyawan'), findsOneWidget);
+      expect(find.text('3201010101010001'), findsOneWidget);
       expect(find.text('14 Juli 2026'), findsOneWidget);
       // Bukan leader: tidak ada baris cabang (cabang utama dihapus 25 Okt).
       expect(find.text('Cabang utama'), findsNothing);
       expect(find.text('Cabang yang dipimpin'), findsNothing);
-      await tester.scrollUntilVisible(find.text('Ganti password'), 200, scrollable: find.byType(Scrollable).first);
+      await tester.scrollUntilVisible(find.text('Simpan'), 200, scrollable: find.byType(Scrollable).first);
+      expect(_button(tester, 'Simpan').onPressed, isNull);
+      await tester.enterText(find.widgetWithText(TextField, 'Nomor HP'), '0812-3456-7890');
+      await tester.pump();
+      expect(_button(tester, 'Simpan').onPressed, isNotNull);
+      // Ganti password pindah ke Setting.
+      expect(find.text('Ganti password'), findsNothing);
     });
   });
 
