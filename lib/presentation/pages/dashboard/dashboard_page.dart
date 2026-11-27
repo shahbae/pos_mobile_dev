@@ -2,18 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_mobile/presentation/widgets/offline_banner.dart';
 import 'package:pos_mobile/presentation/widgets/pending_reminder_banner.dart';
-import 'package:pos_mobile/presentation/pages/dashboard/tabs/stock_tab.dart';
 
 import 'package:pos_mobile/core/auth/role_access.dart';
 import 'package:pos_mobile/presentation/providers/auth_provider.dart';
 import 'package:pos_mobile/presentation/providers/dashboard_index_provider.dart';
 import 'package:pos_mobile/presentation/providers/duty_provider.dart';
 
+import 'package:pos_mobile/presentation/pages/dashboard/menu_layout.dart';
+import 'package:pos_mobile/presentation/pages/dashboard/menu_tiles.dart';
 import 'package:pos_mobile/presentation/pages/dashboard/tabs/home_tab.dart';
 import 'package:pos_mobile/presentation/pages/dashboard/tabs/sales_tab.dart';
+import 'package:pos_mobile/presentation/pages/dashboard/tabs/stock_tab.dart';
 import 'package:pos_mobile/presentation/pages/dashboard/tabs/report_tab.dart';
-import 'package:pos_mobile/presentation/pages/dashboard/tabs/setting_tab.dart';
+import 'package:pos_mobile/presentation/pages/dashboard/tabs/profile_tab.dart';
 import 'package:pos_mobile/presentation/pages/product_transactions/product_transaction_page.dart';
+import 'package:pos_mobile/presentation/pages/settings/setting_page.dart';
 import 'package:pos_mobile/presentation/pages/shifts/shift_guard.dart';
 import 'package:pos_mobile/theme/app_theme.dart';
 
@@ -26,41 +29,23 @@ class _TabSpec {
   const _TabSpec(this.pageIndex, this.icon, this.activeIcon, this.label);
 }
 
+/// Layout baru app kasir (revisi owner 26 Nov 2026): navigasi bawah Beranda ·
+/// Stok · (+) · Laporan · Profil, Setting lewat ikon gir di kanan atas. Di
+/// tablet navigasinya rail samping dengan urutan yang sama.
 class DashboardPage extends ConsumerWidget {
   const DashboardPage({super.key});
 
-  // Apakah fitur hari ini memuat menu apa pun di tab Stok?
-  static bool _showStockTab(Set<AppFeature> features) {
-    const stockish = {
-      AppFeature.products,
-      AppFeature.stockMaterial,
-      AppFeature.stockTopping,
-      AppFeature.stockMovements,
-      AppFeature.toppingMovements,
-      AppFeature.stockAudit,
-      AppFeature.stockRequest,
-      AppFeature.shipment,
-      AppFeature.expenses,
-      AppFeature.branchWaste,
-    };
-    return features.any(stockish.contains);
-  }
-
-  static bool _showReportTab(Set<AppFeature> features) =>
-      features.contains(AppFeature.reports) ||
-      features.contains(AppFeature.stockAlerts) ||
-      features.contains(AppFeature.transactions);
-
-  /// Daftar tab yang terlihat hari ini (urut: Beranda, Stok, Laporan, Pengaturan).
-  List<_TabSpec> _visibleTabs(Set<AppFeature> features) {
+  /// Tab yang terlihat hari ini (urut: Beranda, Stok, Laporan, Profil). Stok &
+  /// Laporan hanya tampil bila ada menu di dalamnya; Profil selalu ada.
+  List<_TabSpec> _visibleTabs(MenuAccess access) {
     return [
-      if (features.contains(AppFeature.dashboard))
+      if (access.today.contains(AppFeature.dashboard))
         const _TabSpec(0, Icons.dashboard_outlined, Icons.dashboard, 'Beranda'),
-      if (_showStockTab(features))
+      if (stockMenu(access).isNotEmpty)
         const _TabSpec(2, Icons.inventory_2_outlined, Icons.inventory_2, 'Stok'),
-      if (_showReportTab(features))
+      if (reportMenu(access).isNotEmpty)
         const _TabSpec(3, Icons.bar_chart_outlined, Icons.bar_chart, 'Laporan'),
-      const _TabSpec(4, Icons.settings_outlined, Icons.settings, 'Pengaturan'),
+      const _TabSpec(4, Icons.person_outline, Icons.person, 'Profil'),
     ];
   }
 
@@ -69,7 +54,7 @@ class DashboardPage extends ConsumerWidget {
     // Fitur role, dikurangi menu kasir untuk karyawan yang hari ini bertugas
     // penyaji saja (Tahap 1 SDM).
     final features = ref.watch(todayFeaturesProvider);
-    final tabs = _visibleTabs(features);
+    final tabs = _visibleTabs(ref.watch(menuAccessProvider));
     final showFab = features.contains(AppFeature.pos);
     // Spanduk penjualan offline mengikuti role, bukan tugas hari ini: antrean
     // di HP ini tetap harus terlihat walau hari ini ia bertugas penyaji.
@@ -84,22 +69,21 @@ class DashboardPage extends ConsumerWidget {
     // NavigationRail butuh minimal 2 destinasi; kalau cuma 1 tab, pakai bottom bar.
     final showSidebar = shortest >= 600 && tabs.length >= 2;
     final theme = Theme.of(context);
-    final titleColor = index == 1 ? AppTheme.textPrimary : theme.colorScheme.primary;
 
     final pages = const [
       HomeTab(),
       SalesTab(),
       StockTab(),
       ReportTab(),
-      SettingTab(),
+      ProfileTab(),
     ];
 
     const titles = [
       'Dashboard',
       'Transaksi',
-      'Manajemen Stok',
+      'Stok',
       'Laporan',
-      'Pengaturan',
+      'Profil',
     ];
 
     Future<void> startTransaction() async {
@@ -116,17 +100,20 @@ class DashboardPage extends ConsumerWidget {
       backgroundColor: Theme.of(context).colorScheme.surface,
 
       appBar: AppBar(
-        backgroundColor: theme.colorScheme.surface,
+        // Pita hijau muda dengan judul hijau (gambar owner).
+        backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.12),
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
         title: Text(
           titles[index],
           style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: titleColor,
+            fontSize: 20,
+            fontWeight: FontWeight.w800,
+            color: theme.colorScheme.primary,
           ),
         ),
+        actions: const [_SettingAction()],
       ),
 
       body: SafeArea(
@@ -181,6 +168,33 @@ class DashboardPage extends ConsumerWidget {
       bottomNavigationBar: showSidebar
           ? null
           : _BottomBar(tabs: tabs, currentPageIndex: index, withFabNotch: showFab),
+    );
+  }
+}
+
+/// Ikon gir + tulisan "Setting" di kanan atas semua tab.
+class _SettingAction extends StatelessWidget {
+  const _SettingAction();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: InkResponse(
+        radius: 32,
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingPage())),
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.settings, color: AppTheme.brandGreenDark, size: 24),
+              Text('Setting', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppTheme.brandGreenDark)),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
