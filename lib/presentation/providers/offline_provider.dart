@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:pos_mobile/core/offline_stock.dart';
 import 'package:pos_mobile/core/promo_engine.dart';
 import 'package:pos_mobile/data/local/outbox_store.dart';
 import 'package:pos_mobile/data/models/pos_catalog_model.dart';
@@ -88,18 +89,30 @@ class OfflineState {
   /// Sedang mengirim antrean.
   final bool sending;
 
-  const OfflineState({this.reachable = true, this.pending = 0, this.failed = 0, this.sending = false});
+  /// Bertambah tiap HP menyimpan angka stok baru dari server, supaya hitungan
+  /// stok offline di layar ikut diperbarui.
+  final int stockRevision;
+
+  const OfflineState({
+    this.reachable = true,
+    this.pending = 0,
+    this.failed = 0,
+    this.sending = false,
+    this.stockRevision = 0,
+  });
 
   /// Mode offline: server tak terjangkau, ATAU masih ada penjualan yang belum
   /// terkirim. Yang kedua menjaga urutan — penjualan baru ikut antre di
   /// belakang yang lama, tidak menyalipnya lewat jalur online.
   bool get active => !reachable || pending > 0;
 
-  OfflineState copyWith({bool? reachable, int? pending, int? failed, bool? sending}) => OfflineState(
+  OfflineState copyWith({bool? reachable, int? pending, int? failed, bool? sending, int? stockRevision}) =>
+      OfflineState(
         reachable: reachable ?? this.reachable,
         pending: pending ?? this.pending,
         failed: failed ?? this.failed,
         sending: sending ?? this.sending,
+        stockRevision: stockRevision ?? this.stockRevision,
       );
 }
 
@@ -107,6 +120,19 @@ class OfflineState {
 class OfflineUnavailable implements Exception {
   final String message;
   const OfflineUnavailable(this.message);
+
+  @override
+  String toString() => message;
+}
+
+/// Stok tidak cukup menurut hitungan HP selama offline (revisi 28 Nov):
+/// penjualannya ditolak, sama seperti server menolaknya saat online.
+class OfflineStockShort extends OfflineUnavailable {
+  final List<StockShortage> shortages;
+  OfflineStockShort(this.shortages) : super('');
+
+  @override
+  String get message => shortages.map((s) => s.message).join('\n');
 
   @override
   String toString() => message;
@@ -180,6 +206,11 @@ class OfflineNotifier extends StateNotifier<OfflineState> {
         if (fetch.shift != null) {
           await store.observeQueueNo(fetch.shift!.id, fetch.shift!.lastQueueNo);
         }
+        final stock = fetch.stock;
+        if (stock != null) {
+          await store.setMeta(_stockKey(id), jsonEncode(stock.toJson()));
+          if (mounted) state = state.copyWith(stockRevision: state.stockRevision + 1);
+        }
       } catch (_) {
         // Gagal mengingat tidak boleh mengganggu jualan online.
       }
@@ -237,6 +268,49 @@ class OfflineNotifier extends StateNotifier<OfflineState> {
     }
   }
 
+  // ── stok offline ───────────────────────────────────────────────────────
+
+  /// Angka stok terakhir dari server untuk cabang aktif. null = belum pernah.
+  Future<StockSnapshot?> stockSnapshot() async {
+    final id = branchId;
+    if (id == null) return null;
+    final raw = await store.meta(_stockKey(id));
+    if (raw == null) return null;
+    try {
+      return StockSnapshot.fromJson(Map<String, dynamic>.from(jsonDecode(raw) as Map));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Stok yang masih tersedia menurut HP: angka stok terakhir dari server
+  /// dikurangi penjualan offline yang belum tercermin di angka itu.
+  ///
+  /// Penjualan yang terkirim saat permintaan stok itu masih berjalan dianggap
+  /// sudah tercermin. Kalau ternyata belum, server tetap menerimanya dan
+  /// mencatat kekurangannya — lebih baik daripada menolak penjualan yang
+  /// sebenarnya cukup.
+  ///
+  /// null = HP belum punya angka stok atau katalog tanpa aturan potong (server
+  /// lama): penjualan offline tidak dicek stoknya, seperti sebelum revisi ini.
+  Future<({StockSnapshot snapshot, Map<String, int> available})?> localStock(PosCatalog catalog) async {
+    final id = branchId;
+    final rules = catalog.stockRules;
+    if (id == null || rules == null) return null;
+    final snapshot = await stockSnapshot();
+    if (snapshot == null) return null;
+    final consumed = <Map<String, int>>[];
+    for (final entry in await store.unsettled(id, sentAfter: snapshot.receivedAt)) {
+      try {
+        final payload = Map<String, dynamic>.from(jsonDecode(entry.payload) as Map);
+        consumed.add(stockNeeds(rules, payload));
+      } catch (_) {
+        // Isi rusak tidak boleh menghentikan jualan; baris itu dilewati.
+      }
+    }
+    return (snapshot: snapshot, available: availableStock(snapshot, consumed));
+  }
+
   // ── menyimpan penjualan ────────────────────────────────────────────────
 
   /// Simpan keranjang sebagai penjualan offline dan kosongkan keranjangnya.
@@ -273,6 +347,30 @@ class OfflineNotifier extends StateNotifier<OfflineState> {
     final cartState = cart.state;
     final priced = pricing ?? basicPricing(cart.state);
     final key = cart.offlineKey(pricing: priced);
+
+    // Stok offline: tolak bila hitungan HP bilang tidak cukup. Penjualan yang
+    // sudah tersimpan dengan kunci ini (bayar ditekan dua kali) tidak dicek
+    // lagi — ia sudah terhitung.
+    final rules = catalog.stockRules;
+    if (rules != null && await store.byIdempotencyKey(key) == null) {
+      final stock = await localStock(catalog);
+      if (stock != null) {
+        final lines = saleLinesOf(cartState);
+        final needs = stockNeeds(rules, {
+          'items': lines.items.map((i) => i.toJson()).toList(),
+          'plastics': lines.plastics.map((p) => p.toJson()).toList(),
+          'sedotans': lines.sedotans.map((s) => s.toJson()).toList(),
+        });
+        final short = stockShortages(
+          rules: rules,
+          needs: needs,
+          available: stock.available,
+          snapshot: stock.snapshot,
+        );
+        if (short.isNotEmpty) throw OfflineStockShort(short);
+      }
+    }
+
     final context = OfflineSaleContext(
       shiftId: s.shiftId,
       cashierId: s.cashierId,
@@ -427,6 +525,7 @@ class OfflineNotifier extends StateNotifier<OfflineState> {
   }
 
   static String _sessionKey(int branchId) => 'session:$branchId';
+  static String _stockKey(int branchId) => 'stock:$branchId';
 
   @override
   void dispose() {

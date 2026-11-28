@@ -167,6 +167,26 @@ class OutboxStore {
     return rows.map(OutboxEntry.fromRow).toList();
   }
 
+  /// Penjualan yang belum tercermin di stok yang terakhir dikirim server
+  /// (stok offline, revisi 28 Nov): yang belum terkirim, dan yang terkirim
+  /// SESUDAH [sentAfter] — jam HP saat angka stok itu diterima. Yang ditolak
+  /// server tidak ikut: server tidak memotong stok untuknya.
+  Future<List<OutboxEntry>> unsettled(int branchId, {required DateTime sentAfter}) async {
+    final db = await _db;
+    final rows = await db.query('outbox',
+        where: 'branch_id = ? AND (status = ? OR (status = ? AND sent_at > ?))',
+        whereArgs: [branchId, OutboxStatus.pending, OutboxStatus.sent, sentAfter.millisecondsSinceEpoch],
+        orderBy: 'id ASC');
+    return rows.map(OutboxEntry.fromRow).toList();
+  }
+
+  /// Penjualan yang sudah tersimpan dengan kunci ini, bila ada.
+  Future<OutboxEntry?> byIdempotencyKey(String key) async {
+    final db = await _db;
+    final rows = await db.query('outbox', where: 'idempotency_key = ?', whereArgs: [key], limit: 1);
+    return rows.isEmpty ? null : OutboxEntry.fromRow(rows.first);
+  }
+
   Future<OutboxEntry?> byClientRef(int branchId, String clientRef) async {
     final db = await _db;
     final rows = await db.query('outbox',

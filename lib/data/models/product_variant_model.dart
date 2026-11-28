@@ -61,6 +61,20 @@ class ProductVariant {
   /// Varian boleh dipesan bila belum habis. `null` (tak dihitung) = boleh.
   bool get ready => isReady != false;
 
+  /// Salinan dengan tanda siap lain (stok offline, revisi 28 Nov).
+  ProductVariant withReady(bool? ready) => ProductVariant(
+        id: id,
+        productId: productId,
+        name: name,
+        sellingPrice: sellingPrice,
+        freeToppingSlots: freeToppingSlots,
+        isActive: isActive,
+        isReady: ready,
+        prepMinutes: prepMinutes,
+        effectivePrepMinutes: effectivePrepMinutes,
+        createdAt: createdAt,
+      );
+
   num get sellingPriceNum => num.tryParse(sellingPrice) ?? 0;
 
   /// Waktu pembuatan yang berlaku untuk varian ini: `effective_prep_minutes`

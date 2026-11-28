@@ -115,7 +115,8 @@ void main() {
     test('promo_rules, alasan, batas, dan pemakaian terbaca; yang berubah-ubah tidak disimpan', () {
       final f = _fetch();
       final c = f.catalog!;
-      expect(posCatalogSchema, 2);
+      // 3 sejak stok offline (revisi 28 Nov): potret v2 tanpa stock_rules dibuang.
+      expect(posCatalogSchema, 3);
       expect(c.promoRules.map((p) => p.id), [10, 11]);
       final happy = c.promoRules.first;
       expect([happy.kind, happy.percent, happy.startTime, happy.endTime, happy.branchIds, happy.limitTotal],

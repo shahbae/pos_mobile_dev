@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:pos_mobile/core/offline_stock.dart';
 import 'package:pos_mobile/core/promo_engine.dart';
 import 'package:pos_mobile/data/local/catalog_store.dart';
 import 'package:pos_mobile/data/models/discount_reason_model.dart';
@@ -17,7 +18,9 @@ import 'package:pos_mobile/data/models/topping_model.dart';
 /// alih-alih dibaca dengan cara yang salah.
 ///
 /// 2: `promo_rules` dan `discount_reasons` (Tahap 3).
-const posCatalogSchema = 2;
+/// 3: `stock_rules` (stok offline, revisi 28 Nov). Potret v2 tidak memuatnya
+///    padahal versinya bisa sama dengan server, jadi harus diunduh ulang.
+const posCatalogSchema = 3;
 
 /// Info toko untuk kepala nota.
 class PosCatalogStoreInfo {
@@ -76,6 +79,10 @@ class PosCatalog {
   /// Alasan diskon manual yang aktif.
   final List<DiscountReason> discountReasons;
 
+  /// Aturan potong stok untuk menghitung stok selama offline. null = server
+  /// belum mengirimnya; penjualan offline lalu tidak dicek stoknya.
+  final StockRules? stockRules;
+
   final Map<int, List<Promo>> _promosByDay = {};
 
   PosCatalog({
@@ -90,6 +97,7 @@ class PosCatalog {
     required this.promos,
     this.promoRules = const [],
     this.discountReasons = const [],
+    this.stockRules,
   });
 
   /// Baca isi katalog. Melempar bila bentuknya tidak seperti yang diharapkan —
@@ -118,6 +126,9 @@ class PosCatalog {
       discountReasons: j['discount_reasons'] is List
           ? list('discount_reasons').map(DiscountReason.fromJson).where((r) => r.isActive).toList()
           : const [],
+      stockRules: j['stock_rules'] is Map
+          ? StockRules.fromJson(Map<String, dynamic>.from(j['stock_rules'] as Map))
+          : null,
     );
   }
 
@@ -230,6 +241,11 @@ class PosCatalogFetch {
   /// tiap ada penjualan.
   final Map<int, PromoUsage> promoUsage;
 
+  /// Stok cabang saat jawaban ini dibuat (revisi 28 Nov). Di luar versi
+  /// katalog, ikut di setiap jawaban. null = server lama yang belum
+  /// mengirimnya.
+  final StockSnapshot? stock;
+
   final PosCatalog? catalog;
 
   /// Isi yang sama dalam bentuk siap simpan.
@@ -245,6 +261,7 @@ class PosCatalogFetch {
     this.cashierName = '',
     this.discountLimitPct = 0,
     this.promoUsage = const {},
+    this.stock,
     this.catalog,
     this.stored,
   });
@@ -265,6 +282,7 @@ class PosCatalogFetch {
     final cashierName = cashier is Map ? cashier['name']?.toString() ?? '' : '';
     final discountLimitPct = (data['discount_limit_pct'] as num?)?.toInt() ?? 0;
     final promoUsage = promoUsageFromJson(data['promo_usage']);
+    final stock = StockSnapshot.fromServer(data['stock'], receivedAt: fetchedAt);
 
     if (unchanged) {
       return PosCatalogFetch(
@@ -277,6 +295,7 @@ class PosCatalogFetch {
         cashierName: cashierName,
         discountLimitPct: discountLimitPct,
         promoUsage: promoUsage,
+        stock: stock,
       );
     }
 
@@ -293,6 +312,7 @@ class PosCatalogFetch {
         'promos',
         'promo_rules',
         'discount_reasons',
+        'stock_rules',
       ])
         if (data.containsKey(key)) key: data[key],
     };
@@ -306,6 +326,7 @@ class PosCatalogFetch {
       cashierName: cashierName,
       discountLimitPct: discountLimitPct,
       promoUsage: promoUsage,
+      stock: stock,
       catalog: PosCatalog.fromContent(content, version: version, fetchedAt: fetchedAt),
       stored: StoredCatalog(
         schema: posCatalogSchema,
