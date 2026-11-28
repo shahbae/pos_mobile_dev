@@ -93,6 +93,32 @@ class Product {
   /// Produk boleh dipesan bila belum habis. `null` (tak dihitung) = boleh.
   bool get ready => productReady != false;
 
+  /// Salinan dengan tanda siap lain — dipakai selama offline, saat HP
+  /// menghitung sendiri stoknya (revisi 28 Nov). [variantReady] per id varian;
+  /// varian yang tidak disebut tetap seperti semula.
+  Product withReadiness({required bool? productReady, Map<int, bool> variantReady = const {}}) => Product(
+        id: id,
+        tenantId: tenantId,
+        sku: sku,
+        name: name,
+        imageUrl: imageUrl,
+        categoryId: categoryId,
+        categoryName: categoryName,
+        categoryFreeable: categoryFreeable,
+        purchasePrice: purchasePrice,
+        sellingPrice: sellingPrice,
+        profitMargin: profitMargin,
+        freeToppingSlots: freeToppingSlots,
+        hasFreeToppings: hasFreeToppings,
+        hasVariants: hasVariants,
+        variants: [
+          for (final v in variants) variantReady.containsKey(v.id) ? v.withReady(variantReady[v.id]) : v,
+        ],
+        productReady: productReady,
+        prepMinutes: prepMinutes,
+        createdAt: createdAt,
+      );
+
   /// Parse price string to num for formatting
   num get purchasePriceNum => num.tryParse(purchasePrice) ?? 0;
   num get sellingPriceNum => num.tryParse(sellingPrice) ?? 0;

@@ -128,6 +128,16 @@ class _MemoryOutbox implements OutboxStore {
   }
 
   @override
+  Future<List<OutboxEntry>> unsettled(int branchId, {required DateTime sentAfter}) async => rows
+      .where((e) =>
+          e.branchId == branchId && (e.isPending || (e.isSent && e.sentAt != null && e.sentAt!.isAfter(sentAfter))))
+      .toList();
+
+  @override
+  Future<OutboxEntry?> byIdempotencyKey(String key) async =>
+      rows.where((e) => e.idempotencyKey == key).firstOrNull;
+
+  @override
   Future<OutboxEntry> record({
     required int branchId,
     required int shiftId,

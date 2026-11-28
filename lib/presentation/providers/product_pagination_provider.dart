@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:pos_mobile/data/models/product_model.dart';
+import 'package:pos_mobile/presentation/providers/offline_stock_provider.dart';
 import 'package:pos_mobile/presentation/providers/pos_catalog_provider.dart';
 
 /// Tab kategori untuk filter menu POS.
@@ -87,12 +88,26 @@ final productPaginationProvider =
         (_, next) => notifier.applyCatalog(next),
         fireImmediately: true,
       );
+      // Selama offline tanda siap dihitung HP dari stoknya sendiri. Saat hitungan
+      // ulang berjalan, hasil sebelumnya tetap dipakai (valueOrNull).
+      ref.listen<AsyncValue<OfflineReadiness?>>(
+        offlineReadinessProvider,
+        (_, next) {
+          if (next.isLoading && next.valueOrNull == null) return;
+          notifier.applyReadiness(next.valueOrNull);
+        },
+        fireImmediately: true,
+      );
       return notifier;
     });
 
 class ProductPaginationNotifier extends StateNotifier<ProductPaginationState> {
   final Future<void> Function() _refreshCatalog;
   Timer? _debounce;
+
+  /// Produk persis dari katalog, sebelum tanda siap offline dipasang.
+  List<Product> _catalogItems = const [];
+  OfflineReadiness? _readiness;
 
   ProductPaginationNotifier(this._refreshCatalog) : super(ProductPaginationState());
 
@@ -104,19 +119,30 @@ class ProductPaginationNotifier extends StateNotifier<ProductPaginationState> {
   /// punya isi, supaya kasir tetap bisa jualan saat pembaruan gagal; galatnya
   /// ditampilkan agar jelas datanya belum tentu terbaru.
   void applyCatalog(PosCatalogState catalog) {
-    final items = catalog.catalog?.products ?? state.allItems;
-    if (identical(items, state.allItems) &&
+    final items = catalog.catalog?.products ?? _catalogItems;
+    if (identical(items, _catalogItems) &&
         catalog.refreshing == state.loading &&
         catalog.error == state.error) {
       return;
     }
+    _catalogItems = items;
     state = state.copyWith(
-      allItems: items,
+      allItems: _shown(),
       loading: catalog.refreshing,
       error: catalog.error,
       clearError: catalog.error == null,
     );
   }
+
+  /// Tanda siap hasil hitungan stok HP selama offline; null = pakai tanda
+  /// dari server.
+  void applyReadiness(OfflineReadiness? readiness) {
+    if (identical(readiness, _readiness)) return;
+    _readiness = readiness;
+    state = state.copyWith(allItems: _shown());
+  }
+
+  List<Product> _shown() => _readiness?.apply(_catalogItems) ?? _catalogItems;
 
   void search(String value) {
     _debounce?.cancel();
